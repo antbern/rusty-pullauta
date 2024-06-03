@@ -4432,7 +4432,9 @@ where
 
     let mut line_buffer = String::new();
     while reader.read_line(&mut line_buffer)? > 0 {
-        line_callback(&line_buffer);
+        // the read line contains the newline delimiter, so we need to trim it off
+        let line = line_buffer.trim_end();
+        line_callback(&line);
         line_buffer.clear();
     }
 
@@ -5568,33 +5570,32 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
     let mut xmin: u64 = u64::MAX;
     let mut ymin: u64 = u64::MAX;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    if let Ok(lines) = read_lines(xyz_file_in) {
-        for line in lines {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    read_lines_no_alloc(xyz_file_in, |line| {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            let xx = ((x - xstart) / size).floor() as u64;
-            let yy = ((y - ystart) / size).floor() as u64;
+        let xx = ((x - xstart) / size).floor() as u64;
+        let yy = ((y - ystart) / size).floor() as u64;
 
-            xyz.insert((xx, yy), h);
+        xyz.insert((xx, yy), h);
 
-            if xmax < xx {
-                xmax = xx;
-            }
-            if ymax < yy {
-                ymax = yy;
-            }
-            if xmin > xx {
-                xmin = xx;
-            }
-            if ymin > yy {
-                ymin = yy;
-            }
+        if xmax < xx {
+            xmax = xx;
         }
-    }
+        if ymax < yy {
+            ymax = yy;
+        }
+        if xmin > xx {
+            xmin = xx;
+        }
+        if ymin > yy {
+            ymin = yy;
+        }
+    })
+    .expect("Could not read file");
+
     let data = fs::read_to_string(Path::new(&format!("{}/contours03.dxf", tmpfolder)))
         .expect("Should have been able to read the file");
     let data: Vec<&str> = data.split("POLYLINE").collect();
@@ -5902,27 +5903,39 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mut temp = String::new();
+    struct Head {
+        id: u64,
+        xtest: f64,
+        ytest: f64,
+    }
+    let mut heads = Vec::<Head>::new();
     for l in 0..data.len() {
         if !el_x[l].is_empty() {
             if el_x[l].first() == el_x[l].last() && el_y[l].first() == el_y[l].last() {
-                let new_line = format!(
-                    "{},{},{},{}\r\n",
-                    l,
-                    el_x[l].len() - 1,
-                    el_x[l][0],
-                    el_y[l][0]
-                );
-                temp.push_str(&new_line);
+                heads.push(Head {
+                    id: l as u64,
+                    xtest: el_x[l][0],
+                    ytest: el_y[l][0],
+                });
             } else {
                 el_x[l].clear();
                 el_y[l].clear();
             }
         }
     }
-    let heads = temp.split('\n').collect::<Vec<&str>>();
-    let mut temp = String::new();
-    let mut bb: HashMap<usize, String> = HashMap::default();
+    struct Top {
+        id: u64,
+        xtest: f64,
+        ytest: f64,
+    }
+    let mut tops = Vec::<Top>::new();
+    struct BoundingBox {
+        minx: f64,
+        maxx: f64,
+        miny: f64,
+        maxy: f64,
+    }
+    let mut bb: HashMap<usize, BoundingBox> = HashMap::default();
     for l in 0..data.len() {
         let mut skip = false;
         if !el_x[l].is_empty() {
@@ -5953,17 +5966,19 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
                     miny = y[k]
                 }
             }
-            bb.insert(l, format!("{},{},{},{}", minx, maxx, miny, maxy));
+            bb.insert(
+                l,
+                BoundingBox {
+                    minx,
+                    maxx,
+                    miny,
+                    maxy,
+                },
+            );
 
             for head in heads.iter() {
-                let headt = head.trim();
-                if headt.is_empty() {
-                    break;
-                }
-                let data = headt.split(',').collect::<Vec<&str>>();
-                let id = data[0].parse::<u64>().unwrap();
-                let xtest = data[2].parse::<f64>().unwrap();
-                let ytest = data[3].parse::<f64>().unwrap();
+                let &Head { id, xtest, ytest } = head;
+
                 if !skip
                     && *elevation.get(&id).unwrap() > *elevation.get(&(l as u64)).unwrap()
                     && id != (l as u64)
@@ -5996,13 +6011,21 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
                 }
             }
             if !skip {
-                let new_line = format!("{},{},{}\r\n", l, x[0], y[0]);
-                temp.push_str(&new_line);
+                tops.push(Top {
+                    id: l as u64,
+                    xtest: x[0],
+                    ytest: y[0],
+                });
             }
         }
     }
-    let tops = temp.split('\n').collect::<Vec<&str>>();
-    let mut temp = String::new();
+    struct Candidate {
+        id: u64,
+        xtest: f64,
+        ytest: f64,
+        topid: u64,
+    }
+    let mut canditates = Vec::<Candidate>::new();
 
     for l in 0..data.len() {
         let mut skip = true;
@@ -6015,23 +6038,16 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
             let taily = *el_y[l].first().unwrap();
             y.push(taily);
 
-            let box_raw = bb.get(&l).unwrap();
-            let mut box_data = box_raw.split(',');
-            let minx = box_data.next().unwrap().parse::<f64>().unwrap();
-            let maxx = box_data.next().unwrap().parse::<f64>().unwrap();
-            let miny = box_data.next().unwrap().parse::<f64>().unwrap();
-            let maxy = box_data.next().unwrap().parse::<f64>().unwrap();
+            let &BoundingBox {
+                minx,
+                maxx,
+                miny,
+                maxy,
+            } = bb.get(&l).unwrap();
 
             let mut topid = 0;
             for head in tops.iter() {
-                let headt = head.trim();
-                if headt.is_empty() {
-                    continue;
-                }
-                let mut data = headt.split(',');
-                let id = data.next().unwrap().parse::<u64>().unwrap();
-                let xtest = data.next().unwrap().parse::<f64>().unwrap();
-                let ytest = data.next().unwrap().parse::<f64>().unwrap();
+                let &Top { id, xtest, ytest } = head;
                 let ll = l as u64;
 
                 if *elevation.get(&ll).unwrap() < (*elevation.get(&id).unwrap() - 0.1)
@@ -6069,8 +6085,12 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
                 }
             }
             if !skip {
-                let new_line = format!("{},{},{},{}\r\n", l, x[0], y[0], topid);
-                temp.push_str(&new_line);
+                canditates.push(Candidate {
+                    id: l as u64,
+                    xtest: x[0],
+                    ytest: y[0],
+                    topid,
+                });
             } else {
                 el_x[l].clear();
                 el_y[l].clear();
@@ -6078,19 +6098,11 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let canditates = temp.split('\n').collect::<Vec<&str>>();
-
     let mut best: HashMap<u64, u64> = HashMap::default();
     let mut mov: HashMap<u64, f64> = HashMap::default();
 
     for head in canditates.iter() {
-        let headt = head.trim();
-        if headt.is_empty() {
-            continue;
-        }
-        let data = headt.split(',').collect::<Vec<&str>>();
-        let id = data[0].parse::<u64>().unwrap();
-        let topid = data[3].parse::<u64>().unwrap();
+        let &Candidate { id, topid, .. } = head;
         let el = *elevation.get(&id).unwrap();
         let test = (el / halfinterval + 1.0).floor() * halfinterval - el;
 
@@ -6110,18 +6122,14 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    let mut temp = String::new();
+    let mut new_candidates = Vec::<Candidate>::new();
     for head in canditates.iter() {
-        let headt = head.trim();
-        if headt.is_empty() {
-            continue;
-        }
-
-        let mut data = headt.split(',');
-        let id = data.next().unwrap().parse::<u64>().unwrap();
-        let xtest = data.next().unwrap().parse::<f64>().unwrap();
-        let ytest = data.next().unwrap().parse::<f64>().unwrap();
-        let topid = data.next().unwrap().parse::<u64>().unwrap();
+        let &Candidate {
+            id,
+            xtest,
+            ytest,
+            topid,
+        } = head;
 
         let x = el_x[id as usize].to_vec();
         if *best.get(&topid).unwrap() == id
@@ -6131,16 +6139,23 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
                         - 2.5 * (*elevation.get(&id).unwrap() / 2.5).floor())
                         > 0.45))
         {
-            let new_line = format!("{},{},{},{}\r\n", id, xtest, ytest, topid);
-            temp.push_str(&new_line);
+            new_candidates.push(Candidate {
+                id,
+                xtest,
+                ytest,
+                topid,
+            });
         } else {
             el_x[id as usize].clear();
             el_y[id as usize].clear();
         }
     }
 
-    let canditates = temp.split('\n').collect::<Vec<&str>>();
-    let mut pin = String::new();
+    let canditates = new_candidates;
+
+    let file_pins =
+        File::create(Path::new(&format!("{}/pins.txt", tmpfolder))).expect("Unable to create file");
+    let mut file_pins = BufWriter::new(file_pins);
 
     for l in 0..data.len() {
         let mut skip = false;
@@ -6155,23 +6170,20 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
             let taily = *el_y[l].first().unwrap();
             y.push(taily);
 
-            let box_raw = bb.get(&l).unwrap();
-            let mut box_data = box_raw.split(',');
-            let minx = box_data.next().unwrap().parse::<f64>().unwrap();
-            let maxx = box_data.next().unwrap().parse::<f64>().unwrap();
-            let miny = box_data.next().unwrap().parse::<f64>().unwrap();
-            let maxy = box_data.next().unwrap().parse::<f64>().unwrap();
+            let &BoundingBox {
+                minx,
+                maxx,
+                miny,
+                maxy,
+            } = bb.get(&l).unwrap();
 
             for head in canditates.iter() {
-                let headt = head.trim();
-                if headt.is_empty() {
-                    continue;
-                }
-                let mut data = headt.split(',');
-                let id = data.next().unwrap().parse::<u64>().unwrap();
-                let xtest = data.next().unwrap().parse::<f64>().unwrap();
-                let ytest = data.next().unwrap().parse::<f64>().unwrap();
-                let topid = data.next().unwrap().parse::<u64>().unwrap();
+                let &Candidate {
+                    id,
+                    xtest,
+                    ytest,
+                    topid,
+                } = head;
 
                 ltopid = topid;
                 if id != ll && !skip && xtest < maxx && xtest > minx && ytest < maxy && ytest > miny
@@ -6215,7 +6227,8 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
                 xa /= xlen;
                 ya /= xlen;
 
-                pin.push_str(&format!(
+                write!(
+                    &mut file_pins,
                     "{},{},{},{},{},{},{},{}\r\n",
                     x[0],
                     y[0],
@@ -6231,7 +6244,9 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
                         .map(|x| x.to_string())
                         .collect::<Vec<_>>()
                         .join(" ")
-                ));
+                )
+                .expect("Could not write to file");
+
                 for k in 0..x.len() {
                     write!(
                         &mut f,
@@ -6251,10 +6266,6 @@ fn knolldetector(thread: &String) -> Result<(), Box<dyn Error>> {
     f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
         .expect("Can not write to file");
 
-    let f =
-        File::create(Path::new(&format!("{}/pins.txt", tmpfolder))).expect("Unable to create file");
-    let mut f = BufWriter::new(f);
-    f.write_all(pin.as_bytes()).expect("Unable to write data");
     println!("Done");
     Ok(())
 }
@@ -6624,26 +6635,36 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
         i += 1;
     }
 
-    let mut thresholds = vec![];
-    let mut i: u32 = 1;
-    loop {
-        let last_threshold = conf
-            .general_section()
-            .get(format!("thresold{}", i))
-            .unwrap_or("");
-        if last_threshold.is_empty() {
-            break;
+    let thresholds = {
+        let mut thresholds = vec![];
+        let mut i: u32 = 1;
+        loop {
+            let last_threshold = conf
+                .general_section()
+                .get(format!("thresold{}", i))
+                .unwrap_or("");
+            if last_threshold.is_empty() {
+                break;
+            }
+            // parse the threshold values
+            let mut parts = last_threshold.split('|');
+            let v0: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let v1: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let v2: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+
+            thresholds.push((v0, v1, v2));
+            i += 1;
         }
-        thresholds.push(last_threshold);
-        i += 1;
-    }
+        thresholds
+    };
 
     let greenshades = conf
         .general_section()
         .get("greenshades")
         .unwrap_or("")
         .split('|')
-        .collect::<Vec<&str>>();
+        .map(|v| v.parse::<f64>().unwrap())
+        .collect::<Vec<f64>>();
     let yellowheight: f64 = conf
         .general_section()
         .get("yellowheight")
@@ -6787,11 +6808,8 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                 }
                 let xx = ((x - xmin) / 3.0).floor() as u64;
                 let yy = ((y - ymin) / 3.0).floor() as u64;
-                if let std::collections::hash_map::Entry::Vacant(e) = hits.entry((xx, yy)) {
-                    e.insert(1);
-                } else {
-                    *hits.get_mut(&(xx, yy)).unwrap() += 1;
-                }
+                *hits.entry((xx, yy)).or_insert(0) += 1;
+
                 if r3 == "2"
                     || h < yellowheight
                         + *xyz
@@ -6801,22 +6819,11 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                             ))
                             .unwrap_or(&0.0)
                 {
-                    if let std::collections::hash_map::Entry::Vacant(e) = yhit.entry((xx, yy)) {
-                        e.insert(1);
-                    } else {
-                        *yhit.get_mut(&(xx, yy)).unwrap() += 1;
-                    }
+                    *yhit.entry((xx, yy)).or_insert(0) += 1;
                 } else if r4 == "1" && r5 == "1" {
-                    if let std::collections::hash_map::Entry::Vacant(e) = noyhit.entry((xx, yy)) {
-                        e.insert(yellowfirstlast);
-                    } else {
-                        *noyhit.get_mut(&(xx, yy)).unwrap() += yellowfirstlast;
-                    }
-                } else if let std::collections::hash_map::Entry::Vacant(e) = noyhit.entry((xx, yy))
-                {
-                    e.insert(1);
+                    *noyhit.entry((xx, yy)).or_insert(0) += yellowfirstlast;
                 } else {
-                    *noyhit.get_mut(&(xx, yy)).unwrap() += 1;
+                    *noyhit.entry((xx, yy)).or_insert(0) += 1;
                 }
             }
         }
@@ -6850,11 +6857,7 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                 if r5 == "1" {
                     let xx = ((x - xmin) / block + 0.5).floor() as u64;
                     let yy = ((y - ymin) / block + 0.5).floor() as u64;
-                    if let std::collections::hash_map::Entry::Vacant(e) = firsthit.entry((xx, yy)) {
-                        e.insert(1);
-                    } else {
-                        *firsthit.get_mut(&(xx, yy)).unwrap() += 1;
-                    }
+                    *firsthit.entry((xx, yy)).or_insert(0) += 1;
                 }
 
                 let xx = ((x - xmin) / size).floor() as u64;
@@ -6875,27 +6878,14 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                 let hh = h - thelele;
                 if hh <= 1.2 {
                     if r3 == "2" {
-                        if let std::collections::hash_map::Entry::Vacant(e) = ugg.entry((xx, yy)) {
-                            e.insert(1.0);
-                        } else {
-                            *ugg.get_mut(&(xx, yy)).unwrap() += 1.0;
-                        }
+                        *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
                     } else if hh > 0.25 {
-                        if let std::collections::hash_map::Entry::Vacant(e) = ug.entry((xx, yy)) {
-                            e.insert(1);
-                        } else {
-                            *ug.get_mut(&(xx, yy)).unwrap() += 1;
-                        }
-                    } else if let std::collections::hash_map::Entry::Vacant(e) = ugg.entry((xx, yy))
-                    {
-                        e.insert(1.0);
+                        *ug.entry((xx, yy)).or_insert(0) += 1;
                     } else {
-                        *ugg.get_mut(&(xx, yy)).unwrap() += 1.0;
+                        *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
                     }
-                } else if let std::collections::hash_map::Entry::Vacant(e) = ugg.entry((xx, yy)) {
-                    e.insert(0.05);
                 } else {
-                    *ugg.get_mut(&(xx, yy)).unwrap() += 0.05;
+                    *ugg.entry((xx, yy)).or_insert(0.0) += 0.05;
                 }
 
                 let xx = ((x - xmin) / block + 0.5).floor() as u64;
@@ -6903,18 +6893,9 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                 let yyy = ((y - ymin) / block).floor() as u64; // necessary due to bug in perl version
                 if r3 == "2" || greenground >= hh {
                     if r4 == "1" && r5 == "1" {
-                        if let std::collections::hash_map::Entry::Vacant(e) = ghit.entry((xx, yyy))
-                        {
-                            e.insert(firstandlastreturnasground);
-                        } else {
-                            *ghit.get_mut(&(xx, yyy)).unwrap() += firstandlastreturnasground;
-                        }
-                    } else if let std::collections::hash_map::Entry::Vacant(e) =
-                        ghit.entry((xx, yyy))
-                    {
-                        e.insert(1);
+                        *ghit.entry((xx, yyy)).or_insert(0) += firstandlastreturnasground;
                     } else {
-                        *ghit.get_mut(&(xx, yyy)).unwrap() += 1;
+                        *ghit.entry((xx, yyy)).or_insert(0) += 1;
                     }
                 } else {
                     let mut last = 1.0;
@@ -6935,24 +6916,13 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                             && *top.get(&(xx, yy)).unwrap_or(&0.0) - thelele < roof
                         {
                             let offset = factor * last;
-                            if let std::collections::hash_map::Entry::Vacant(e) =
-                                greenhit.entry((xx, yy))
-                            {
-                                e.insert(offset);
-                            } else {
-                                *greenhit.get_mut(&(xx, yy)).unwrap() += offset;
-                            }
+                            *greenhit.entry((xx, yy)).or_insert(0.0) += offset;
                             break;
                         }
                     }
 
                     if greenhigh < hh {
-                        if let std::collections::hash_map::Entry::Vacant(e) = highit.entry((xx, yy))
-                        {
-                            e.insert(1);
-                        } else {
-                            *highit.get_mut(&(xx, yy)).unwrap() += 1;
-                        }
+                        *highit.entry((xx, yy)).or_insert(0) += 1;
                     }
                 }
             }
@@ -7071,12 +7041,7 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
             ghit2 += *ghit.get(&(x as u64, y as u64)).unwrap_or(&0);
 
             let mut greenlimit = 9999.0;
-            for threshold in thresholds.iter() {
-                let parts = threshold.split('|');
-                let v = parts.collect::<Vec<&str>>();
-                let v0: f64 = v[0].parse::<f64>().unwrap();
-                let v1: f64 = v[1].parse::<f64>().unwrap();
-                let v2: f64 = v[2].parse::<f64>().unwrap();
+            for &(v0, v1, v2) in thresholds.iter() {
                 if roof >= v0 && roof < v1 {
                     greenlimit = v2;
                     break;
@@ -7092,8 +7057,7 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
                 * (1.0 - pointvolumefactor * firsthit2 as f64 / (aveg + 0.00001))
                     .powf(pointvolumeexponent);
             if thevalue > 0.0 {
-                for (i, gshade) in greenshades.iter().enumerate() {
-                    let shade = gshade.parse::<f64>().unwrap();
+                for (i, &shade) in greenshades.iter().enumerate() {
                     if thevalue > greenlimit * shade {
                         greenshade = i + 1;
                     }
@@ -7238,30 +7202,28 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
         .parse::<u64>()
         .unwrap_or(0);
     if buildings > 0 || water > 0 {
-        if let Ok(lines) = read_lines(xyz_file_in) {
-            for line in lines {
-                let ip = line.unwrap_or(String::new());
-                let parts = ip.split(' ');
-                let r = parts.collect::<Vec<&str>>();
-                let x: f64 = r[0].parse::<f64>().unwrap();
-                let y: f64 = r[1].parse::<f64>().unwrap();
-                let c: u64 = r[3].parse::<u64>().unwrap();
-                if c == buildings {
-                    draw_filled_rect_mut(
-                        &mut imgwater,
-                        Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
-                        black,
-                    );
-                }
-                if c == water {
-                    draw_filled_rect_mut(
-                        &mut imgwater,
-                        Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
-                        blue,
-                    );
-                }
+        read_lines_no_alloc(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let c: u64 = parts.next().unwrap().parse::<u64>().unwrap();
+
+            if c == buildings {
+                draw_filled_rect_mut(
+                    &mut imgwater,
+                    Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
+                    black,
+                );
             }
-        }
+            if c == water {
+                draw_filled_rect_mut(
+                    &mut imgwater,
+                    Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
+                    blue,
+                );
+            }
+        })
+        .expect("Can not read file");
     }
     let waterele = conf
         .general_section()
@@ -7271,23 +7233,23 @@ fn makevegenew(thread: &String) -> Result<(), Box<dyn Error>> {
         .unwrap_or(-999999.0);
     let path = format!("{}/xyz2.xyz", tmpfolder);
     let xyz_file_in = Path::new(&path);
-    if let Ok(lines) = read_lines(xyz_file_in) {
-        for line in lines {
-            let ip = line.unwrap_or(String::new());
-            let parts = ip.split(' ');
-            let r = parts.collect::<Vec<&str>>();
-            let x: f64 = r[0].parse::<f64>().unwrap();
-            let y: f64 = r[1].parse::<f64>().unwrap();
-            let hh: f64 = r[2].parse::<f64>().unwrap();
-            if hh < waterele {
-                draw_filled_rect_mut(
-                    &mut imgwater,
-                    Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
-                    blue,
-                );
-            }
+
+    read_lines_no_alloc(xyz_file_in, |line| {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let hh: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+
+        if hh < waterele {
+            draw_filled_rect_mut(
+                &mut imgwater,
+                Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
+                blue,
+            );
         }
-    }
+    })
+    .expect("Can not read file");
+
     imgwater
         .save(Path::new(&format!("{}/blueblack.png", tmpfolder)))
         .expect("could not save output png");
