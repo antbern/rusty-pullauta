@@ -1,0 +1,68 @@
+on:
+  pull_request:
+    branches: [ "master" ]
+
+name: "Regression"
+
+jobs:
+  compare-results:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+
+    - uses: dtolnay/rust-toolchain@stable
+
+    - name: Download LAZ file
+      env:
+        REGRESSION_LAZ_FILE_URL: ${{ secrets.REGRESSION_LAZ_FILE_URL }}
+      run: curl -L "$REGRESSION_LAZ_FILE_URL" -o test_file.laz
+
+    - name: Run code on PR branch
+      id: run_pr_branch
+      run: |
+        echo "Running code on PR branch"
+        compare -list resource
+        cargo run --release -- test_file.laz
+        mv pullautus.png pullautus_pr.png
+        mv pullautus_depr.png pullautus_depr_pr.png
+        rm -rf temp/
+
+    - name: Checkout main branch
+      run: |
+        git fetch origin master
+        git checkout master
+
+    - name: Run code on master branch
+      id: run_main_branch
+      run: |
+        echo "Running code on main branch"
+        cargo run --release -- test_file.laz
+        mv pullautus.png pullautus_main.png
+        mv pullautus_depr.png pullautus_depr_main.png
+
+    - name: Compare results
+      id: compare
+      run: |
+        # Compare the results from both branches
+        # install imagemagic to do the comparison ( Seems to work and already be included with ubuntu-latest)
+        sudo apt install imagemagick 
+        compare -metric PSNR pullautus_main.png pullautus_pr.png difference.png
+        compare -metric PSNR pullautus_depr_main.png pullautus_depr_pr.png difference_depr.png
+    
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: regression-results
+        path: |
+          pullautus_main.png
+          pullautus_pr.png
+          difference.png
+          pullautus_depr_main.png
+          pullautus_depr_pr.png
+          difference_depr.png
+        overwrite: true # we need subsequent runs to overwrite the result
+
