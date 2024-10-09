@@ -5,10 +5,12 @@ use rand::distributions;
 use rand::prelude::*;
 use std::error::Error;
 use std::fs::{self, File};
+use std::hash::Hash;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::blocks;
+use crate::cache::CachedComputation;
 use crate::cliffs;
 use crate::config::Config;
 use crate::contours;
@@ -148,36 +150,53 @@ pub fn process_tile(
             ..
         } = config;
 
-        if thinfactor != 1.0 {
-            info!("{}Using thinning factor {}", thread_name, thinfactor);
-        }
+        let mut compute = CachedComputation::new(
+            Path::new(filename),
+            &Path::new(&tmpfolder).join("xyztemp.xyz.cachetag"),
+            |s| {
+                thinfactor.to_bits().hash(s);
+                xfactor.to_bits().hash(s);
+                yfactor.to_bits().hash(s);
+                zfactor.to_bits().hash(s);
+                zoff.to_bits().hash(s);
+            },
+        );
 
-        let mut rng = rand::thread_rng();
-        let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
-
-        let tmp_filename = tmpfolder.join("xyztemp.xyz");
-        let tmp_file = File::create(tmp_filename).expect("Unable to create file");
-        let mut tmp_fp = BufWriter::new(tmp_file);
-
-        let mut reader = Reader::from_path(filename).expect("Unable to open reader");
-        for ptu in reader.points() {
-            let pt = ptu.unwrap();
-            if thinfactor == 1.0 || rng.sample(randdist) {
-                write!(
-                    &mut tmp_fp,
-                    "{} {} {} {} {} {} {}\r\n",
-                    pt.x * xfactor,
-                    pt.y * yfactor,
-                    pt.z * zfactor + zoff,
-                    u8::from(pt.classification),
-                    pt.number_of_returns,
-                    pt.return_number,
-                    pt.intensity
-                )
-                .expect("Could not write temp file");
+        // if the cachetag is the same, we can skip the processing
+        if let Some(guard) = compute.needs_recompute() {
+            if thinfactor != 1.0 {
+                info!("{}Using thinning factor {}", thread_name, thinfactor);
             }
+
+            let mut rng = rand::thread_rng();
+            let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
+
+            let tmp_filename = tmpfolder.join("xyztemp.xyz");
+            let tmp_file = File::create(tmp_filename).expect("Unable to create file");
+            let mut tmp_fp = BufWriter::new(tmp_file);
+
+            let mut reader = Reader::from_path(filename).expect("Unable to open reader");
+            for ptu in reader.points() {
+                let pt = ptu.unwrap();
+                if thinfactor == 1.0 || rng.sample(randdist) {
+                    write!(
+                        &mut tmp_fp,
+                        "{} {} {} {} {} {} {}\r\n",
+                        pt.x * xfactor,
+                        pt.y * yfactor,
+                        pt.z * zfactor + zoff,
+                        u8::from(pt.classification),
+                        pt.number_of_returns,
+                        pt.return_number,
+                        pt.intensity
+                    )
+                    .expect("Could not write temp file");
+                }
+            }
+            tmp_fp.flush().unwrap();
+
+            guard.finalize();
         }
-        tmp_fp.flush().unwrap();
     } else {
         fs::copy(Path::new(filename), tmpfolder.join("xyztemp.xyz"))
             .expect("Could not copy file to tmpfolder");

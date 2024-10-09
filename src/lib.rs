@@ -2,6 +2,7 @@
 #![allow(clippy::needless_range_loop)]
 
 pub mod blocks;
+pub mod cache;
 pub mod canvas;
 pub mod cliffs;
 pub mod config;
