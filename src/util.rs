@@ -85,11 +85,17 @@ struct CachedPoints {
 }
 
 /// Global shared storage
+/// TODO: make this more thread-beneficial by not requiring to lock the cache to have read-access
 static POINT_CACHE: LazyLock<Mutex<std::collections::HashMap<String, CachedPoints>>> =
     LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
-/// Reads the input file and caches the content in memory if that is enabled in the config
-pub fn read_xyztemp_input_file(
+/// Reads the input file and parses the XYZ and optional metadata fields.
+/// If the `experimental_cache_input_files` is on, this caches the content in memory, allowing for
+/// faster re-reads of the same file.
+///
+/// This is thread-safe and will only cache the file once, even if called from multiple threads.
+/// Although the file might be read multiple times in case of concurrent access.
+pub fn read_xyz_file(
     filename: &Path,
     config: &Config,
     mut callback: impl FnMut(&PointLocation, Option<&PointMetadata>),

@@ -7,7 +7,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
-use crate::util::{read_lines, read_xyztemp_input_file};
+use crate::util::{read_lines, read_xyz_file};
 use crate::vec2d::Vec2D;
 
 fn merge_png(
@@ -551,7 +551,7 @@ pub fn smoothjoin(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut ymax: u64 = u64::MIN;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
 
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
         let h = p.z;

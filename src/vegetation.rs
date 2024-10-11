@@ -11,7 +11,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::config::{Config, Zone};
-use crate::util::{read_lines, read_xyztemp_input_file};
+use crate::util::{read_lines, read_xyz_file};
 
 pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Generating vegetation...");
@@ -46,7 +46,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut top: HashMap<(u64, u64), f64> = HashMap::default();
 
-    read_xyztemp_input_file(xyz_file_in, config, |p, _| {
+    read_xyz_file(xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
         let h = p.z;
@@ -100,7 +100,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default();
 
     let mut i = 0;
-    read_xyztemp_input_file(xyz_file_in, config, |p, m| {
+    read_xyz_file(xyz_file_in, config, |p, m| {
         let x = p.x;
         let y = p.y;
         let h = p.z;
@@ -157,7 +157,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let step: f32 = 6.0;
 
     let mut i = 0;
-    read_xyztemp_input_file(xyz_file_in, config, |p, m| {
+    read_xyz_file(xyz_file_in, config, |p, m| {
         let x = p.x;
         let y = p.y;
         let h = p.z - zoffset;
@@ -483,7 +483,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        read_xyztemp_input_file(xyz_file_in, config, |p, m| {
+        read_xyz_file(xyz_file_in, config, |p, m| {
             let x = p.x;
             let y = p.y;
             let c = m.expect("metadata missing").classification as u64;
@@ -507,7 +507,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     }
 
     let xyz_file_in = tmpfolder.join("xyz2.xyz");
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
         let hh = p.z;
