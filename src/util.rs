@@ -118,16 +118,21 @@ pub fn read_xyztemp_input_file(
 
     debug!("Reading points from {}", filename.display());
     let (mut point_locations, mut point_metadata) = (Vec::new(), Vec::new());
+    let mut has_metadata = None;
     read_lines_no_alloc(filename, |line| {
-        let mut parts = line.trim().split(' ');
+        let mut parts = line.trim().split(' ').peekable();
 
         let x = parts.next().unwrap().parse::<f64>().unwrap();
         let y = parts.next().unwrap().parse::<f64>().unwrap();
         let z = parts.next().unwrap().parse::<f64>().unwrap();
 
-        // if we have metadata, parse it
-        let m = if let Some(c) = parts.next() {
-            let classification = c.parse::<u8>().unwrap();
+        // if we dont have metadata information yet, check if there is any
+        if has_metadata.is_none() {
+            has_metadata = Some(parts.peek().is_some());
+        }
+
+        let m = if has_metadata.expect("metadata should be set on first line") {
+            let classification = parts.next().unwrap().parse::<u8>().unwrap();
             let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
             let return_number = parts.next().unwrap().parse::<u8>().unwrap();
             let intensity = parts.next().unwrap().parse::<u16>().unwrap();
