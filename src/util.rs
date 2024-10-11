@@ -3,10 +3,13 @@ use std::{
     fs::File,
     io::{self, BufRead},
     path::Path,
+    sync::{LazyLock, Mutex},
     time::Instant,
 };
 
 use log::debug;
+
+use crate::config::Config;
 
 pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
@@ -59,6 +62,96 @@ where
         elapsed / byte_count as u32,
         byte_count as f64 / line_count as f64,
     );
+
+    Ok(())
+}
+
+pub struct PointLocation {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+pub struct PointMetadata {
+    pub classification: u8,
+    pub number_of_returns: u8,
+    pub return_number: u8,
+    pub intensity: u16,
+}
+
+struct CachedPoints {
+    locations: Box<[PointLocation]>,
+    metadata: Box<[PointMetadata]>,
+}
+
+/// Global shared storage
+static POINT_CACHE: LazyLock<Mutex<std::collections::HashMap<String, CachedPoints>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+/// Reads the input file and caches the content in memory if that is enabled in the config
+pub fn read_xyztemp_input_file(
+    filename: &Path,
+    config: &Config,
+    mut callback: impl FnMut(&PointLocation, &PointMetadata),
+) -> Result<(), Box<dyn std::error::Error>> {
+    let should_cache = config.cache_input_points;
+
+    if should_cache {
+        if let Some(cached_points) = POINT_CACHE
+            .lock()
+            .expect("should not be poisoned")
+            .get(&filename.display().to_string())
+        {
+            debug!("Using cached points for {}", filename.display());
+            for (l, m) in cached_points
+                .locations
+                .iter()
+                .zip(cached_points.metadata.iter())
+            {
+                callback(l, m);
+            }
+            return Ok(());
+        }
+    }
+
+    debug!("Reading points from {}", filename.display());
+    let (mut point_locations, mut point_metadata) = (Vec::new(), Vec::new());
+    read_lines_no_alloc(filename, |line| {
+        let mut parts = line.trim().split(' ');
+
+        let x = parts.next().unwrap().parse::<f64>().unwrap();
+        let y = parts.next().unwrap().parse::<f64>().unwrap();
+        let z = parts.next().unwrap().parse::<f64>().unwrap();
+        let classification = parts.next().unwrap().parse::<u8>().unwrap();
+        let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
+        let return_number = parts.next().unwrap().parse::<u8>().unwrap();
+        let intensity = parts.next().unwrap().parse::<u16>().unwrap();
+
+        let l = PointLocation { x, y, z };
+        let m = PointMetadata {
+            classification,
+            number_of_returns,
+            return_number,
+            intensity,
+        };
+
+        callback(&l, &m);
+        if should_cache {
+            point_locations.push(l);
+            point_metadata.push(m);
+        }
+    })?;
+
+    if should_cache {
+        POINT_CACHE.lock().expect("should not be poisoned").insert(
+            filename.display().to_string(),
+            CachedPoints {
+                locations: point_locations.into_boxed_slice(),
+                metadata: point_metadata.into_boxed_slice(),
+            },
+        );
+        debug!("Cached points for {}", filename.display());
+    }
 
     Ok(())
 }

@@ -11,7 +11,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::config::{Config, Zone};
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::util::{read_lines, read_lines_no_alloc, read_xyztemp_input_file};
 
 pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Generating vegetation...");
@@ -102,15 +102,14 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default();
 
     let mut i = 0;
-    read_lines_no_alloc(xyz_file_in, |line| {
+    read_xyztemp_input_file(xyz_file_in, config, |p, m| {
+        let x = p.x;
+        let y = p.y;
+        let h = p.z;
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
-            let mut parts = line.trim().split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let r3 = parts.next().unwrap();
-            let r4 = parts.next().unwrap();
-            let r5 = parts.next().unwrap();
+            let r3 = m.classification;
+            let r4 = m.number_of_returns;
+            let r5 = m.return_number;
 
             if xmax < x {
                 xmax = x;
@@ -128,7 +127,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
                 let yy = ((y - ymin) / 3.0).floor() as u64;
                 *hits.entry((xx, yy)).or_insert(0) += 1;
 
-                if r3 == "2"
+                if r3 == 2
                     || h < yellowheight
                         + *xyz
                             .get(&(
@@ -138,7 +137,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
                             .unwrap_or(&0.0)
                 {
                     *yhit.entry((xx, yy)).or_insert(0) += 1;
-                } else if r4 == "1" && r5 == "1" {
+                } else if r4 == 1 && r5 == 1 {
                     *noyhit.entry((xx, yy)).or_insert(0) += yellowfirstlast;
                 } else {
                     *noyhit.entry((xx, yy)).or_insert(0) += 1;
@@ -159,20 +158,17 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let step: f32 = 6.0;
 
     let mut i = 0;
-    read_lines_no_alloc(xyz_file_in, |line| {
+    read_xyztemp_input_file(xyz_file_in, config, |p, m| {
+        let x = p.x;
+        let y = p.y;
+        let h = p.z - zoffset;
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
-            let mut parts = line.trim().split(' ');
-
-            // parse the parts of the line
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap() - zoffset;
-            let r3 = parts.next().unwrap();
-            let r4 = parts.next().unwrap();
-            let r5 = parts.next().unwrap();
+            let r3 = m.classification;
+            let r4 = m.number_of_returns;
+            let r5 = m.return_number;
 
             if x > xmin && y > ymin {
-                if r5 == "1" {
+                if r5 == 1 {
                     let xx = ((x - xmin) / block + 0.5).floor() as u64;
                     let yy = ((y - ymin) / block + 0.5).floor() as u64;
                     *firsthit.entry((xx, yy)).or_insert(0) += 1;
@@ -195,7 +191,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
                 let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as u64;
                 let hh = h - thelele;
                 if hh <= 1.2 {
-                    if r3 == "2" {
+                    if r3 == 2 {
                         *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
                     } else if hh > 0.25 {
                         *ug.entry((xx, yy)).or_insert(0) += 1;
@@ -209,8 +205,8 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
                 let xx = ((x - xmin) / block + 0.5).floor() as u64;
                 let yy = ((y - ymin) / block + 0.5).floor() as u64;
                 let yyy = ((y - ymin) / block).floor() as u64; // necessary due to bug in perl version
-                if r3 == "2" || greenground >= hh {
-                    if r4 == "1" && r5 == "1" {
+                if r3 == 2 || greenground >= hh {
+                    if r4 == 1 && r5 == 1 {
                         *ghit.entry((xx, yyy)).or_insert(0) += firstandlastreturnasground;
                     } else {
                         *ghit.entry((xx, yyy)).or_insert(0) += 1;
