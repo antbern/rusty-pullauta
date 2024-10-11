@@ -1,6 +1,6 @@
 use crate::canvas::Canvas;
 use crate::config::Config;
-use crate::util::{read_lines, read_xyztemp_input_file};
+use crate::util::{read_lines, read_xyz_file};
 use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
@@ -1568,7 +1568,7 @@ pub fn draw_curves(
 
         let mut xyz: HashMap<(usize, usize), f64> = HashMap::default();
 
-        read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+        read_xyz_file(&xyz_file_in, config, |p, _| {
             let x = p.x;
             let y = p.y;
             let h = p.z;

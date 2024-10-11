@@ -8,7 +8,7 @@ use std::{error::Error, path::Path};
 
 use crate::{
     config::Config,
-    util::{read_lines, read_xyztemp_input_file},
+    util::{read_lines, read_xyz_file},
 };
 
 pub fn blocks(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
@@ -38,7 +38,7 @@ pub fn blocks(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     }
 
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
         let h = p.z;
@@ -63,7 +63,7 @@ pub fn blocks(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     let white = Rgba([255, 255, 255, 255]);
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+    read_xyz_file(&xyz_file_in, config, |p, m| {
         let x = p.x;
         let y = p.y;
         let h = p.z;

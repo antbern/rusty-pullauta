@@ -6,7 +6,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::util::{read_lines_no_alloc, read_xyztemp_input_file};
+use crate::util::{read_lines_no_alloc, read_xyz_file};
 use crate::vec2d::Vec2D;
 
 pub fn xyz2contours(
@@ -34,7 +34,7 @@ pub fn xyz2contours(
 
     let water_class = water_class.parse::<u8>().unwrap();
     let xyz_file_in = tmpfolder.join(xyzfilein);
-    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+    read_xyz_file(&xyz_file_in, config, |p, m| {
         if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
             let x = p.x;
             let y = p.y;
@@ -76,7 +76,7 @@ pub fn xyz2contours(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+    read_xyz_file(&xyz_file_in, config, |p, m| {
         if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
             let x = p.x;
             let y = p.y;

@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::util::read_lines;
-use crate::util::read_xyztemp_input_file;
+use crate::util::read_xyz_file;
 use crate::vec2d::Vec2D;
 
 pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
@@ -39,7 +39,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut ymax: f64 = f64::MIN;
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
 
@@ -91,7 +91,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         f64::NAN,
     );
 
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
         let h = p.z;
@@ -152,7 +152,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut rng = rand::thread_rng();
     let randdist = distributions::Bernoulli::new(cliff_thin).unwrap();
 
-    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+    read_xyz_file(&xyz_file_in, config, |p, m| {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             let m = m.expect("metadata missing");
             if m.classification == 2 {
@@ -333,7 +333,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     );
 
     let xyz_file_in = tmpfolder.join("xyz2.xyz");
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             let x = p.x;
             let y = p.y;

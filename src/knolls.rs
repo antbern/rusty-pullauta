@@ -8,7 +8,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::util::{read_lines, read_lines_no_alloc, read_xyztemp_input_file};
+use crate::util::{read_lines, read_lines_no_alloc, read_xyz_file};
 
 pub fn dotknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Identifying dotknolls...");
@@ -209,7 +209,7 @@ pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Er
     let mut xmin: u64 = u64::MAX;
     let mut ymin: u64 = u64::MAX;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let x = p.x;
         let y = p.y;
         let h = p.z;
@@ -939,7 +939,7 @@ pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
     let mut xmax: u64 = 0;
     let mut ymax: u64 = 0;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         let xx = ((p.x - xstart) / size).floor() as u64;
         let yy = ((p.y - ystart) / size).floor() as u64;
         xyz.insert((xx, yy), p.z);
