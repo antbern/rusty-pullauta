@@ -9,7 +9,7 @@ use std::f32::consts::SQRT_2;
 use std::path::Path;
 
 use crate::config::{Config, Zone};
-use crate::util::{read_lines, read_lines_no_alloc, read_xyztemp_input_file};
+use crate::util::{read_lines, read_xyztemp_input_file};
 
 pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Generating vegetation...");
@@ -43,12 +43,10 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut top: HashMap<(u64, u64), f64> = HashMap::default();
 
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.trim().split(' ');
-
-        let x = parts.next().unwrap().parse::<f64>().unwrap();
-        let y = parts.next().unwrap().parse::<f64>().unwrap();
-        let h = parts.next().unwrap().parse::<f64>().unwrap();
+    read_xyztemp_input_file(xyz_file_in, config, |p, _| {
+        let x = p.x;
+        let y = p.y;
+        let h = p.z;
 
         let xx = ((x - xstart) / size).floor() as u64;
         let yy = ((y - ystart) / size).floor() as u64;
@@ -448,12 +446,10 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        read_lines_no_alloc(xyz_file_in, |line| {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            parts.next();
-            let c: u64 = parts.next().unwrap().parse::<u64>().unwrap();
+        read_xyztemp_input_file(xyz_file_in, config, |p, m| {
+            let x = p.x;
+            let y = p.y;
+            let c = m.expect("metadata missing").classification as u64;
 
             if c == buildings {
                 draw_filled_rect_mut(
@@ -474,11 +470,10 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     }
 
     let xyz_file_in = tmpfolder.join("xyz2.xyz");
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let hh: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+        let x = p.x;
+        let y = p.y;
+        let hh = p.z;
 
         if hh < config.waterele {
             draw_filled_rect_mut(

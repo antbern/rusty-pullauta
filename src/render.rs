@@ -1,6 +1,6 @@
 use crate::canvas::Canvas;
 use crate::config::Config;
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::util::{read_lines, read_xyztemp_input_file};
 use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
@@ -1568,11 +1568,10 @@ pub fn draw_curves(
 
         let mut xyz: HashMap<(usize, usize), f64> = HashMap::default();
 
-        read_lines_no_alloc(xyz_file_in, |line| {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+            let x = p.x;
+            let y = p.y;
+            let h = p.z;
 
             let xx = ((x - xstart) / size).floor() as usize;
             let yy = ((y - ystart) / size).floor() as usize;
