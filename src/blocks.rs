@@ -8,7 +8,7 @@ use std::{error::Error, path::Path};
 
 use crate::{
     config::Config,
-    util::{read_lines, read_lines_no_alloc, read_xyztemp_input_file},
+    util::{read_lines, read_xyztemp_input_file},
 };
 
 pub fn blocks(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
@@ -38,11 +38,10 @@ pub fn blocks(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     }
 
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    read_xyztemp_input_file(&xyz_file_in, config, |p, _| {
+        let x = p.x;
+        let y = p.y;
+        let h = p.z;
 
         let xx = ((x - xstartxyz) / size).floor() as u64;
         let yy = ((y - ystartxyz) / size).floor() as u64;
