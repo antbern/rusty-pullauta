@@ -102,6 +102,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
             let x = p.x;
             let y = p.y;
             let h = p.z;
+            let m = m.expect("metadata missing");
             let r3 = m.classification;
             let r4 = m.number_of_returns;
             let r5 = m.return_number;
@@ -159,6 +160,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
             let x = p.x;
             let y = p.y;
             let h = p.z - zoffset;
+            let m = m.expect("metadata missing");
             let r3 = m.classification;
             let r4 = m.number_of_returns;
             let r5 = m.return_number;

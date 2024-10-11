@@ -81,7 +81,7 @@ pub struct PointMetadata {
 
 struct CachedPoints {
     locations: Box<[PointLocation]>,
-    metadata: Box<[PointMetadata]>,
+    metadata: Option<Box<[PointMetadata]>>,
 }
 
 /// Global shared storage
@@ -92,7 +92,7 @@ static POINT_CACHE: LazyLock<Mutex<std::collections::HashMap<String, CachedPoint
 pub fn read_xyztemp_input_file(
     filename: &Path,
     config: &Config,
-    mut callback: impl FnMut(&PointLocation, &PointMetadata),
+    mut callback: impl FnMut(&PointLocation, Option<&PointMetadata>),
 ) -> Result<(), Box<dyn std::error::Error>> {
     let should_cache = config.cache_input_points;
 
@@ -103,12 +103,14 @@ pub fn read_xyztemp_input_file(
             .get(&filename.display().to_string())
         {
             debug!("Using cached points for {}", filename.display());
-            for (l, m) in cached_points
-                .locations
-                .iter()
-                .zip(cached_points.metadata.iter())
-            {
-                callback(l, m);
+            if let Some(metadata) = cached_points.metadata.as_ref() {
+                for (l, m) in cached_points.locations.iter().zip(metadata.iter()) {
+                    callback(l, Some(m));
+                }
+            } else {
+                for l in cached_points.locations.iter() {
+                    callback(l, None);
+                }
             }
             return Ok(());
         }
@@ -122,23 +124,31 @@ pub fn read_xyztemp_input_file(
         let x = parts.next().unwrap().parse::<f64>().unwrap();
         let y = parts.next().unwrap().parse::<f64>().unwrap();
         let z = parts.next().unwrap().parse::<f64>().unwrap();
-        let classification = parts.next().unwrap().parse::<u8>().unwrap();
-        let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
-        let return_number = parts.next().unwrap().parse::<u8>().unwrap();
-        let intensity = parts.next().unwrap().parse::<u16>().unwrap();
 
-        let l = PointLocation { x, y, z };
-        let m = PointMetadata {
-            classification,
-            number_of_returns,
-            return_number,
-            intensity,
+        // if we have metadata, parse it
+        let m = if let Some(c) = parts.next() {
+            let classification = c.parse::<u8>().unwrap();
+            let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
+            let return_number = parts.next().unwrap().parse::<u8>().unwrap();
+            let intensity = parts.next().unwrap().parse::<u16>().unwrap();
+            Some(PointMetadata {
+                classification,
+                number_of_returns,
+                return_number,
+                intensity,
+            })
+        } else {
+            None
         };
 
-        callback(&l, &m);
+        let l = PointLocation { x, y, z };
+
+        callback(&l, m.as_ref());
         if should_cache {
             point_locations.push(l);
-            point_metadata.push(m);
+            if let Some(m) = m {
+                point_metadata.push(m);
+            }
         }
     })?;
 
@@ -147,7 +157,11 @@ pub fn read_xyztemp_input_file(
             filename.display().to_string(),
             CachedPoints {
                 locations: point_locations.into_boxed_slice(),
-                metadata: point_metadata.into_boxed_slice(),
+                metadata: if point_metadata.is_empty() {
+                    None
+                } else {
+                    Some(point_metadata.into_boxed_slice())
+                },
             },
         );
         debug!("Cached points for {}", filename.display());

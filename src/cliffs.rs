@@ -156,6 +156,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
 
     read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
         if cliff_thin == 1.0 || rng.sample(randdist) {
+            let m = m.expect("metadata missing");
             if m.classification == 2 {
                 list_alt[(
                     ((p.x - xmin).floor() / 3.0) as usize,
