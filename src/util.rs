@@ -108,7 +108,7 @@ pub fn read_xyz_file(
             .expect("should not be poisoned")
             .get(&filename.display().to_string())
         {
-            debug!("Using cached points for {}", filename.display());
+            debug!("[cache: {}] using cached points", filename.display());
             if let Some(metadata) = cached_points.metadata.as_ref() {
                 for (l, m) in cached_points.locations.iter().zip(metadata.iter()) {
                     callback(l, Some(m));
@@ -122,7 +122,15 @@ pub fn read_xyz_file(
         }
     }
 
-    debug!("Reading points from {}", filename.display());
+    if should_cache {
+        debug!(
+            "[cache: {}] no entry found, reading file...",
+            filename.display()
+        );
+    } else {
+        debug!("[cache: {}] disabled, reading file...", filename.display());
+    }
+
     let (mut point_locations, mut point_metadata) = (Vec::new(), Vec::new());
     let mut has_metadata = None;
     read_lines_no_alloc(filename, |line| {
@@ -164,6 +172,7 @@ pub fn read_xyz_file(
     })?;
 
     if should_cache {
+        debug!("[cache: {}] storing points in cache", filename.display());
         POINT_CACHE.lock().expect("should not be poisoned").insert(
             filename.display().to_string(),
             CachedPoints {
@@ -175,10 +184,33 @@ pub fn read_xyz_file(
                 },
             },
         );
-        debug!("Cached points for {}", filename.display());
     }
 
     Ok(())
+}
+
+/// Explicitly set the cache contents for the provided xyz file. This can be used to pre-populate
+/// the cache during initial loading of the file. Does not allow over-writing existing cache
+/// contents.
+pub fn set_xyz_file_cache_contents(
+    filename: &Path,
+    locations: Vec<PointLocation>,
+    metadata: Option<Vec<PointMetadata>>,
+) {
+    let mut cache = POINT_CACHE.lock().expect("should not be poisoned");
+    if cache.contains_key(&filename.display().to_string()) {
+        panic!("Cache already contains content for {}", filename.display());
+    }
+
+    debug!("[cache: {}] Setting cache contents", filename.display());
+
+    cache.insert(
+        filename.display().to_string(),
+        CachedPoints {
+            locations: locations.into_boxed_slice(),
+            metadata: metadata.map(|m| m.into_boxed_slice()),
+        },
+    );
 }
 
 /// Helper struct to time operations. Keeps track of the total time taken until the object is
