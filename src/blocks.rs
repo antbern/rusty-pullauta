@@ -6,9 +6,12 @@ use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::{error::Error, path::Path};
 
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::{
+    config::Config,
+    util::{read_lines, read_lines_no_alloc, read_xyztemp_input_file},
+};
 
-pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn blocks(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Identifying blocks...");
     let xyz_file_in = tmpfolder.join("xyz2.xyz");
     let mut size: f64 = f64::NAN;
@@ -61,22 +64,17 @@ pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     let white = Rgba([255, 255, 255, 255]);
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let r3 = parts.next().unwrap();
-        let r4 = parts.next().unwrap();
-        let r5 = parts.next().unwrap();
+    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+        let x = p.x;
+        let y = p.y;
+        let h = p.z;
+        let r3 = m.classification;
+        let r4 = m.number_of_returns;
+        let r5 = m.return_number;
 
         let xx = ((x - xstartxyz) / size).floor() as u64;
         let yy = ((y - ystartxyz) / size).floor() as u64;
-        if r3 != "2"
-            && r3 != "9"
-            && r4 == "1"
-            && r5 == "1"
-            && h - *xyz.get(&(xx, yy)).unwrap_or(&0.0) > 2.0
+        if r3 != 2 && r3 != 9 && r4 == 1 && r5 == 1 && h - *xyz.get(&(xx, yy)).unwrap_or(&0.0) > 2.0
         {
             draw_filled_rect_mut(
                 &mut img,

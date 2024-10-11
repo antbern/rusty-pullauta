@@ -301,7 +301,7 @@ pub fn process_tile(
     if !vegeonly && !contoursonly && !cliffsonly && config.detectbuildings {
         info!("{}Detecting buildings", thread_name);
         timing.start_section("detecting buildings");
-        blocks::blocks(tmpfolder).unwrap();
+        blocks::blocks(config, tmpfolder).unwrap();
     }
     if !skip_rendering && !vegeonly && !contoursonly && !cliffsonly {
         info!("{}Rendering png map with depressions", thread_name);

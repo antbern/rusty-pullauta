@@ -7,6 +7,8 @@ pub struct Config {
     pub batch: bool,
     pub processes: u64,
 
+    pub cache_input_points: bool,
+
     // only one can be set at a time
     pub vegeonly: bool,
     pub cliffsonly: bool,
@@ -327,6 +329,7 @@ impl Config {
         Ok(Self {
             batch: gs.get("batch").unwrap() == "1",
             processes,
+            cache_input_points: true, // TODO
             vegeonly,
             cliffsonly,
             contoursonly,
