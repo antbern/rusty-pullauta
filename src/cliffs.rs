@@ -2,6 +2,7 @@ use image::{Rgb, RgbImage};
 use log::info;
 use rand::distributions;
 use rand::prelude::*;
+use std::borrow::Cow;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -10,6 +11,7 @@ use std::path::Path;
 use crate::config::Config;
 use crate::util::read_lines;
 use crate::util::read_lines_no_alloc;
+use crate::vec2d::Vec2D;
 
 pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Identifying cliffs...");
@@ -36,16 +38,11 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut ymin: f64 = f64::MAX;
     let mut ymax: f64 = f64::MIN;
 
-    let mut hmin: f64 = f64::MAX;
-    let mut hmax: f64 = f64::MIN;
-
     let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-
     read_lines_no_alloc(xyz_file_in, |line| {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
         if xmin > x {
             xmin = x;
@@ -61,14 +58,6 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
 
         if ymax < y {
             ymax = y;
-        }
-
-        if hmin > h {
-            hmin = h;
-        }
-
-        if hmax < h {
-            hmax = h;
         }
     })
     .expect("Could not read input file");
@@ -97,10 +86,12 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         }
     }
 
-    let mut xyz = vec![
-        vec![f64::NAN; ((ymax - ystart) / size).ceil() as usize + 1];
-        ((xmax - xstart) / size).ceil() as usize + 1
-    ];
+    let mut xyz = Vec2D::new(
+        ((xmax - xstart) / size).ceil() as usize + 1,
+        ((ymax - ystart) / size).ceil() as usize + 1,
+        f64::NAN,
+    );
+
     read_lines_no_alloc(xyz_file_in, |line| {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -110,7 +101,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         let xx = ((x - xstart) / size).floor() as usize;
         let yy = ((y - ystart) / size).floor() as usize;
 
-        xyz[xx][yy] = h;
+        xyz[(xx, yy)] = h;
 
         if sxmax < xx {
             sxmax = xx;
@@ -121,22 +112,25 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     })
     .expect("Could not read input file");
 
-    let mut steepness = vec![vec![f64::NAN; symax + 1]; sxmax + 1];
+    let mut steepness = Vec2D::new(sxmax + 1, symax + 1, f64::NAN);
+
     for i in 3..sxmax - 4 {
         for j in 3..symax - 4 {
             let mut low: f64 = f64::MAX;
             let mut high: f64 = f64::MIN;
             for ii in i - 3..i + 4 {
                 for jj in j - 3..j + 4 {
-                    if xyz[ii][jj] < low {
-                        low = xyz[ii][jj];
+                    let value = xyz[(ii, jj)];
+
+                    if value < low {
+                        low = value;
                     }
-                    if xyz[ii][jj] > high {
-                        high = xyz[ii][jj];
+                    if value > high {
+                        high = value;
                     }
                 }
             }
-            steepness[i][j] = high - low;
+            steepness[(i, j)] = high - low;
         }
     }
 
@@ -149,11 +143,11 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     xmin = (xmin / 3.0).floor() * 3.0;
     ymin = (ymin / 3.0).floor() * 3.0;
 
-    let mut list_alt =
-        vec![
-            vec![Vec::<(f64, f64, f64)>::new(); (((ymax - ymin) / 3.0).ceil() + 1.0) as usize];
-            (((xmax - xmin) / 3.0).ceil() + 1.0) as usize
-        ];
+    let mut list_alt = Vec2D::new(
+        (((xmax - xmin) / 3.0).ceil() + 1.0) as usize,
+        (((ymax - ymin) / 3.0).ceil() + 1.0) as usize,
+        Vec::<(f64, f64, f64)>::new(),
+    );
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz");
 
@@ -169,7 +163,10 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
             let r3 = parts.next().unwrap();
 
             if r3 == "2" {
-                list_alt[((x - xmin).floor() / 3.0) as usize][((y - ymin).floor() / 3.0) as usize]
+                list_alt[(
+                    ((x - xmin).floor() / 3.0) as usize,
+                    ((y - ymin).floor() / 3.0) as usize,
+                )]
                     .push((x, y, h));
             }
         }
@@ -191,61 +188,61 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
             xmin, ymin, xmax, ymax
     ).expect("Cannot write dxf file");
 
+    // temporary vector to reuse memory allocations
+    let mut t = Vec::<(f64, f64, f64)>::new();
     for x in 0..w + 1 {
         for y in 0..h + 1 {
-            if !list_alt[x][y].is_empty() {
-                let mut t = Vec::<(f64, f64, f64)>::new();
+            if !list_alt[(x, y)].is_empty() {
+                t.clear();
                 if x >= 1 {
                     if y >= 1 {
-                        t.extend(&list_alt[x - 1][y - 1]);
+                        t.extend(&list_alt[(x - 1, y - 1)]);
                     }
-                    t.extend(&list_alt[x - 1][y]);
+                    t.extend(&list_alt[(x - 1, y)]);
                     if y < h {
-                        t.extend(&list_alt[x - 1][y + 1]);
+                        t.extend(&list_alt[(x - 1, y + 1)]);
                     }
                 }
                 if y >= 1 {
-                    t.extend(&list_alt[x][y - 1]);
+                    t.extend(&list_alt[(x, y - 1)]);
                 }
-                t.extend(&list_alt[x][y]);
+                t.extend(&list_alt[(x, y)]);
                 if y < h {
-                    t.extend(&list_alt[x][y + 1]);
+                    t.extend(&list_alt[(x, y + 1)]);
                 }
                 if x < w {
                     if y >= 1 {
-                        t.extend(&list_alt[x + 1][y - 1]);
+                        t.extend(&list_alt[(x + 1, y - 1)]);
                     }
-                    t.extend(&list_alt[x + 1][y]);
+                    t.extend(&list_alt[(x + 1, y)]);
                     if y < h {
-                        t.extend(&list_alt[x + 1][y + 1]);
+                        t.extend(&list_alt[(x + 1, y + 1)]);
                     }
                 }
-                let mut d = Vec::<(f64, f64, f64)>::new();
-                d.extend(&list_alt[x][y]);
+                // use a Cow to avoid unnecessary allocation in the case when we don't need to modify the list
+                let mut d = Cow::Borrowed(&list_alt[(x, y)]);
 
                 if d.len() > 31 {
-                    let b = ((d.len() - 1) as f64 / 30.0).floor() as usize;
-                    let mut i: usize = 0;
-                    while i < d.len() {
-                        let mut e = i + b;
-                        if e > d.len() {
-                            e = d.len();
-                        }
-                        let _: Vec<_> = d.drain(i..e).collect();
-                        i += 1;
-                    }
+                    // since we need to modify it, we need to convert it to mutable
+                    // this will actually mutate the outer `d`
+                    let d = d.to_mut();
+
+                    // if d has too many points, thin it by keeping every b point
+                    let b = ((d.len() - 1) as f64 / 30.0).floor() as usize + 1;
+                    let mut idx = 0;
+                    d.retain(|_| {
+                        idx += 1;
+                        idx % b == 0
+                    });
                 }
                 if t.len() > 301 {
-                    let b = ((t.len() - 1) as f64 / 300.0).floor() as usize;
-                    let mut i: usize = 0;
-                    while i < t.len() {
-                        let mut e = i + b;
-                        if e > t.len() {
-                            e = t.len();
-                        }
-                        let _: Vec<_> = t.drain(i..e).collect();
-                        i += 1;
-                    }
+                    // if t has too many points, thin it by keeping every b point
+                    let b = ((t.len() - 1) as f64 / 300.0).floor() as usize + 1;
+                    let mut idx = 0;
+                    t.retain(|_| {
+                        idx += 1;
+                        idx % b == 0
+                    })
                 }
                 let mut temp_max: f64 = f64::MIN;
                 let mut temp_min: f64 = f64::MAX;
@@ -259,18 +256,16 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
                     }
                 }
                 if temp_max - temp_min < c1_limit * 0.999 {
-                    d.clear();
+                    // no cliffs to add, continue
+                    continue;
                 }
 
-                for rec in d.iter() {
-                    let x0 = rec.0;
-                    let y0 = rec.1;
-                    let h0 = rec.2;
-
+                for &(x0, y0, h0) in d.iter() {
                     let cliff_length = 1.47;
-                    let mut steep = steepness[((x0 - xstart) / size + 0.5).floor() as usize]
-                        [((y0 - ystart) / size + 0.5).floor() as usize]
-                        - flat_place;
+                    let mut steep = steepness[(
+                        ((x0 - xstart) / size + 0.5).floor() as usize,
+                        ((y0 - ystart) / size + 0.5).floor() as usize,
+                    )] - flat_place;
                     if steep.is_nan() {
                         steep = -flat_place;
                     }
@@ -285,33 +280,23 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
                         bonus = 0.0;
                     }
                     let limit2 = c2_limit + bonus;
-                    for rec2 in t.iter() {
-                        let xt = rec2.0;
-                        let yt = rec2.1;
-                        let ht = rec2.2;
-
+                    for &(xt, yt, ht) in t.iter() {
                         let temp = h0 - ht;
                         let dist = ((x0 - xt).powi(2) + (y0 - yt).powi(2)).sqrt();
                         if dist > 0.0 {
+                            let imgx = ((x0 + xt) / 2.0 - xmin + 0.5).floor() as u32;
+                            let imgy = ((y0 + yt) / 2.0 - ymin + 0.5).floor() as u32;
                             if steep < no_small_ciffs
                                 && temp > limit
                                 && temp > (limit + (dist - limit) * 0.85)
-                                && (((x0 + xt) / 2.0 - xmin + 0.5).floor() as u32) < img.width()
-                                && (((y0 + yt) / 2.0 - ymin + 0.5).floor() as u32) < img.height()
+                                && imgx < img.width()
+                                && imgy < img.height()
                             {
-                                let p = img.get_pixel(
-                                    ((x0 + xt) / 2.0 - xmin + 0.5).floor() as u32,
-                                    ((y0 + yt) / 2.0 - ymin + 0.5).floor() as u32,
-                                );
+                                let p = img.get_pixel(imgx, imgy);
                                 if p[0] == 255 {
-                                    img.put_pixel(
-                                        ((x0 + xt) / 2.0 - xmin + 0.5).floor() as u32,
-                                        ((y0 + yt) / 2.0 - ymin + 0.5).floor() as u32,
-                                        Rgb([0, 0, 0]),
-                                    );
+                                    img.put_pixel(imgx, imgy, Rgb([0, 0, 0]));
                                     f2.write_all(
-                                        "POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff2\r\n  0\r\n"
-                                            .as_bytes(),
+                                        b"POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff2\r\n  0\r\n",
                                     )
                                     .expect("Cannot write dxf file");
                                     write!(
@@ -326,10 +311,8 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
                             }
 
                             if temp > limit2 && temp > (limit2 + (dist - limit2) * 0.85) {
-                                f3.write_all(
-                                    "POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff3\r\n  0\r\n".as_bytes(),
-                                )
-                                .expect("Cannot write dxf file");
+                                f3.write_all(b"POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff3\r\n  0\r\n")
+                                    .expect("Cannot write dxf file");
                                 write!(
                                     &mut f3,
                                     "VERTEX\r\n  8\r\ncliff3\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nVERTEX\r\n  8\r\ncliff3\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nSEQEND\r\n  0\r\n",
@@ -346,14 +329,15 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         }
     }
 
-    f2.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
+    f2.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
         .expect("Cannot write dxf file");
     let c2_limit = 2.6 * 2.75;
-    let mut list_alt =
-        vec![
-            vec![Vec::<(f64, f64, f64)>::new(); (((ymax - ymin) / 3.0).ceil() + 1.0) as usize];
-            (((xmax - xmin) / 3.0).ceil() + 1.0) as usize
-        ];
+
+    let mut list_alt = Vec2D::new(
+        (((xmax - xmin) / 3.0).ceil() + 1.0) as usize,
+        (((ymax - ymin) / 3.0).ceil() + 1.0) as usize,
+        Vec::<(f64, f64, f64)>::new(),
+    );
 
     let xyz_file_in = tmpfolder.join("xyz2.xyz");
     read_lines_no_alloc(&xyz_file_in, |line| {
@@ -363,61 +347,57 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
             let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
             let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            list_alt[((x - xmin).floor() / 3.0) as usize][((y - ymin).floor() / 3.0) as usize]
+            list_alt[(
+                ((x - xmin).floor() / 3.0) as usize,
+                ((y - ymin).floor() / 3.0) as usize,
+            )]
                 .push((x, y, h));
         }
     })
     .expect("Could not read input file");
 
+    // temporary vector to reuse memory allocations
+    let mut t = Vec::<(f64, f64, f64)>::new();
     for x in 0..w + 1 {
         for y in 0..h + 1 {
-            if !list_alt[x][y].is_empty() {
-                let mut t = Vec::<(f64, f64, f64)>::new();
+            let d = &list_alt[(x, y)];
+            if !d.is_empty() {
+                t.clear();
                 if x >= 1 {
                     if y >= 1 {
-                        t.extend(&list_alt[x - 1][y - 1]);
+                        t.extend(&list_alt[(x - 1, y - 1)]);
                     }
-                    t.extend(&list_alt[x - 1][y]);
+                    t.extend(&list_alt[(x - 1, y)]);
                     if y < h {
-                        t.extend(&list_alt[x - 1][y + 1]);
+                        t.extend(&list_alt[(x - 1, y + 1)]);
                     }
                 }
                 if y >= 1 {
-                    t.extend(&list_alt[x][y - 1]);
+                    t.extend(&list_alt[(x, y - 1)]);
                 }
-                t.extend(&list_alt[x][y]);
+                t.extend(&list_alt[(x, y)]);
                 if y < h {
-                    t.extend(&list_alt[x][y + 1]);
+                    t.extend(&list_alt[(x, y + 1)]);
                 }
                 if x < w {
                     if y >= 1 {
-                        t.extend(&list_alt[x + 1][y - 1]);
+                        t.extend(&list_alt[(x + 1, y - 1)]);
                     }
-                    t.extend(&list_alt[x + 1][y]);
+                    t.extend(&list_alt[(x + 1, y)]);
                     if y < h {
-                        t.extend(&list_alt[x + 1][y + 1]);
+                        t.extend(&list_alt[(x + 1, y + 1)]);
                     }
                 }
-                let mut d = Vec::<(f64, f64, f64)>::new();
-                d.extend(&list_alt[x][y]);
 
-                for rec in d.iter() {
-                    let x0 = rec.0;
-                    let y0 = rec.1;
-                    let h0 = rec.2;
+                for &(x0, y0, h0) in d.iter() {
                     let cliff_length = 1.47;
                     let limit = c2_limit;
-                    for rec2 in t.iter() {
-                        let xt = rec2.0;
-                        let yt = rec2.1;
-                        let ht = rec2.2;
+                    for &(xt, yt, ht) in t.iter() {
                         let temp = h0 - ht;
                         let dist = ((x0 - xt).powi(2) + (y0 - yt).powi(2)).sqrt();
                         if dist > 0.0 && temp > limit && temp > (limit + (dist - limit) * 0.85) {
-                            f3.write_all(
-                                "POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff4\r\n  0\r\n".as_bytes(),
-                            )
-                            .expect("Cannot write dxf file");
+                            f3.write_all(b"POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff4\r\n  0\r\n")
+                                .expect("Cannot write dxf file");
                             write!(
                                 &mut f3,
                                 "VERTEX\r\n  8\r\ncliff4\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nVERTEX\r\n  8\r\ncliff4\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nSEQEND\r\n  0\r\n",
@@ -433,7 +413,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         }
     }
 
-    f3.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
+    f3.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
         .expect("Cannot write dxf file");
     img.save(tmpfolder.join("c2.png"))
         .expect("could not save output png");
