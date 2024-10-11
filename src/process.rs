@@ -17,6 +17,8 @@ use crate::knolls;
 use crate::merge;
 use crate::render;
 use crate::util::read_lines;
+use crate::util::PointLocation;
+use crate::util::PointMetadata;
 use crate::util::Timing;
 use crate::vegetation;
 
@@ -156,13 +158,36 @@ pub fn process_tile(
         let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
 
         let tmp_filename = tmpfolder.join("xyztemp.xyz");
-        let tmp_file = File::create(tmp_filename).expect("Unable to create file");
+        let tmp_file = File::create(&tmp_filename).expect("Unable to create file");
         let mut tmp_fp = BufWriter::new(tmp_file);
 
         let mut reader = Reader::from_path(filename).expect("Unable to open reader");
+        let mut s = if config.experimental_cache_input_files {
+            if thinfactor == 1.0 {
+                Some((Vec::new(), Vec::new()))
+            } else {
+                let n = reader.header().number_of_points() as usize;
+                Some((Vec::with_capacity(n), Vec::with_capacity(n)))
+            }
+        } else {
+            None
+        };
         for ptu in reader.points() {
             let pt = ptu.unwrap();
             if thinfactor == 1.0 || rng.sample(randdist) {
+                if let Some((l, m)) = s.as_mut() {
+                    l.push(PointLocation {
+                        x: pt.x * xfactor,
+                        y: pt.y * yfactor,
+                        z: pt.z * zfactor + zoff,
+                    });
+                    m.push(PointMetadata {
+                        classification: pt.classification.into(),
+                        number_of_returns: pt.number_of_returns,
+                        return_number: pt.return_number,
+                        intensity: pt.intensity,
+                    });
+                }
                 write!(
                     &mut tmp_fp,
                     "{} {} {} {} {} {} {}\r\n",
@@ -178,6 +203,9 @@ pub fn process_tile(
             }
         }
         tmp_fp.flush().unwrap();
+        if let Some((l, m)) = s {
+            crate::util::set_xyz_file_cache_contents(&tmp_filename, l, Some(m));
+        }
     } else {
         fs::copy(Path::new(filename), tmpfolder.join("xyztemp.xyz"))
             .expect("Could not copy file to tmpfolder");
