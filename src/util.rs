@@ -94,7 +94,7 @@ pub fn read_xyztemp_input_file(
     config: &Config,
     mut callback: impl FnMut(&PointLocation, Option<&PointMetadata>),
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let should_cache = config.cache_input_points;
+    let should_cache = config.experimental_cache_input_files;
 
     if should_cache {
         if let Some(cached_points) = POINT_CACHE

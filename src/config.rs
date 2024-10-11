@@ -7,7 +7,7 @@ pub struct Config {
     pub batch: bool,
     pub processes: u64,
 
-    pub cache_input_points: bool,
+    pub experimental_cache_input_files: bool,
 
     // only one can be set at a time
     pub vegeonly: bool,
@@ -154,6 +154,8 @@ impl Config {
         let pnorthlineswidth: usize = parse_typed(gs, "northlineswidth", 0);
 
         let processes: u64 = gs.get("processes").unwrap().parse::<u64>().unwrap();
+        let experimental_cache_input_files: bool =
+            gs.get("experimental_cache_input_files").unwrap_or("0") == "1";
 
         let lazfolder = gs.get("lazfolder").unwrap_or("").to_string();
         let batchoutfolder = gs.get("batchoutfolder").unwrap_or("").to_string();
@@ -329,7 +331,7 @@ impl Config {
         Ok(Self {
             batch: gs.get("batch").unwrap() == "1",
             processes,
-            cache_input_points: true, // TODO
+            experimental_cache_input_files,
             vegeonly,
             cliffsonly,
             contoursonly,
