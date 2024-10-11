@@ -6,7 +6,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::util::read_lines_no_alloc;
+use crate::util::{read_lines_no_alloc, read_xyztemp_input_file};
 use crate::vec2d::Vec2D;
 
 pub fn xyz2contours(
@@ -32,19 +32,13 @@ pub fn xyz2contours(
     let mut hmin: f64 = f64::MAX;
     let mut hmax: f64 = f64::MIN;
 
+    let water_class = water_class.parse::<u8>().unwrap();
     let xyz_file_in = tmpfolder.join(xyzfilein);
-    read_lines_no_alloc(&xyz_file_in, |line| {
-        let mut parts = line.trim().split(' ');
-
-        let p0 = parts.next().unwrap();
-        let p1 = parts.next().unwrap();
-        let p2 = parts.next().unwrap();
-        let p3 = parts.next();
-
-        if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
-            let x: f64 = p0.parse::<f64>().unwrap();
-            let y: f64 = p1.parse::<f64>().unwrap();
-            let h: f64 = p2.parse::<f64>().unwrap();
+    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+        if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
+            let x = p.x;
+            let y = p.y;
+            let h = p.z;
 
             if xmin > x {
                 xmin = x;
@@ -82,18 +76,11 @@ pub fn xyz2contours(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.trim().split(' ');
-
-        let p0 = parts.next().unwrap();
-        let p1 = parts.next().unwrap();
-        let p2 = parts.next().unwrap();
-        let p3 = parts.next();
-
-        if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
-            let x: f64 = p0.parse::<f64>().unwrap();
-            let y: f64 = p1.parse::<f64>().unwrap();
-            let h: f64 = p2.parse::<f64>().unwrap();
+    read_xyztemp_input_file(&xyz_file_in, config, |p, m| {
+        if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
+            let x = p.x;
+            let y = p.y;
+            let h = p.z;
 
             let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
             let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
