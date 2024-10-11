@@ -3,7 +3,7 @@ use std::{
     fs::File,
     io::{self, BufRead},
     path::Path,
-    sync::{LazyLock, Mutex},
+    sync::{Arc, LazyLock, Mutex},
     time::Instant,
 };
 
@@ -85,8 +85,7 @@ struct CachedPoints {
 }
 
 /// Global shared storage
-/// TODO: make this more thread-beneficial by not requiring to lock the cache to have read-access
-static POINT_CACHE: LazyLock<Mutex<std::collections::HashMap<String, CachedPoints>>> =
+static POINT_CACHE: LazyLock<Mutex<std::collections::HashMap<String, Arc<CachedPoints>>>> =
     LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
 /// Reads the input file and parses the XYZ and optional metadata fields.
@@ -103,11 +102,16 @@ pub fn read_xyz_file(
     let should_cache = config.experimental_cache_input_files;
 
     if should_cache {
-        if let Some(cached_points) = POINT_CACHE
-            .lock()
-            .expect("should not be poisoned")
-            .get(&filename.display().to_string())
-        {
+        // this ensyres that the lock is released as soon as possible, since we only clone the Arc
+        // while the lock is held
+        let cached_points = {
+            POINT_CACHE
+                .lock()
+                .expect("should not be poisoned")
+                .get(&filename.display().to_string())
+                .cloned()
+        };
+        if let Some(cached_points) = cached_points {
             debug!("[cache: {}] using cached points", filename.display());
             if let Some(metadata) = cached_points.metadata.as_ref() {
                 for (l, m) in cached_points.locations.iter().zip(metadata.iter()) {
@@ -175,14 +179,14 @@ pub fn read_xyz_file(
         debug!("[cache: {}] storing points in cache", filename.display());
         POINT_CACHE.lock().expect("should not be poisoned").insert(
             filename.display().to_string(),
-            CachedPoints {
+            Arc::new(CachedPoints {
                 locations: point_locations.into_boxed_slice(),
                 metadata: if point_metadata.is_empty() {
                     None
                 } else {
                     Some(point_metadata.into_boxed_slice())
                 },
-            },
+            }),
         );
     }
 
@@ -206,10 +210,10 @@ pub fn set_xyz_file_cache_contents(
 
     cache.insert(
         filename.display().to_string(),
-        CachedPoints {
+        Arc::new(CachedPoints {
             locations: locations.into_boxed_slice(),
             metadata: metadata.map(|m| m.into_boxed_slice()),
-        },
+        }),
     );
 }
 
