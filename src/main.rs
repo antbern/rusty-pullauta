@@ -144,7 +144,7 @@ fn main() {
     }
 
     if command == "blocks" {
-        pullauta::blocks::blocks(&tmpfolder).unwrap();
+        pullauta::blocks::blocks(&config, &tmpfolder).unwrap();
         return;
     }
 

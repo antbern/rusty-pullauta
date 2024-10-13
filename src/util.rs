@@ -3,10 +3,13 @@ use std::{
     fs::File,
     io::{self, BufRead},
     path::Path,
+    sync::{Arc, LazyLock, Mutex},
     time::Instant,
 };
 
 use log::debug;
+
+use crate::config::Config;
 
 pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
@@ -61,6 +64,157 @@ where
     );
 
     Ok(())
+}
+
+pub struct PointLocation {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+pub struct PointMetadata {
+    pub classification: u8,
+    pub number_of_returns: u8,
+    pub return_number: u8,
+    pub intensity: u16,
+}
+
+struct CachedPoints {
+    locations: Box<[PointLocation]>,
+    metadata: Option<Box<[PointMetadata]>>,
+}
+
+/// Global shared storage
+static POINT_CACHE: LazyLock<Mutex<std::collections::HashMap<String, Arc<CachedPoints>>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+/// Reads the input file and parses the XYZ and optional metadata fields.
+/// If the `experimental_cache_input_files` is on, this caches the content in memory, allowing for
+/// faster re-reads of the same file.
+///
+/// This is thread-safe and will only cache the file once, even if called from multiple threads.
+/// Although the file might be read multiple times in case of concurrent access.
+pub fn read_xyz_file(
+    filename: &Path,
+    config: &Config,
+    mut callback: impl FnMut(&PointLocation, Option<&PointMetadata>),
+) -> Result<(), Box<dyn std::error::Error>> {
+    let should_cache = config.experimental_cache_input_files;
+
+    if should_cache {
+        // this ensyres that the lock is released as soon as possible, since we only clone the Arc
+        // while the lock is held
+        let cached_points = {
+            POINT_CACHE
+                .lock()
+                .expect("should not be poisoned")
+                .get(&filename.display().to_string())
+                .cloned()
+        };
+        if let Some(cached_points) = cached_points {
+            debug!("[cache: {}] using cached points", filename.display());
+            if let Some(metadata) = cached_points.metadata.as_ref() {
+                for (l, m) in cached_points.locations.iter().zip(metadata.iter()) {
+                    callback(l, Some(m));
+                }
+            } else {
+                for l in cached_points.locations.iter() {
+                    callback(l, None);
+                }
+            }
+            return Ok(());
+        }
+    }
+
+    if should_cache {
+        debug!(
+            "[cache: {}] no entry found, reading file...",
+            filename.display()
+        );
+    } else {
+        debug!("[cache: {}] disabled, reading file...", filename.display());
+    }
+
+    let (mut point_locations, mut point_metadata) = (Vec::new(), Vec::new());
+    let mut has_metadata = None;
+    read_lines_no_alloc(filename, |line| {
+        let mut parts = line.trim().split(' ').peekable();
+
+        let x = parts.next().unwrap().parse::<f64>().unwrap();
+        let y = parts.next().unwrap().parse::<f64>().unwrap();
+        let z = parts.next().unwrap().parse::<f64>().unwrap();
+
+        // if we dont have metadata information yet, check if there is any
+        if has_metadata.is_none() {
+            has_metadata = Some(parts.peek().is_some());
+        }
+
+        let m = if has_metadata.expect("metadata should be set on first line") {
+            let classification = parts.next().unwrap().parse::<u8>().unwrap();
+            let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
+            let return_number = parts.next().unwrap().parse::<u8>().unwrap();
+            let intensity = parts.next().unwrap().parse::<u16>().unwrap();
+            Some(PointMetadata {
+                classification,
+                number_of_returns,
+                return_number,
+                intensity,
+            })
+        } else {
+            None
+        };
+
+        let l = PointLocation { x, y, z };
+
+        callback(&l, m.as_ref());
+        if should_cache {
+            point_locations.push(l);
+            if let Some(m) = m {
+                point_metadata.push(m);
+            }
+        }
+    })?;
+
+    if should_cache {
+        debug!("[cache: {}] storing points in cache", filename.display());
+        POINT_CACHE.lock().expect("should not be poisoned").insert(
+            filename.display().to_string(),
+            Arc::new(CachedPoints {
+                locations: point_locations.into_boxed_slice(),
+                metadata: if point_metadata.is_empty() {
+                    None
+                } else {
+                    Some(point_metadata.into_boxed_slice())
+                },
+            }),
+        );
+    }
+
+    Ok(())
+}
+
+/// Explicitly set the cache contents for the provided xyz file. This can be used to pre-populate
+/// the cache during initial loading of the file. Does not allow over-writing existing cache
+/// contents.
+pub fn set_xyz_file_cache_contents(
+    filename: &Path,
+    locations: Vec<PointLocation>,
+    metadata: Option<Vec<PointMetadata>>,
+) {
+    let mut cache = POINT_CACHE.lock().expect("should not be poisoned");
+    if cache.contains_key(&filename.display().to_string()) {
+        panic!("Cache already contains content for {}", filename.display());
+    }
+
+    debug!("[cache: {}] Setting cache contents", filename.display());
+
+    cache.insert(
+        filename.display().to_string(),
+        Arc::new(CachedPoints {
+            locations: locations.into_boxed_slice(),
+            metadata: metadata.map(|m| m.into_boxed_slice()),
+        }),
+    );
 }
 
 /// Helper struct to time operations. Keeps track of the total time taken until the object is

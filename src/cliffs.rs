@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::util::read_lines;
-use crate::util::read_lines_no_alloc;
+use crate::util::read_xyz_file;
 use crate::vec2d::Vec2D;
 
 pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
@@ -39,10 +39,9 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut ymax: f64 = f64::MIN;
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    read_xyz_file(&xyz_file_in, config, |p, _| {
+        let x = p.x;
+        let y = p.y;
 
         if xmin > x {
             xmin = x;
@@ -92,11 +91,10 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         f64::NAN,
     );
 
-    read_lines_no_alloc(xyz_file_in, |line| {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    read_xyz_file(&xyz_file_in, config, |p, _| {
+        let x = p.x;
+        let y = p.y;
+        let h = p.z;
 
         let xx = ((x - xstart) / size).floor() as usize;
         let yy = ((y - ystart) / size).floor() as usize;
@@ -154,20 +152,15 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut rng = rand::thread_rng();
     let randdist = distributions::Bernoulli::new(cliff_thin).unwrap();
 
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    read_xyz_file(&xyz_file_in, config, |p, m| {
         if cliff_thin == 1.0 || rng.sample(randdist) {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let r3 = parts.next().unwrap();
-
-            if r3 == "2" {
+            let m = m.expect("metadata missing");
+            if m.classification == 2 {
                 list_alt[(
-                    ((x - xmin).floor() / 3.0) as usize,
-                    ((y - ymin).floor() / 3.0) as usize,
+                    ((p.x - xmin).floor() / 3.0) as usize,
+                    ((p.y - ymin).floor() / 3.0) as usize,
                 )]
-                    .push((x, y, h));
+                    .push((p.x, p.y, p.z));
             }
         }
     })
@@ -340,12 +333,11 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     );
 
     let xyz_file_in = tmpfolder.join("xyz2.xyz");
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    read_xyz_file(&xyz_file_in, config, |p, _| {
         if cliff_thin == 1.0 || rng.sample(randdist) {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let x = p.x;
+            let y = p.y;
+            let h = p.z;
 
             list_alt[(
                 ((x - xmin).floor() / 3.0) as usize,
