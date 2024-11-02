@@ -4,6 +4,7 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 
 pub mod blocks;
+pub mod cache;
 pub mod canvas;
 pub mod cliffs;
 pub mod config;
