@@ -4,16 +4,13 @@ use rand::distributions;
 use rand::prelude::*;
 use std::borrow::Cow;
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::io::Write;
 
 use crate::config::Config;
-use crate::util::read_lines;
-use crate::util::read_lines_no_alloc;
+use crate::util::FileProvider;
 use crate::vec2d::Vec2D;
 
-pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Identifying cliffs...");
 
     let &Config {
@@ -38,8 +35,8 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     let mut ymin: f64 = f64::MAX;
     let mut ymax: f64 = f64::MIN;
 
-    let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.lines("xyztemp.xyz");
+    while let Some(line) = reader.next().expect("Could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -59,31 +56,31 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         if ymax < y {
             ymax = y;
         }
-    })
-    .expect("Could not read input file");
+    }
 
-    let xyz_file_in = tmpfolder.join("xyz2.xyz");
+    let xyz_file_in = "xyz2.xyz";
+
     let mut size: f64 = f64::NAN;
     let mut xstart: f64 = f64::NAN;
     let mut ystart: f64 = f64::NAN;
     let mut sxmax: usize = usize::MIN;
     let mut symax: usize = usize::MIN;
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    let mut reader = provider.xyz(xyz_file_in);
+    let mut i = 0;
+    while let Some(line) = reader.next().expect("Could not read input file") {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
+        if i == 0 {
+            xstart = x;
+            ystart = y;
+        } else if i == 1 {
+            size = y - ystart;
+        } else {
+            break;
         }
+        i += 1;
     }
 
     let mut xyz = Vec2D::new(
@@ -92,7 +89,8 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         f64::NAN,
     );
 
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("Could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -109,8 +107,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         if symax < yy {
             symax = yy;
         }
-    })
-    .expect("Could not read input file");
+    }
 
     let mut steepness = Vec2D::new(sxmax + 1, symax + 1, f64::NAN);
 
@@ -149,12 +146,11 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         Vec::<(f64, f64, f64)>::new(),
     );
 
-    let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-
     let mut rng = rand::thread_rng();
     let randdist = distributions::Bernoulli::new(cliff_thin).unwrap();
 
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    let mut reader = provider.xyz("xyztemp.xyz");
+    while let Some(line) = reader.next().expect("Could not read input file") {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             let mut parts = line.split(' ');
             let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -170,20 +166,15 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
                     .push((x, y, h));
             }
         }
-    })
-    .expect("Could not read input file");
+    }
 
     let w = ((xmax - xmin).floor() / 3.0) as usize;
     let h = ((ymax - ymin).floor() / 3.0) as usize;
 
-    let f2 = File::create(tmpfolder.join("c2g.dxf")).expect("Unable to create file");
-    let mut f2 = BufWriter::new(f2);
-
+    let mut f2 = provider.write("c2g.dxf");
     write!(&mut f2,"  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n", xmin, ymin, xmax, ymax).expect("Cannot write dxf file");
 
-    let f3 = File::create(tmpfolder.join("c3g.dxf")).expect("Unable to create file");
-    let mut f3 = BufWriter::new(f3);
-
+    let mut f3 = provider.write("c3g.dxf");
     write!(&mut f3, "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
             xmin, ymin, xmax, ymax
     ).expect("Cannot write dxf file");
@@ -339,8 +330,8 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         Vec::<(f64, f64, f64)>::new(),
     );
 
-    let xyz_file_in = tmpfolder.join("xyz2.xyz");
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    let mut reader = provider.xyz("xyz2.xyz");
+    while let Some(line) = reader.next().expect("Could not read input file") {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             let mut parts = line.split(' ');
             let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -353,8 +344,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
             )]
                 .push((x, y, h));
         }
-    })
-    .expect("Could not read input file");
+    }
 
     // temporary vector to reuse memory allocations
     let mut t = Vec::<(f64, f64, f64)>::new();
@@ -415,7 +405,7 @@ pub fn makecliffs(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
 
     f3.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
         .expect("Cannot write dxf file");
-    img.save(tmpfolder.join("c2.png"))
+    img.save(provider.path("c2.png"))
         .expect("could not save output png");
     info!("Done");
     Ok(())

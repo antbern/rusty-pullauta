@@ -298,7 +298,7 @@ pub fn process_tile(
     if !vegeonly && !contoursonly {
         info!("{}Cliff generation", thread_name);
         timing.start_section("cliff generation");
-        cliffs::makecliffs(config, tmpfolder).unwrap();
+        cliffs::makecliffs(config, provider).unwrap();
     }
     if !vegeonly && !contoursonly && !cliffsonly && config.detectbuildings {
         info!("{}Detecting buildings", thread_name);

@@ -173,7 +173,7 @@ fn main() {
     }
 
     if command == "makecliffs" {
-        pullauta::cliffs::makecliffs(&config, &tmpfolder).unwrap();
+        pullauta::cliffs::makecliffs(&config, &mut provider).unwrap();
         return;
     }
 

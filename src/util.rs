@@ -215,6 +215,10 @@ impl FileProvider {
         let path = self.base_directory.join(filename);
         path.exists()
     }
+
+    pub fn path(&self, filename: &str) -> PathBuf {
+        self.base_directory.join(filename)
+    }
 }
 
 pub struct XyzReader {
