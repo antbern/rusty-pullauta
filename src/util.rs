@@ -1,8 +1,8 @@
 use std::{
     fmt::Debug,
     fs::File,
-    io::{self, BufRead},
-    path::Path,
+    io::{self, BufRead, Write},
+    path::{Path, PathBuf},
     time::Instant,
 };
 
@@ -163,5 +163,67 @@ impl Drop for Timing {
             self.name,
             self.start.elapsed()
         );
+    }
+}
+
+/// A provider of file readers that can be used to read lines from a file.
+///
+/// Creates and generates file objects that can be read / written to. Provides special
+/// functionality for reading XYZ files in an efficient way. Can provide caching of read data.
+pub struct FileProvider {
+    base_directory: PathBuf,
+}
+
+impl FileProvider {
+    pub fn new(base_directory: &Path) -> Self {
+        Self {
+            base_directory: base_directory.to_path_buf(),
+        }
+    }
+
+    pub fn xyz(&self, filename: &str) -> XyzReader {
+        let path = self.base_directory.join(filename);
+        XyzReader {
+            line_reader: LineReader::new(io::BufReader::new(
+                File::open(path).expect("Could not open file"),
+            )),
+        }
+    }
+    pub fn lines(&self, filename: &str) -> LineReader<io::BufReader<File>> {
+        let path = self.base_directory.join(filename);
+        LineReader::new(io::BufReader::new(
+            File::open(path).expect("Could not open file"),
+        ))
+    }
+
+    pub fn read(&self, filename: &str) -> impl BufRead {
+        let path = self.base_directory.join(filename);
+        io::BufReader::new(File::open(path).expect("Could not open file"))
+    }
+
+    pub fn read_to_string(&self, filename: &str) -> io::Result<String> {
+        let path = self.base_directory.join(filename);
+        std::fs::read_to_string(path)
+    }
+
+    pub fn write(&self, filename: &str) -> impl Write {
+        let path = self.base_directory.join(filename);
+        io::BufWriter::new(File::create(path).expect("Could not create file"))
+    }
+
+    pub fn exists(&self, filename: &str) -> bool {
+        let path = self.base_directory.join(filename);
+        path.exists()
+    }
+}
+
+pub struct XyzReader {
+    line_reader: LineReader<io::BufReader<File>>,
+}
+
+impl XyzReader {
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> io::Result<Option<&str>> {
+        self.line_reader.next()
     }
 }

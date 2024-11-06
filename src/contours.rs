@@ -1,17 +1,17 @@
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::io::Write;
 
 use crate::config::Config;
-use crate::util::read_lines_no_alloc;
+use crate::util::FileProvider;
 use crate::vec2d::Vec2D;
+
+const POLYLINE_OUT_TEMP_FILE: &str = "temp_polylines.txt";
 
 pub fn xyz2contours(
     config: &Config,
-    tmpfolder: &Path,
+    provider: &mut FileProvider,
     cinterval: f64,
     xyzfilein: &str,
     xyzfileout: &str,
@@ -32,8 +32,8 @@ pub fn xyz2contours(
     let mut hmin: f64 = f64::MAX;
     let mut hmax: f64 = f64::MIN;
 
-    let xyz_file_in = tmpfolder.join(xyzfilein);
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyzfilein);
+    while let Some(line) = reader.next().expect("could not read file") {
         let mut parts = line.trim().split(' ');
 
         let p0 = parts.next().unwrap();
@@ -70,8 +70,7 @@ pub fn xyz2contours(
                 hmax = h;
             }
         }
-    })
-    .expect("could not read file");
+    }
 
     xmin = (xmin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
     ymin = (ymin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
@@ -82,7 +81,8 @@ pub fn xyz2contours(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyzfilein);
+    while let Some(line) = reader.next().expect("could not read file") {
         let mut parts = line.trim().split(' ');
 
         let p0 = parts.next().unwrap();
@@ -102,8 +102,7 @@ pub fn xyz2contours(
             *sum += h;
             *count += 1;
         }
-    })
-    .expect("could not read file");
+    }
 
     let mut avg_alt = Vec2D::new(w + 2, h + 2, f64::NAN);
 
@@ -229,9 +228,7 @@ pub fn xyz2contours(
     }
 
     if !xyzfileout.is_empty() && xyzfileout != "null" {
-        let xyz_file_out = tmpfolder.join(xyzfileout);
-        let f = File::create(xyz_file_out).expect("Unable to create file");
-        let mut f = BufWriter::new(f);
+        let mut f = provider.write(xyzfileout);
         for x in 0..w + 1 {
             for y in 0..h + 1 {
                 let ele = avg_alt[(x, y)];
@@ -245,10 +242,8 @@ pub fn xyz2contours(
         let v = cinterval;
 
         let mut level: f64 = (hmin / v).floor() * v;
-        let polyline_out = tmpfolder.join("temp_polylines.txt");
 
-        let f = File::create(&polyline_out).expect("Unable to create file");
-        let mut f = BufWriter::new(f);
+        let mut f = provider.write(POLYLINE_OUT_TEMP_FILE);
 
         loop {
             if level >= hmax {
@@ -469,8 +464,7 @@ pub fn xyz2contours(
         // explicitly flush and drop to close the file
         drop(f);
 
-        let f = File::create(tmpfolder.join(dxffile)).expect("Unable to create file");
-        let mut f = BufWriter::new(f);
+        let mut f = provider.write(dxffile);
 
         write!(
             &mut f,
@@ -478,7 +472,8 @@ pub fn xyz2contours(
             xmin, ymin, xmax, ymax,
         ).expect("Cannot write dxf file");
 
-        read_lines_no_alloc(polyline_out, |line| {
+        let mut polyline_out = provider.lines(POLYLINE_OUT_TEMP_FILE);
+        while let Some(line) = polyline_out.next().expect("Cannot read file") {
             let parts = line.trim().split(';');
             let r = parts.collect::<Vec<&str>>();
             f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\ncont\r\n  0\r\n".as_bytes())
@@ -505,8 +500,7 @@ pub fn xyz2contours(
             }
             f.write_all("SEQEND\r\n  0\r\n".as_bytes())
                 .expect("Cannot write dxf file");
-        })
-        .expect("Cannot read file");
+        }
         f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
             .expect("Cannot write dxf file");
         info!("Done");

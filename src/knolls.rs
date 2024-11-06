@@ -3,45 +3,44 @@ use imageproc::drawing::draw_line_segment_mut;
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::fs::{self, File};
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::io::Write;
 
 use crate::config::Config;
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::util::FileProvider;
 
-pub fn dotknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Identifying dotknolls...");
 
     let scalefactor = config.scalefactor;
 
-    let xyz_file_in = tmpfolder.join("xyz_knolls.xyz");
+    let xyz_file_in = "xyz_knolls.xyz";
 
     let mut xstart: f64 = 0.0;
     let mut ystart: f64 = 0.0;
     let mut size: f64 = 0.0;
 
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    let mut i = 0;
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
+        if i == 0 {
+            xstart = x;
+            ystart = y;
+        } else if i == 1 {
+            size = y - ystart;
+        } else {
+            break;
         }
+        i += 1;
     }
     let mut xmax = 0.0;
     let mut ymax = 0.0;
 
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
 
         // make sure we have at least 2 items
@@ -60,8 +59,7 @@ pub fn dotknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
                 ymax = yy;
             }
         }
-    })
-    .expect("Could not read input file");
+    }
 
     let mut im = GrayImage::from_pixel(
         (xmax * size / scalefactor) as u32,
@@ -69,15 +67,15 @@ pub fn dotknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
         Luma([0xff]),
     );
 
-    let f = File::create(tmpfolder.join("dotknolls.dxf")).expect("Unable to create file");
-    let mut f = BufWriter::new(f);
+    let mut f = provider.write("dotknolls.dxf");
     write!(&mut f,
         "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
         xstart, ystart, xmax * size + xstart, ymax * size + ystart
     ).expect("Cannot write dxf file");
 
-    let input = tmpfolder.join("out2.dxf");
-    let data = fs::read_to_string(input).expect("Can not read input file");
+    let data = provider
+        .read_to_string("out2.dxf")
+        .expect("Can not read input file");
     let data: Vec<&str> = data.split("POLYLINE").collect();
 
     for (j, rec) in data.iter().enumerate() {
@@ -122,8 +120,8 @@ pub fn dotknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
         }
     }
 
-    let input = tmpfolder.join("dotknolls.txt");
-    read_lines_no_alloc(input, |line| {
+    let mut reader = provider.lines("dotknolls.txt");
+    while let Some(line) = reader.next().expect("could not read input file") {
         let parts = line.split(' ');
         let r = parts.collect::<Vec<&str>>();
         if r.len() >= 3 {
@@ -163,15 +161,14 @@ pub fn dotknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
             )
             .expect("Can not write to file");
         }
-    })
-    .expect("Could not read file");
+    }
 
     f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
         .expect("Can not write to file");
     info!("Done");
     Ok(())
 }
-pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Detecting knolls...");
     let scalefactor = config.scalefactor;
     let contour_interval = config.contour_interval;
@@ -180,28 +177,28 @@ pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Er
 
     let interval = 0.3 * scalefactor;
 
-    let xyz_file_in = tmpfolder.join("xyz_03.xyz");
+    let xyz_file_in = "xyz_03.xyz";
 
     let mut size: f64 = f64::NAN;
     let mut xstart: f64 = f64::NAN;
     let mut ystart: f64 = f64::NAN;
 
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    let mut reader = provider.xyz(xyz_file_in);
+    let mut i = 0;
+    while let Some(line) = reader.next().expect("could not read input file") {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
+        if i == 0 {
+            xstart = x;
+            ystart = y;
+        } else if i == 1 {
+            size = y - ystart;
+        } else {
+            break;
         }
+        i += 1;
     }
 
     let mut xmax: u64 = u64::MIN;
@@ -209,7 +206,8 @@ pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Er
     let mut xmin: u64 = u64::MAX;
     let mut ymin: u64 = u64::MAX;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -232,14 +230,13 @@ pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Er
         if ymin > yy {
             ymin = yy;
         }
-    })
-    .expect("Could not read file");
+    }
 
-    let data = fs::read_to_string(tmpfolder.join("contours03.dxf"))
+    let data = provider
+        .read_to_string("contours03.dxf")
         .expect("Should have been able to read the file");
     let data: Vec<&str> = data.split("POLYLINE").collect();
-    let f = File::create(tmpfolder.join("detected.dxf")).expect("Unable to create file");
-    let mut f = BufWriter::new(f);
+    let mut f = provider.write("detected.dxf");
     write!(&mut f,
         "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
         xmin, ymin, xmax, ymax
@@ -791,8 +788,7 @@ pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Er
 
     let canditates = new_candidates;
 
-    let file_pins = File::create(tmpfolder.join("pins.txt")).expect("Unable to create file");
-    let mut file_pins = BufWriter::new(file_pins);
+    let mut file_pins = provider.write("pins.dxf");
 
     for l in 0..data.len() {
         let mut skip = false;
@@ -907,40 +903,41 @@ pub fn knolldetector(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Er
     Ok(())
 }
 
-pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Identifying knolls...");
     let scalefactor = config.scalefactor;
     let contour_interval = config.contour_interval;
 
     let interval = contour_interval / 2.0 * scalefactor;
 
-    let xyz_file_in = tmpfolder.join("xyz_03.xyz");
+    let xyz_file_in = "xyz_03.xyz";
 
     let mut xstart: f64 = 0.0;
     let mut ystart: f64 = 0.0;
     let mut size: f64 = 0.0;
 
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    let mut reader = provider.xyz(xyz_file_in);
+    let mut i = 0;
+    while let Some(line) = reader.next().expect("could not read input file") {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
+        if i == 0 {
+            xstart = x;
+            ystart = y;
+        } else if i == 1 {
+            size = y - ystart;
+        } else {
+            break;
         }
+        i += 1;
     }
     let mut xmax: u64 = 0;
     let mut ymax: u64 = 0;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -955,10 +952,9 @@ pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
         if ymax < yy {
             ymax = yy;
         }
-    })
-    .expect("could not read file");
-    let mut xyz2: HashMap<(u64, u64), f64> = xyz.clone();
+    }
 
+    let mut xyz2: HashMap<(u64, u64), f64> = xyz.clone();
     for i in 2..(xmax as usize - 1) {
         for j in 2..(ymax as usize - 1) {
             let mut low = f64::MAX;
@@ -997,9 +993,10 @@ pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
     }
     let mut pins: Vec<Pin> = Vec::new();
 
-    let pins_file_in = tmpfolder.join("pins.txt");
-    if pins_file_in.exists() {
-        read_lines_no_alloc(pins_file_in, |line| {
+    let pins_file_in = "pins.txt";
+    if provider.exists(pins_file_in) {
+        let mut reader = provider.lines(pins_file_in);
+        while let Some(line) = reader.next().expect("could not read file") {
             let mut r = line.trim().split(',');
             let ele = r.nth(2).unwrap().parse::<f64>().unwrap();
             let xx = r.next().unwrap().parse::<f64>().unwrap();
@@ -1026,8 +1023,7 @@ pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
                 xlist: x,
                 ylist: y,
             });
-        })
-        .expect("could not read pins file");
+        }
     }
 
     // compute closest distance from each pin to another pin
@@ -1162,10 +1158,10 @@ pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
         }
     }
 
-    let f2 = File::create(tmpfolder.join("xyz_knolls.xyz")).expect("Unable to create file");
-    let mut f2 = BufWriter::new(f2);
+    let mut f2 = provider.write("xyz_knolls.xyz");
 
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let parts = line.split(' ');
         let mut r = parts.collect::<Vec<&str>>();
         let x: f64 = r[0].parse::<f64>().unwrap();
@@ -1189,8 +1185,7 @@ pub fn xyzknolls(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>
         let out = r.join(" ");
         f2.write_all(out.as_bytes()).expect("cannot write to file");
         f2.write_all("\n".as_bytes()).expect("cannot write to file");
-    })
-    .expect("could not read file");
+    }
 
     info!("Done");
     Ok(())

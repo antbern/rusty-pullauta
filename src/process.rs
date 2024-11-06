@@ -17,6 +17,7 @@ use crate::knolls;
 use crate::merge;
 use crate::render;
 use crate::util::read_lines;
+use crate::util::FileProvider;
 use crate::util::Timing;
 use crate::vegetation;
 
@@ -93,6 +94,7 @@ pub fn process_tile(
     config: &Config,
     thread: &String,
     tmpfolder: &Path,
+    provider: &mut FileProvider,
     filename: &str,
     skip_rendering: bool,
 ) -> Result<(), Box<dyn Error>> {
@@ -198,7 +200,7 @@ pub fn process_tile(
     if vegeonly || cliffsonly {
         contours::xyz2contours(
             config,
-            tmpfolder,
+            provider,
             scalefactor * 0.3,
             "xyztemp.xyz",
             "xyz_03.xyz",
@@ -209,7 +211,7 @@ pub fn process_tile(
     } else {
         contours::xyz2contours(
             config,
-            tmpfolder,
+            provider,
             scalefactor * 0.3,
             "xyztemp.xyz",
             "xyz_03.xyz",
@@ -234,7 +236,7 @@ pub fn process_tile(
             info!("{}Basemap contours", thread_name);
             contours::xyz2contours(
                 config,
-                tmpfolder,
+                provider,
                 basemapcontours,
                 "xyz2.xyz",
                 "",
@@ -246,11 +248,11 @@ pub fn process_tile(
         if !skipknolldetection {
             info!("{}Knoll detection part 2", thread_name);
             timing.start_section("knoll detection part 2");
-            knolls::knolldetector(config, tmpfolder).unwrap();
+            knolls::knolldetector(config, provider).unwrap();
         }
         info!("{}Contour generation part 1", thread_name);
         timing.start_section("contour generation part 1");
-        knolls::xyzknolls(config, tmpfolder).unwrap();
+        knolls::xyzknolls(config, provider).unwrap();
 
         info!("{}Contour generation part 2", thread_name);
         timing.start_section("contour generation part 2");
@@ -258,7 +260,7 @@ pub fn process_tile(
             // contours 2.5
             contours::xyz2contours(
                 config,
-                tmpfolder,
+                provider,
                 halfinterval,
                 "xyz_knolls.xyz",
                 "null",
@@ -269,7 +271,7 @@ pub fn process_tile(
         } else {
             contours::xyz2contours(
                 config,
-                tmpfolder,
+                provider,
                 halfinterval,
                 "xyztemp.xyz",
                 "null",
@@ -284,7 +286,7 @@ pub fn process_tile(
 
         info!("{}Contour generation part 4", thread_name);
         timing.start_section("contour generation part 4");
-        knolls::dotknolls(config, tmpfolder).unwrap();
+        knolls::dotknolls(config, provider).unwrap();
     }
 
     if !cliffsonly && !contoursonly {
@@ -455,11 +457,13 @@ pub fn batch_process(conf: &Config, thread: &String) {
         tmp_fp.flush().unwrap();
 
         let tmpfolder = PathBuf::from(format!("temp{}", thread));
+        let mut provider = FileProvider::new(&tmpfolder);
         if zip_files.is_empty() {
             process_tile(
                 conf,
                 thread,
                 &tmpfolder,
+                &mut provider,
                 &format!("temp{}.xyz", thread),
                 false,
             )
@@ -469,6 +473,7 @@ pub fn batch_process(conf: &Config, thread: &String) {
                 conf,
                 thread,
                 &tmpfolder,
+                &mut provider,
                 &format!("temp{}.xyz", thread),
                 true,
             )

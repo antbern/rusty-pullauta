@@ -1,5 +1,6 @@
 use log::info;
 use pullauta::config::Config;
+use pullauta::util::FileProvider;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -64,6 +65,7 @@ fn main() {
 
     let tmpfolder = PathBuf::from(format!("temp{}", thread));
     fs::create_dir_all(&tmpfolder).expect("Could not create tmp folder");
+    let mut provider = FileProvider::new(&tmpfolder);
 
     let pnorthlinesangle = config.pnorthlinesangle;
     let pnorthlineswidth = config.pnorthlineswidth;
@@ -149,7 +151,7 @@ fn main() {
     }
 
     if command == "dotknolls" {
-        pullauta::knolls::dotknolls(&config, &tmpfolder).unwrap();
+        pullauta::knolls::dotknolls(&config, &mut provider).unwrap();
         return;
     }
 
@@ -166,7 +168,7 @@ fn main() {
     }
 
     if command == "knolldetector" {
-        pullauta::knolls::knolldetector(&config, &tmpfolder).unwrap();
+        pullauta::knolls::knolldetector(&config, &mut provider).unwrap();
         return;
     }
 
@@ -224,7 +226,7 @@ fn main() {
     }
 
     if command == "xyzknolls" {
-        pullauta::knolls::xyzknolls(&config, &tmpfolder).unwrap();
+        pullauta::knolls::xyzknolls(&config, &mut provider).unwrap();
     }
 
     if command == "unzipmtk" {
@@ -246,7 +248,7 @@ fn main() {
         }
         pullauta::contours::xyz2contours(
             &config,
-            &tmpfolder,
+            &mut provider,
             cinterval,
             &xyzfilein,
             &xyzfileout,
@@ -293,7 +295,7 @@ fn main() {
         if thread == "0" {
             thread = String::from("");
         }
-        pullauta::process::batch_process(&config, &thread)
+        pullauta::process::batch_process(&config, &thread);
     }
 
     if command_lowercase.ends_with(".zip") {
@@ -311,6 +313,14 @@ fn main() {
         if args.len() > 1 {
             norender = args[1].clone() == "norender";
         }
-        pullauta::process::process_tile(&config, &thread, &tmpfolder, &command, norender).unwrap();
+        pullauta::process::process_tile(
+            &config,
+            &thread,
+            &tmpfolder,
+            &mut provider,
+            &command,
+            norender,
+        )
+        .unwrap();
     }
 }
