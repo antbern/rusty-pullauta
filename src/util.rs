@@ -24,43 +24,81 @@ where
     P: AsRef<Path> + Debug,
 {
     debug!("Reading lines from {filename:?}");
-    let start = Instant::now();
 
     let file = File::open(filename)?;
-    let mut reader = io::BufReader::new(file);
+    let mut reader = LineReader::new(io::BufReader::new(file));
 
-    let mut line_buffer = String::new();
-    let mut line_count: u32 = 0;
-    let mut byte_count: usize = 0;
-    loop {
-        let bytes_read = reader.read_line(&mut line_buffer)?;
-
-        if bytes_read == 0 {
-            break;
-        }
-
-        line_count += 1;
-        byte_count += bytes_read;
-
-        // the read line contains the newline delimiter, so we need to trim it off
-        let line = line_buffer.trim_end();
+    while let Some(line) = reader.next()? {
         line_callback(line);
-        line_buffer.clear();
     }
 
-    let elapsed = start.elapsed();
-    debug!(
-        "Read {} lines in {:.2?} ({:.2?}/line), total {} bytes ({:.2} bytes/second, {:?}/byte, {:.2} bytes/line)",
-        line_count,
-        elapsed,
-        elapsed / line_count,
-        byte_count,
-        byte_count as f64 / elapsed.as_secs_f64(),
-        elapsed / byte_count as u32,
-        byte_count as f64 / line_count as f64,
-    );
-
     Ok(())
+}
+
+/// A simple line reader that reads lines from a file without allocating. Once it reaches EOF, it
+/// will log statistics about the read operation, such as the number of lines read, the total number
+/// of bytes read, and the time taken to read the file.
+pub struct LineReader<R: BufRead> {
+    reader: R,
+    buffer: String,
+    // for tracking statistics
+    start: Option<Instant>,
+    line_count: u32,
+    byte_count: usize,
+}
+
+impl<R: BufRead> LineReader<R> {
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader,
+            buffer: String::new(),
+            start: None,
+            line_count: 0,
+            byte_count: 0,
+        }
+    }
+    // complains about impl Iterator for LineReader, but that
+    // is not possible since we want a "LendingIterator" that returns borrowed data each time.
+    #[allow(clippy::should_implement_trait)]
+    /// Read the next line from the file. Returns `None` if EOF is reached.
+    pub fn next(&mut self) -> io::Result<Option<&str>> {
+        // start the timer the first time the function is called
+        if self.start.is_none() {
+            self.start = Some(Instant::now());
+        }
+
+        self.buffer.clear();
+        let bytes_read = self.reader.read_line(&mut self.buffer)?;
+
+        if bytes_read == 0 {
+            // EOF reached
+            self.log_statistics();
+
+            return Ok(None);
+        }
+
+        self.line_count += 1;
+        self.byte_count += bytes_read;
+
+        // the read line contains the newline delimiter, so we need to trim it off
+        return Ok(Some(self.buffer.trim_end()));
+    }
+
+    fn log_statistics(&self) {
+        if let Some(start) = self.start {
+            let elapsed = start.elapsed();
+            debug!(
+                "Read {} lines in {:.2?} ({:.2?}/line), total {} bytes ({:.2} bytes/second, {:?}/byte, {:.2} bytes/line)",
+                self.line_count,
+                elapsed,
+                elapsed / self.line_count,
+                self.byte_count,
+                self.byte_count as f64 / elapsed.as_secs_f64(),
+                elapsed / self.byte_count as u32,
+                self.byte_count as f64 / self.line_count as f64,
+            );
+        }
+    }
 }
 
 /// Helper struct to time operations. Keeps track of the total time taken until the object is
