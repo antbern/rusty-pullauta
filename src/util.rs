@@ -181,7 +181,7 @@ impl FileProvider {
         }
     }
 
-    pub fn xyz(&self, filename: &str) -> XyzReader {
+    pub fn xyz(&mut self, filename: &str) -> XyzReader {
         let path = self.base_directory.join(filename);
         XyzReader {
             line_reader: LineReader::new(io::BufReader::new(
@@ -189,24 +189,24 @@ impl FileProvider {
             )),
         }
     }
-    pub fn lines(&self, filename: &str) -> LineReader<io::BufReader<File>> {
+    pub fn lines(&mut self, filename: &str) -> LineReader<io::BufReader<File>> {
         let path = self.base_directory.join(filename);
         LineReader::new(io::BufReader::new(
             File::open(path).expect("Could not open file"),
         ))
     }
 
-    pub fn read(&self, filename: &str) -> impl BufRead {
+    pub fn read(&mut self, filename: &str) -> impl BufRead {
         let path = self.base_directory.join(filename);
         io::BufReader::new(File::open(path).expect("Could not open file"))
     }
 
-    pub fn read_to_string(&self, filename: &str) -> io::Result<String> {
+    pub fn read_to_string(&mut self, filename: &str) -> io::Result<String> {
         let path = self.base_directory.join(filename);
         std::fs::read_to_string(path)
     }
 
-    pub fn write(&self, filename: &str) -> impl Write {
+    pub fn write(&mut self, filename: &str) -> impl Write {
         let path = self.base_directory.join(filename);
         io::BufWriter::new(File::create(path).expect("Could not create file"))
     }
