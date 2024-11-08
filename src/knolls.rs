@@ -22,9 +22,8 @@ pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
     let mut i = 0;
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if i == 0 {
             xstart = x;
@@ -41,23 +40,18 @@ pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
 
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
+        let x = line.p.x;
+        let y = line.p.y;
 
-        // make sure we have at least 2 items
-        if let (Some(r0), Some(r1)) = (parts.next(), parts.next()) {
-            let x: f64 = r0.parse::<f64>().unwrap();
-            let y: f64 = r1.parse::<f64>().unwrap();
+        let xx = ((x - xstart) / size).floor();
+        let yy = ((y - ystart) / size).floor();
 
-            let xx = ((x - xstart) / size).floor();
-            let yy = ((y - ystart) / size).floor();
+        if xmax < xx {
+            xmax = xx;
+        }
 
-            if xmax < xx {
-                xmax = xx;
-            }
-
-            if ymax < yy {
-                ymax = yy;
-            }
+        if ymax < yy {
+            ymax = yy;
         }
     }
 
@@ -186,9 +180,8 @@ pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(),
     let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if i == 0 {
             xstart = x;
@@ -208,10 +201,9 @@ pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(),
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
 
         let xx = ((x - xstart) / size).floor() as u64;
         let yy = ((y - ystart) / size).floor() as u64;
@@ -919,9 +911,8 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
     let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if i == 0 {
             xstart = x;
@@ -938,10 +929,9 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
 
         let xx = ((x - xstart) / size).floor() as u64;
         let yy = ((y - ystart) / size).floor() as u64;
@@ -1162,10 +1152,8 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
 
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let parts = line.split(' ');
-        let mut r = parts.collect::<Vec<&str>>();
-        let x: f64 = r[0].parse::<f64>().unwrap();
-        let y: f64 = r[1].parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
         let mut h = *xyz2
             .get(&(
                 ((x - xstart) / size).floor() as u64,
@@ -1180,11 +1168,8 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
                 h = tmp + 0.02;
             }
         }
-        let new_val = format!("{}", h);
-        r[2] = &new_val;
-        let out = r.join(" ");
-        f2.write_all(out.as_bytes()).expect("cannot write to file");
-        f2.write_all("\n".as_bytes()).expect("cannot write to file");
+        // with the modified elevation, write the new file
+        writeln!(f2, "{} {} {} {}", x, y, h, line.the_rest()).expect("cannot write to file");
     }
 
     info!("Done");

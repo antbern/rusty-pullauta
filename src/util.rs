@@ -67,16 +67,20 @@ impl<R: BufRead> LineReader<R> {
     fn log_statistics(&self) {
         if let Some(start) = self.start {
             let elapsed = start.elapsed();
-            debug!(
-                "Read {} lines in {:.2?} ({:.2?}/line), total {} bytes ({:.2} bytes/second, {:?}/byte, {:.2} bytes/line)",
-                self.line_count,
-                elapsed,
-                elapsed / self.line_count,
-                self.byte_count,
-                self.byte_count as f64 / elapsed.as_secs_f64(),
-                elapsed / self.byte_count as u32,
-                self.byte_count as f64 / self.line_count as f64,
-            );
+            if self.line_count == 0 {
+                debug!("Read 0 lines in {:.2?}", elapsed);
+            } else {
+                debug!(
+                    "Read {} lines in {:.2?} ({:.2?}/line), total {} bytes ({:.2} bytes/second, {:?}/byte, {:.2} bytes/line)",
+                    self.line_count,
+                    elapsed,
+                    elapsed / self.line_count,
+                    self.byte_count,
+                    self.byte_count as f64 / elapsed.as_secs_f64(),
+                    elapsed / self.byte_count as u32,
+                    self.byte_count as f64 / self.line_count as f64,
+                );
+            }
         }
     }
 }
@@ -213,13 +217,83 @@ impl FileProvider {
     }
 }
 
+pub struct PointLocation {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+pub struct PointMetadata {
+    pub classification: u8,
+    pub number_of_returns: u8,
+    pub return_number: u8,
+    pub intensity: u16,
+}
+
+// struct CachedPoints {
+//     locations: Box<[PointLocation]>,
+//     metadata: Option<Box<[PointMetadata]>>,
+// }
+
 pub struct XyzReader {
     line_reader: LineReader<io::BufReader<File>>,
 }
 
+pub struct PartiallyParsedXyz<'a> {
+    /// The parsed point location.
+    pub p: PointLocation,
+
+    /// The rest of the line that was not parsed, potentially contains metadata.
+    the_rest: Option<&'a str>,
+}
+
+impl<'a> PartiallyParsedXyz<'a> {
+    pub fn from_str(line: &'a str) -> Self {
+        // only parse the first three values
+        let mut parts = line.splitn(3 + 1, ' ');
+
+        let x = parts.next().unwrap().parse().unwrap();
+        let y = parts.next().unwrap().parse().unwrap();
+        let z = parts.next().unwrap().parse().unwrap();
+        // the last part is the rest of the line
+        let the_rest = parts.next();
+
+        Self {
+            p: PointLocation { x, y, z },
+            the_rest,
+        }
+    }
+    /// Parse the metadata from the rest of the line.
+    pub fn metadata(&self) -> Option<PointMetadata> {
+        let mut parts = self.the_rest?.split(' ');
+
+        let classification: u8 = parts.next()?.parse().ok()?;
+        let number_of_returns: u8 = parts.next()?.parse().ok()?;
+        let return_number: u8 = parts.next()?.parse().ok()?;
+        let intensity: u16 = parts.next()?.parse().ok()?;
+
+        Some(PointMetadata {
+            classification,
+            number_of_returns,
+            return_number,
+            intensity,
+        })
+    }
+
+    pub fn the_rest(&self) -> &str {
+        self.the_rest.unwrap_or("")
+    }
+}
+
 impl XyzReader {
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> io::Result<Option<&str>> {
-        self.line_reader.next()
+    pub fn next(&mut self) -> io::Result<Option<PartiallyParsedXyz<'_>>> {
+        let line = match self.line_reader.next() {
+            Ok(Some(line)) => line,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+
+        Ok(Some(PartiallyParsedXyz::from_str(line)))
     }
 }

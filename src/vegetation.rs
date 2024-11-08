@@ -22,9 +22,8 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x = parts.next().unwrap().parse::<f64>().unwrap();
-        let y = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if i == 0 {
             xstart = x;
@@ -44,11 +43,9 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
 
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.trim().split(' ');
-
-        let x = parts.next().unwrap().parse::<f64>().unwrap();
-        let y = parts.next().unwrap().parse::<f64>().unwrap();
-        let h = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
 
         let xx = ((x - xstart) / size).floor() as u64;
         let yy = ((y - ystart) / size).floor() as u64;
@@ -99,13 +96,13 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
-            let mut parts = line.trim().split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let r3 = parts.next().unwrap();
-            let r4 = parts.next().unwrap();
-            let r5 = parts.next().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
+            let h = line.p.z;
+            let m = line.metadata().expect("should have metadata");
+            let r3 = m.classification;
+            let r4 = m.number_of_returns;
+            let r5 = m.return_number;
 
             if xmax < x {
                 xmax = x;
@@ -122,7 +119,7 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
                 let xx = ((x - xmin) / 3.0).floor() as u64;
                 let yy = ((y - ymin) / 3.0).floor() as u64;
 
-                if r3 == "2"
+                if r3 == 2
                     || h < yellowheight
                         + *xyz
                             .get(&(
@@ -132,7 +129,7 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
                             .unwrap_or(&0.0)
                 {
                     *yhit.entry((xx, yy)).or_insert(0) += 1;
-                } else if r4 == "1" && r5 == "1" {
+                } else if r4 == 1 && r5 == 1 {
                     *noyhit.entry((xx, yy)).or_insert(0) += yellowfirstlast;
                 } else {
                     *noyhit.entry((xx, yy)).or_insert(0) += 1;
@@ -157,18 +154,16 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
-            let mut parts = line.trim().split(' ');
-
-            // parse the parts of the line
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap() - zoffset;
-            let r3 = parts.next().unwrap();
-            let r4 = parts.next().unwrap();
-            let r5 = parts.next().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
+            let h = line.p.z - zoffset;
+            let m = line.metadata().expect("should have metadata");
+            let r3 = m.classification;
+            let r4 = m.number_of_returns;
+            let r5 = m.return_number;
 
             if x > xmin && y > ymin {
-                if r5 == "1" {
+                if r5 == 1 {
                     let xx = ((x - xmin) / block + 0.5).floor() as u64;
                     let yy = ((y - ymin) / block + 0.5).floor() as u64;
                     *firsthit.entry((xx, yy)).or_insert(0) += 1;
@@ -191,7 +186,7 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
                 let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as u64;
                 let hh = h - thelele;
                 if hh <= 1.2 {
-                    if r3 == "2" {
+                    if r3 == 2 {
                         *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
                     } else if hh > 0.25 {
                         *ug.entry((xx, yy)).or_insert(0) += 1;
@@ -205,8 +200,8 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
                 let xx = ((x - xmin) / block + 0.5).floor() as u64;
                 let yy = ((y - ymin) / block + 0.5).floor() as u64;
                 let yyy = ((y - ymin) / block).floor() as u64; // necessary due to bug in perl version
-                if r3 == "2" || greenground >= hh {
-                    if r4 == "1" && r5 == "1" {
+                if r3 == 2 || greenground >= hh {
+                    if r4 == 1 && r5 == 1 {
                         *ghit.entry((xx, yyy)).or_insert(0) += firstandlastreturnasground;
                     } else {
                         *ghit.entry((xx, yyy)).or_insert(0) += 1;
@@ -451,11 +446,10 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     if buildings > 0 || water > 0 {
         let mut reader = provider.xyz(xyz_file_in);
         while let Some(line) = reader.next().expect("could not read input file") {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            parts.next();
-            let c: u64 = parts.next().unwrap().parse::<u64>().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
+            let m = line.metadata().expect("should have metadata");
+            let c = m.classification;
 
             if c == buildings {
                 draw_filled_rect_mut(
@@ -476,10 +470,9 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
 
     let mut reader = provider.xyz("xyz2.xyz");
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let hh: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let hh = line.p.z;
 
         if hh < config.waterele {
             draw_filled_rect_mut(

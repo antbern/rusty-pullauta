@@ -21,7 +21,7 @@ pub fn xyz2contours(
     info!("Generating curves...");
 
     let scalefactor = config.scalefactor;
-    let water_class = &config.water_class;
+    let water_class = config.water_class;
 
     let mut xmin: f64 = f64::MAX;
     let mut xmax: f64 = f64::MIN;
@@ -34,18 +34,12 @@ pub fn xyz2contours(
 
     let mut reader = provider.xyz(xyzfilein);
     while let Some(line) = reader.next().expect("could not read file") {
-        let mut parts = line.trim().split(' ');
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
+        let m = line.metadata();
 
-        let p0 = parts.next().unwrap();
-        let p1 = parts.next().unwrap();
-        let p2 = parts.next().unwrap();
-        let p3 = parts.next();
-
-        if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
-            let x: f64 = p0.parse::<f64>().unwrap();
-            let y: f64 = p1.parse::<f64>().unwrap();
-            let h: f64 = p2.parse::<f64>().unwrap();
-
+        if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
             if xmin > x {
                 xmin = x;
             }
@@ -83,18 +77,12 @@ pub fn xyz2contours(
 
     let mut reader = provider.xyz(xyzfilein);
     while let Some(line) = reader.next().expect("could not read file") {
-        let mut parts = line.trim().split(' ');
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
+        let m = line.metadata();
 
-        let p0 = parts.next().unwrap();
-        let p1 = parts.next().unwrap();
-        let p2 = parts.next().unwrap();
-        let p3 = parts.next();
-
-        if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
-            let x: f64 = p0.parse::<f64>().unwrap();
-            let y: f64 = p1.parse::<f64>().unwrap();
-            let h: f64 = p2.parse::<f64>().unwrap();
-
+        if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
             let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
             let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
 

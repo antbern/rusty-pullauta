@@ -68,9 +68,8 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
     while let Some(line) = reader.next().expect("Could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if i == 0 {
             xstart = x;
@@ -91,10 +90,9 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
 
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("Could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
 
         let xx = ((x - xstart) / size).floor() as usize;
         let yy = ((y - ystart) / size).floor() as usize;
@@ -152,13 +150,15 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut reader = provider.xyz("xyztemp.xyz");
     while let Some(line) = reader.next().expect("Could not read input file") {
         if cliff_thin == 1.0 || rng.sample(randdist) {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let r3 = parts.next().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
+            let h = line.p.z;
+            let r3 = line
+                .metadata()
+                .expect("should have metadata")
+                .classification;
 
-            if r3 == "2" {
+            if r3 == 2 {
                 list_alt[(
                     ((x - xmin).floor() / 3.0) as usize,
                     ((y - ymin).floor() / 3.0) as usize,
@@ -333,10 +333,9 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut reader = provider.xyz("xyz2.xyz");
     while let Some(line) = reader.next().expect("Could not read input file") {
         if cliff_thin == 1.0 || rng.sample(randdist) {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
+            let h = line.p.z;
 
             list_alt[(
                 ((x - xmin).floor() / 3.0) as usize,

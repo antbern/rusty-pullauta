@@ -1548,9 +1548,8 @@ pub fn draw_curves(
         let mut reader = provider.xyz(xyz_file_in);
         let mut i = 0;
         while let Some(line) = reader.next().expect("could not read input file") {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
 
             if i == 0 {
                 xstart = x;
@@ -1572,10 +1571,9 @@ pub fn draw_curves(
 
         let mut reader = provider.xyz(xyz_file_in);
         while let Some(line) = reader.next().expect("could not read input file") {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let x = line.p.x;
+            let y = line.p.y;
+            let h = line.p.z;
 
             let xx = ((x - xstart) / size).floor() as usize;
             let yy = ((y - ystart) / size).floor() as usize;

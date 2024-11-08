@@ -18,9 +18,8 @@ pub fn blocks(provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if i == 0 {
             xstartxyz = x;
@@ -36,10 +35,9 @@ pub fn blocks(provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut reader = provider.xyz(xyz_file_in);
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
 
         let xx = ((x - xstartxyz) / size).floor() as u64;
         let yy = ((y - ystartxyz) / size).floor() as u64;
@@ -61,21 +59,17 @@ pub fn blocks(provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
 
     let mut reader = provider.xyz("xyztemp.xyz");
     while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let r3 = parts.next().unwrap();
-        let r4 = parts.next().unwrap();
-        let r5 = parts.next().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
+        let h = line.p.z;
+        let m = line.metadata().expect("should have metadata");
+        let r3 = m.classification;
+        let r4 = m.number_of_returns;
+        let r5 = m.return_number;
 
         let xx = ((x - xstartxyz) / size).floor() as u64;
         let yy = ((y - ystartxyz) / size).floor() as u64;
-        if r3 != "2"
-            && r3 != "9"
-            && r4 == "1"
-            && r5 == "1"
-            && h - *xyz.get(&(xx, yy)).unwrap_or(&0.0) > 2.0
+        if r3 != 2 && r3 != 9 && r4 == 1 && r5 == 1 && h - *xyz.get(&(xx, yy)).unwrap_or(&0.0) > 2.0
         {
             draw_filled_rect_mut(
                 &mut img,
