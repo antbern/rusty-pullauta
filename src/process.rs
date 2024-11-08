@@ -94,13 +94,11 @@ pub fn unzipmtk(
 pub fn process_tile(
     config: &Config,
     thread: &String,
-    tmpfolder: &Path,
     provider: &mut FileProvider,
     filename: &str,
     skip_rendering: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut timing = Timing::start_now("process_tile");
-    fs::create_dir_all(tmpfolder).expect("Could not create tmp folder");
 
     let &Config {
         pnorthlinesangle,
@@ -158,9 +156,7 @@ pub fn process_tile(
         let mut rng = rand::thread_rng();
         let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
 
-        let tmp_filename = tmpfolder.join("xyztemp.xyz");
-        let tmp_file = File::create(tmp_filename).expect("Unable to create file");
-        let mut tmp_fp = BufWriter::new(tmp_file);
+        let mut tmp_fp = provider.write("xyztemp.xyz");
 
         let mut reader = Reader::from_path(filename).expect("Unable to open reader");
         for ptu in reader.points() {
@@ -182,7 +178,8 @@ pub fn process_tile(
         }
         tmp_fp.flush().unwrap();
     } else {
-        fs::copy(Path::new(filename), tmpfolder.join("xyztemp.xyz"))
+        provider
+            .copy_from_outside(filename, "xyztemp.xyz")
             .expect("Could not copy file to tmpfolder");
     }
     info!("{}Done", thread_name);
@@ -222,7 +219,8 @@ pub fn process_tile(
         .expect("contour generation failed");
     }
 
-    fs::copy(tmpfolder.join("xyz_03.xyz"), tmpfolder.join("xyz2.xyz"))
+    provider
+        .copy("xyz_03.xyz", "xyz2.xyz")
         .expect("Could not copy file");
 
     let &Config {
@@ -463,7 +461,6 @@ pub fn batch_process(conf: &Config, thread: &String) {
             process_tile(
                 conf,
                 thread,
-                &tmpfolder,
                 &mut provider,
                 &format!("temp{}.xyz", thread),
                 false,
@@ -473,7 +470,6 @@ pub fn batch_process(conf: &Config, thread: &String) {
             process_tile(
                 conf,
                 thread,
-                &tmpfolder,
                 &mut provider,
                 &format!("temp{}.xyz", thread),
                 true,

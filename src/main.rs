@@ -320,14 +320,7 @@ fn main() {
         if args.len() > 1 {
             norender = args[1].clone() == "norender";
         }
-        pullauta::process::process_tile(
-            &config,
-            &thread,
-            &tmpfolder,
-            &mut provider,
-            &command,
-            norender,
-        )
-        .unwrap();
+        pullauta::process::process_tile(&config, &thread, &mut provider, &command, norender)
+            .unwrap();
     }
 }

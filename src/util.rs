@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{self, BufRead, Write},
     path::{Path, PathBuf},
     time::Instant,
@@ -161,6 +161,7 @@ impl FileProvider {
         }
     }
 
+    /// Read the XYZ records from a file in the base directory.
     pub fn xyz(&mut self, filename: &str) -> XyzReader {
         let path = self.base_directory.join(filename);
         XyzReader {
@@ -169,6 +170,8 @@ impl FileProvider {
             )),
         }
     }
+
+    /// Read the lines of a file in the base directory.
     pub fn lines(&mut self, filename: &str) -> LineReader<io::BufReader<File>> {
         let path = self.base_directory.join(filename);
         LineReader::new(io::BufReader::new(
@@ -176,28 +179,42 @@ impl FileProvider {
         ))
     }
 
+    /// Read a file in the base directory.
     pub fn read(&mut self, filename: &str) -> impl BufRead {
         let path = self.base_directory.join(filename);
         io::BufReader::new(File::open(path).expect("Could not open file"))
     }
 
+    /// Read the contents of a file into a string.
     pub fn read_to_string(&mut self, filename: &str) -> io::Result<String> {
         let path = self.base_directory.join(filename);
         std::fs::read_to_string(path)
     }
 
+    /// Write to a file in the base directory.
     pub fn write(&mut self, filename: &str) -> impl Write {
         let path = self.base_directory.join(filename);
         io::BufWriter::new(File::create(path).expect("Could not create file"))
     }
 
+    /// Check if a file exists in the base directory.
     pub fn exists(&self, filename: &str) -> bool {
         let path = self.base_directory.join(filename);
         path.exists()
     }
 
+    /// Get the full path to a file in the base directory.
     pub fn path(&self, filename: &str) -> PathBuf {
         self.base_directory.join(filename)
+    }
+
+    /// Copy from an external file to the base directory.
+    pub fn copy_from_outside(&self, from: &str, to: &str) -> io::Result<()> {
+        fs::copy(from, self.base_directory.join(to)).map(|_| ())
+    }
+    /// Copy files within the base directory.
+    pub fn copy(&self, from: &str, to: &str) -> io::Result<()> {
+        fs::copy(self.base_directory.join(from), self.base_directory.join(to)).map(|_| ())
     }
 }
 
