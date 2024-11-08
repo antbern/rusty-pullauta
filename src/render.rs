@@ -1501,16 +1501,20 @@ pub fn render(
 
     let mut pgw_file_out = provider.write(&format!("{}.pgw", filename));
 
-    let mut reader = provider.lines("vegetation.pgw");
-    let mut i = 0;
-    while let Some(line) = reader.next().expect("could nore read file") {
-        let mut x: f64 = line.parse::<f64>().unwrap();
-        if i == 0 || i == 3 {
-            x = x / 600.0 * 254.0 * scalefactor;
+    let file_in = "vegetation.pgw";
+    if let Ok(lines) = read_lines(provider.path(file_in)) {
+        for (i, line) in lines.enumerate() {
+            let ip = line.unwrap_or(String::new());
+            let x: f64 = ip.parse::<f64>().unwrap();
+            if i == 0 || i == 3 {
+                write!(&mut pgw_file_out, "{}\r\n", x / 600.0 * 254.0 * scalefactor)
+                    .expect("Unable to write to file");
+            } else {
+                write!(&mut pgw_file_out, "{}\r\n", ip).expect("Unable to write to file");
+            }
         }
-        write!(&mut pgw_file_out, "{}\r\n", x).expect("Unable to write to file");
-        i += 1;
     }
+
     info!("Done");
     Ok(())
 }
