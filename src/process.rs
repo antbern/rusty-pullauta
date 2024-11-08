@@ -24,7 +24,7 @@ use crate::vegetation;
 pub fn process_zip(
     config: &Config,
     thread: &String,
-    tmpfolder: &Path,
+    provider: &mut FileProvider,
     filenames: &[String],
 ) -> Result<(), Box<dyn Error>> {
     let mut timing = Timing::start_now("process_zip");
@@ -36,14 +36,14 @@ pub fn process_zip(
 
     info!("Rendering shape files");
     timing.start_section("unzip and render shape files");
-    unzipmtk(config, tmpfolder, filenames).unwrap();
+    unzipmtk(config, provider, filenames).unwrap();
 
     info!("Rendering png map with depressions");
     timing.start_section("Rendering png map with depressions");
     render::render(
         config,
         thread,
-        tmpfolder,
+        provider,
         pnorthlinesangle,
         pnorthlineswidth,
         false,
@@ -55,7 +55,7 @@ pub fn process_zip(
     render::render(
         config,
         thread,
-        tmpfolder,
+        provider,
         pnorthlinesangle,
         pnorthlineswidth,
         true,
@@ -67,25 +67,26 @@ pub fn process_zip(
 
 pub fn unzipmtk(
     config: &Config,
-    tmpfolder: &Path,
+    provider: &mut FileProvider,
     filenames: &[String],
 ) -> Result<(), Box<dyn Error>> {
-    let low_file = tmpfolder.join("low.png");
+    let low_file = provider.path("low.png");
     if low_file.exists() {
         fs::remove_file(low_file).unwrap();
     }
 
-    let high_file = tmpfolder.join("high.png");
+    let high_file = provider.path("high.png");
     if high_file.exists() {
         fs::remove_file(high_file).unwrap();
     }
 
+    let extract_path = provider.path(".");
     for zip_name in filenames.iter() {
         let fname = Path::new(&zip_name);
         let file = fs::File::open(fname).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
-        archive.extract(tmpfolder).unwrap();
-        render::mtkshaperender(config, tmpfolder).unwrap();
+        archive.extract(&extract_path).unwrap();
+        render::mtkshaperender(config, provider).unwrap();
     }
     Ok(())
 }
@@ -282,7 +283,7 @@ pub fn process_tile(
         }
         info!("{}Contour generation part 3", thread_name);
         timing.start_section("contour generation part 3");
-        merge::smoothjoin(config, tmpfolder).unwrap();
+        merge::smoothjoin(config, provider).unwrap();
 
         info!("{}Contour generation part 4", thread_name);
         timing.start_section("contour generation part 4");
@@ -292,7 +293,7 @@ pub fn process_tile(
     if !cliffsonly && !contoursonly {
         info!("{}Vegetation generation", thread_name);
         timing.start_section("vegetation generation");
-        vegetation::makevege(config, tmpfolder).unwrap();
+        vegetation::makevege(config, provider).unwrap();
     }
 
     if !vegeonly && !contoursonly {
@@ -303,7 +304,7 @@ pub fn process_tile(
     if !vegeonly && !contoursonly && !cliffsonly && config.detectbuildings {
         info!("{}Detecting buildings", thread_name);
         timing.start_section("detecting buildings");
-        blocks::blocks(tmpfolder).unwrap();
+        blocks::blocks(provider).unwrap();
     }
     if !skip_rendering && !vegeonly && !contoursonly && !cliffsonly {
         info!("{}Rendering png map with depressions", thread_name);
@@ -311,7 +312,7 @@ pub fn process_tile(
         render::render(
             config,
             thread,
-            tmpfolder,
+            provider,
             pnorthlinesangle,
             pnorthlineswidth,
             false,
@@ -323,7 +324,7 @@ pub fn process_tile(
         render::render(
             config,
             thread,
-            tmpfolder,
+            provider,
             pnorthlinesangle,
             pnorthlineswidth,
             true,
@@ -333,7 +334,7 @@ pub fn process_tile(
         info!("{}Rendering formlines", thread_name);
         timing.start_section("rendering formlines");
         let mut img = RgbaImage::from_pixel(1, 1, Rgba([0, 0, 0, 0]));
-        render::draw_curves(config, &mut img, tmpfolder, false, false).unwrap();
+        render::draw_curves(config, &mut img, provider, false, false).unwrap();
     } else {
         info!("{}Skipped rendering", thread_name);
     }
@@ -479,7 +480,7 @@ pub fn batch_process(conf: &Config, thread: &String) {
             )
             .unwrap();
             if !vegeonly && !cliffsonly && !contoursonly {
-                process_zip(conf, thread, &tmpfolder, &zip_files).unwrap();
+                process_zip(conf, thread, &mut provider, &zip_files).unwrap();
             }
         }
 

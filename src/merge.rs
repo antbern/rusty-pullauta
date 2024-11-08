@@ -7,7 +7,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::util::FileProvider;
 use crate::vec2d::Vec2D;
 
 fn merge_png(
@@ -504,7 +504,7 @@ pub fn dxfmerge(config: &Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn smoothjoin(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn smoothjoin(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Smooth curves...");
 
     let &Config {
@@ -525,33 +525,34 @@ pub fn smoothjoin(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     }
 
     let interval = halfinterval;
-    let xyz_file_in = tmpfolder.join("xyz_knolls.xyz");
+    let xyz_file_in = "xyz_knolls.xyz";
     let mut size: f64 = f64::NAN;
     let mut xstart: f64 = f64::NAN;
     let mut ystart: f64 = f64::NAN;
 
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
+    let mut reader = provider.xyz(xyz_file_in);
+    let mut i = 0;
+    while let Some(line) = reader.next().expect("could not read input file") {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        if i == 0 {
+            xstart = x;
+            ystart = y;
+        } else if i == 1 {
+            size = y - ystart;
+        } else {
+            break;
         }
+        i += 1;
     }
 
     let mut xmax: u64 = u64::MIN;
     let mut ymax: u64 = u64::MIN;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
 
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -568,8 +569,7 @@ pub fn smoothjoin(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
         if ymax < yy {
             ymax = yy;
         }
-    })
-    .expect("error reading xyz file");
+    }
 
     let mut steepness = Vec2D::new((xmax + 1) as usize, (ymax + 1) as usize, f64::NAN);
 
@@ -591,17 +591,16 @@ pub fn smoothjoin(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
             steepness[(i as usize, j as usize)] = high - low;
         }
     }
-    let input = tmpfolder.join("out.dxf");
-    let data = fs::read_to_string(input).expect("Can not read input file");
+    let data = provider
+        .read_to_string("out.dxf")
+        .expect("Can not read input file");
     let data: Vec<&str> = data.split("POLYLINE").collect();
     let mut dxfheadtmp = data[0];
     dxfheadtmp = dxfheadtmp.split("ENDSEC").collect::<Vec<&str>>()[0];
     dxfheadtmp = dxfheadtmp.split("HEADER").collect::<Vec<&str>>()[1];
     let dxfhead = &format!("HEADER{}ENDSEC", dxfheadtmp);
 
-    let output = tmpfolder.join("out2.dxf");
-    let fp = File::create(output).expect("Unable to create file");
-    let mut fp = BufWriter::new(fp);
+    let mut fp = provider.write("out2.dxf");
 
     fp.write_all(b"  0\r\nSECTION\r\n  2\r\n")
         .expect("Could not write file");
@@ -610,17 +609,9 @@ pub fn smoothjoin(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error
     fp.write_all(b"\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n")
         .expect("Could not write file");
 
-    let depr_output = tmpfolder.join("depressions.txt");
-    let depr_fp = File::create(depr_output).expect("Unable to create file");
-    let mut depr_fp = BufWriter::new(depr_fp);
-
-    let dotknoll_output = tmpfolder.join("dotknolls.txt");
-    let dotknoll_fp = File::create(dotknoll_output).expect("Unable to create file");
-    let mut dotknoll_fp = BufWriter::new(dotknoll_fp);
-
-    let knollhead_output = tmpfolder.join("knollheads.txt");
-    let knollhead_fp = File::create(knollhead_output).expect("Unable to create file");
-    let mut knollhead_fp = BufWriter::new(knollhead_fp);
+    let mut depr_fp = provider.write("depressions.txt");
+    let mut dotknoll_fp = provider.write("dotknolls.txt");
+    let mut knollhead_fp = provider.write("knollheads.txt");
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
     let mut heads2: HashMap<String, usize> = HashMap::default();

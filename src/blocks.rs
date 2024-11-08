@@ -1,41 +1,41 @@
 use image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
-use imageproc::drawing::draw_filled_rect_mut;
-use imageproc::filter::median_filter;
-use imageproc::rect::Rect;
+use imageproc::{drawing::draw_filled_rect_mut, filter::median_filter, rect::Rect};
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
-use std::{error::Error, path::Path};
+use std::error::Error;
 
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::util::FileProvider;
 
-pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn blocks(provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Identifying blocks...");
-    let xyz_file_in = tmpfolder.join("xyz2.xyz");
+    let xyz_file_in = "xyz2.xyz";
     let mut size: f64 = f64::NAN;
     let mut xstartxyz: f64 = f64::NAN;
     let mut ystartxyz: f64 = f64::NAN;
     let mut xmax: u64 = u64::MIN;
     let mut ymax: u64 = u64::MIN;
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstartxyz = x;
-                ystartxyz = y;
-            } else if i == 1 {
-                size = y - ystartxyz;
-            } else {
-                break;
-            }
+    let mut reader = provider.xyz(xyz_file_in);
+    let mut i = 0;
+    while let Some(line) = reader.next().expect("could not read input file") {
+        let mut parts = line.split(' ');
+        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+
+        if i == 0 {
+            xstartxyz = x;
+            ystartxyz = y;
+        } else if i == 1 {
+            size = y - ystartxyz;
+        } else {
+            break;
         }
+        i += 1;
     }
 
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -51,8 +51,7 @@ pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
         if ymax < yy {
             ymax = yy;
         }
-    })
-    .expect("error reading xyz file");
+    }
 
     let mut img = RgbImage::from_pixel(xmax as u32 * 2, ymax as u32 * 2, Rgb([255, 255, 255]));
     let mut img2 = RgbaImage::from_pixel(xmax as u32 * 2, ymax as u32 * 2, Rgba([0, 0, 0, 0]));
@@ -60,8 +59,8 @@ pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     let black = Rgb([0, 0, 0]);
     let white = Rgba([255, 255, 255, 255]);
 
-    let xyz_file_in = tmpfolder.join("xyztemp.xyz");
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz("xyztemp.xyz");
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -98,10 +97,9 @@ pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
                 white,
             );
         }
-    })
-    .expect("error reading xyz file");
+    }
 
-    img2.save(tmpfolder.join("blocks2.png"))
+    img2.save(provider.path("blocks2.png"))
         .expect("error saving png");
 
     let mut img = DynamicImage::ImageRgb8(img);
@@ -111,7 +109,7 @@ pub fn blocks(tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     let filter_size = 2;
     img = image::DynamicImage::ImageRgb8(median_filter(&img.to_rgb8(), filter_size, filter_size));
 
-    img.save(tmpfolder.join("blocks.png"))
+    img.save(provider.path("blocks.png"))
         .expect("error saving png");
     info!("Done");
     Ok(())

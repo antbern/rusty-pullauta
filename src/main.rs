@@ -75,7 +75,7 @@ fn main() {
         pullauta::render::render(
             &config,
             &thread,
-            &tmpfolder,
+            &mut provider,
             pnorthlinesangle,
             pnorthlineswidth,
             false,
@@ -85,7 +85,7 @@ fn main() {
         pullauta::render::render(
             &config,
             &thread,
-            &tmpfolder,
+            &mut provider,
             pnorthlinesangle,
             pnorthlineswidth,
             true,
@@ -146,7 +146,7 @@ fn main() {
     }
 
     if command == "blocks" {
-        pullauta::blocks::blocks(&tmpfolder).unwrap();
+        pullauta::blocks::blocks(&mut provider).unwrap();
         return;
     }
 
@@ -178,7 +178,7 @@ fn main() {
     }
 
     if command == "makevege" {
-        pullauta::vegetation::makevege(&config, &tmpfolder).unwrap();
+        pullauta::vegetation::makevege(&config, &mut provider).unwrap();
     }
 
     if command == "pngmerge" || command == "pngmergedepr" {
@@ -222,7 +222,7 @@ fn main() {
     }
 
     if command == "smoothjoin" {
-        pullauta::merge::smoothjoin(&config, &tmpfolder).unwrap();
+        pullauta::merge::smoothjoin(&config, &mut provider).unwrap();
     }
 
     if command == "xyzknolls" {
@@ -230,11 +230,11 @@ fn main() {
     }
 
     if command == "unzipmtk" {
-        pullauta::process::unzipmtk(&config, &tmpfolder, &args).unwrap();
+        pullauta::process::unzipmtk(&config, &mut provider, &args).unwrap();
     }
 
     if command == "mtkshaperender" {
-        pullauta::render::mtkshaperender(&config, &tmpfolder).unwrap();
+        pullauta::render::mtkshaperender(&config, &mut provider).unwrap();
     }
 
     if command == "xyz2contours" {
@@ -263,8 +263,15 @@ fn main() {
         let angle: f64 = args[0].parse::<f64>().unwrap();
         let nwidth: usize = args[1].parse::<usize>().unwrap();
         let nodepressions: bool = args.len() > 2 && args[2] == "nodepressions";
-        pullauta::render::render(&config, &thread, &tmpfolder, angle, nwidth, nodepressions)
-            .unwrap();
+        pullauta::render::render(
+            &config,
+            &thread,
+            &mut provider,
+            angle,
+            nwidth,
+            nodepressions,
+        )
+        .unwrap();
         return;
     }
 
@@ -301,7 +308,7 @@ fn main() {
     if command_lowercase.ends_with(".zip") {
         let mut zips: Vec<String> = vec![command];
         zips.extend(args);
-        pullauta::process::process_zip(&config, &thread, &tmpfolder, &zips).unwrap();
+        pullauta::process::process_zip(&config, &thread, &mut provider, &zips).unwrap();
         return;
     }
 

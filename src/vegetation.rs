@@ -6,36 +6,35 @@ use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
 use std::f32::consts::SQRT_2;
-use std::path::Path;
 
 use crate::config::{Config, Zone};
-use crate::util::{read_lines, read_lines_no_alloc};
+use crate::util::FileProvider;
 
-pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
+pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
     info!("Generating vegetation...");
 
-    let xyz_file_in = tmpfolder.join("xyz2.xyz");
+    let xyz_file_in = "xyz2.xyz";
 
     let mut xstart: f64 = 0.0;
     let mut ystart: f64 = 0.0;
     let mut size: f64 = 0.0;
 
-    if let Ok(lines) = read_lines(&xyz_file_in) {
-        for (i, line) in lines.enumerate() {
-            let ip = line.unwrap_or(String::new());
-            let mut parts = ip.split(' ');
-            let x = parts.next().unwrap().parse::<f64>().unwrap();
-            let y = parts.next().unwrap().parse::<f64>().unwrap();
+    let mut reader = provider.xyz(xyz_file_in);
+    let mut i = 0;
+    while let Some(line) = reader.next().expect("could not read input file") {
+        let mut parts = line.split(' ');
+        let x = parts.next().unwrap().parse::<f64>().unwrap();
+        let y = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
+        if i == 0 {
+            xstart = x;
+            ystart = y;
+        } else if i == 1 {
+            size = y - ystart;
+        } else {
+            break;
         }
+        i += 1;
     }
 
     let block = config.greendetectsize;
@@ -43,7 +42,8 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut top: HashMap<(u64, u64), f64> = HashMap::default();
 
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.trim().split(' ');
 
         let x = parts.next().unwrap().parse::<f64>().unwrap();
@@ -58,8 +58,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
         if top.contains_key(&(xxx, yyy)) && h > *top.get(&(xxx, yyy)).unwrap() {
             top.insert((xxx, yyy), h);
         }
-    })
-    .expect("Can not read file");
+    }
 
     let thresholds = &config.thresholds;
 
@@ -86,7 +85,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     } = config;
     let greenshades = &config.greenshades;
 
-    let xyz_file_in = tmpfolder.join("xyztemp.xyz");
+    let xyz_file_in = "xyztemp.xyz";
 
     let xmin = xstart;
     let ymin = ystart;
@@ -97,7 +96,8 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default();
 
     let mut i = 0;
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let mut parts = line.trim().split(' ');
             let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -141,8 +141,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
         }
 
         i += 1;
-    })
-    .expect("Can not read file");
+    }
     // rebind the variables to be non-mut for the rest of the function
     let (yhit, noyhit) = (yhit, noyhit);
 
@@ -155,7 +154,8 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let step: f32 = 6.0;
 
     let mut i = 0;
-    read_lines_no_alloc(&xyz_file_in, |line| {
+    let mut reader = provider.xyz(xyz_file_in);
+    while let Some(line) = reader.next().expect("could not read input file") {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let mut parts = line.trim().split(' ');
 
@@ -242,8 +242,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
         }
 
         i += 1;
-    })
-    .expect("Can not read file");
+    }
     // rebind the variables to be non-mut for the rest of the function
     let (firsthit, ugg, ug, ghit, greenhit, highit) = (firsthit, ugg, ug, ghit, greenhit, highit);
 
@@ -386,22 +385,22 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     }
 
     imgye2
-        .save(tmpfolder.join("yellow.png"))
+        .save(provider.path("yellow.png"))
         .expect("could not save output png");
     imggr1
-        .save(tmpfolder.join("greens.png"))
+        .save(provider.path("greens.png"))
         .expect("could not save output png");
 
     let mut img = DynamicImage::ImageRgb8(imggr1);
     image::imageops::overlay(&mut img, &DynamicImage::ImageRgba8(imgye2), 0, 0);
-    img.save(tmpfolder.join("vegetation.png"))
+    img.save(provider.path("vegetation.png"))
         .expect("could not save output png");
 
     // drop img to free memory
     drop(img);
 
     if vege_bitmode {
-        let g_img = image::open(tmpfolder.join("greens.png")).expect("Opening image failed");
+        let g_img = image::open(provider.path("greens.png")).expect("Opening image failed");
         let mut g_img = g_img.to_rgb8();
         for pixel in g_img.pixels_mut() {
             let mut found = false;
@@ -418,10 +417,10 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
         }
         let g_img = DynamicImage::ImageRgb8(g_img).to_luma8();
         g_img
-            .save(tmpfolder.join("greens_bit.png"))
+            .save(provider.path("greens_bit.png"))
             .expect("could not save output png");
 
-        let y_img = image::open(tmpfolder.join("yellow.png")).expect("Opening image failed");
+        let y_img = image::open(provider.path("yellow.png")).expect("Opening image failed");
         let mut y_img = y_img.to_rgba8();
         for pixel in y_img.pixels_mut() {
             if pixel[0] == ye2[0] && pixel[1] == ye2[1] && pixel[2] == ye2[2] && pixel[3] == ye2[3]
@@ -433,14 +432,14 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
         }
         let y_img = DynamicImage::ImageRgba8(y_img).to_luma_alpha8();
         y_img
-            .save(tmpfolder.join("yellow_bit.png"))
+            .save(provider.path("yellow_bit.png"))
             .expect("could not save output png");
 
         let mut img_bit = DynamicImage::ImageLuma8(g_img);
         let img_bit2 = DynamicImage::ImageLumaA8(y_img);
         image::imageops::overlay(&mut img_bit, &img_bit2, 0, 0);
         img_bit
-            .save(tmpfolder.join("vegetation_bit.png"))
+            .save(provider.path("vegetation_bit.png"))
             .expect("could not save output png");
     }
 
@@ -450,7 +449,8 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        read_lines_no_alloc(xyz_file_in, |line| {
+        let mut reader = provider.xyz(xyz_file_in);
+        while let Some(line) = reader.next().expect("could not read input file") {
             let mut parts = line.split(' ');
             let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
             let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -471,12 +471,11 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
                     blue,
                 );
             }
-        })
-        .expect("Can not read file");
+        }
     }
 
-    let xyz_file_in = tmpfolder.join("xyz2.xyz");
-    read_lines_no_alloc(xyz_file_in, |line| {
+    let mut reader = provider.xyz("xyz2.xyz");
+    while let Some(line) = reader.next().expect("could not read input file") {
         let mut parts = line.split(' ');
         let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
         let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
@@ -489,11 +488,10 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
                 blue,
             );
         }
-    })
-    .expect("Can not read file");
+    }
 
     imgwater
-        .save(tmpfolder.join("blueblack.png"))
+        .save(provider.path("blueblack.png"))
         .expect("could not save output png");
 
     drop(imgwater); // explicitly drop imgwater to free memory
@@ -632,15 +630,15 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
         x += bf32 * step;
     }
     imgug
-        .save(tmpfolder.join("undergrowth.png"))
+        .save(provider.path("undergrowth.png"))
         .expect("could not save output png");
     let img_ug_bit_b = median_filter(&img_ug_bit, (bf32 * step) as u32, (bf32 * step) as u32);
     img_ug_bit_b
-        .save(tmpfolder.join("undergrowth_bit.png"))
+        .save(provider.path("undergrowth_bit.png"))
         .expect("could not save output png");
 
     std::fs::write(
-        tmpfolder.join("undergrowth.pgw"),
+        provider.path("undergrowth.pgw"),
         format!(
             "{}\r\n0.0\r\n0.0\r\n{}\r\n{}\r\n{}\r\n",
             1.0 / tmpfactor,
@@ -652,7 +650,7 @@ pub fn makevege(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>>
     .expect("Cannot write pgw file");
 
     std::fs::write(
-        tmpfolder.join("vegetation.pgw"),
+        provider.path("vegetation.pgw"),
         format!("1.0\r\n0.0\r\n0.0\r\n-1.0\r\n{}\r\n{}\r\n", xmin, ymax),
     )
     .expect("Cannot write pgw file");

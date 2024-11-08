@@ -1,5 +1,4 @@
 use std::{
-    fmt::Debug,
     fs::File,
     io::{self, BufRead, Write},
     path::{Path, PathBuf},
@@ -14,25 +13,6 @@ where
 {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
-}
-
-/// Iterates over the lines in a file and calls the callback with a &str reference to each line.
-/// This function does not allocate new strings for each line, as opposed to using
-/// [`io::BufReader::lines()`] as in [`read_lines`].
-pub fn read_lines_no_alloc<P>(filename: P, mut line_callback: impl FnMut(&str)) -> io::Result<()>
-where
-    P: AsRef<Path> + Debug,
-{
-    debug!("Reading lines from {filename:?}");
-
-    let file = File::open(filename)?;
-    let mut reader = LineReader::new(io::BufReader::new(file));
-
-    while let Some(line) = reader.next()? {
-        line_callback(line);
-    }
-
-    Ok(())
 }
 
 /// A simple line reader that reads lines from a file without allocating. Once it reaches EOF, it
