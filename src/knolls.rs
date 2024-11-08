@@ -788,7 +788,7 @@ pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(),
 
     let canditates = new_candidates;
 
-    let mut file_pins = provider.write("pins.dxf");
+    let mut file_pins = provider.write("pins.txt");
 
     for l in 0..data.len() {
         let mut skip = false;

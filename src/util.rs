@@ -156,6 +156,7 @@ pub struct FileProvider {
 
 impl FileProvider {
     pub fn new(base_directory: &Path) -> Self {
+        fs::create_dir_all(base_directory).expect("Could not create tmp folder");
         Self {
             base_directory: base_directory.to_path_buf(),
         }
@@ -177,12 +178,6 @@ impl FileProvider {
         LineReader::new(io::BufReader::new(
             File::open(path).expect("Could not open file"),
         ))
-    }
-
-    /// Read a file in the base directory.
-    pub fn read(&mut self, filename: &str) -> impl BufRead {
-        let path = self.base_directory.join(filename);
-        io::BufReader::new(File::open(path).expect("Could not open file"))
     }
 
     /// Read the contents of a file into a string.

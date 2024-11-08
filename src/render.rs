@@ -31,14 +31,14 @@ pub fn mtkshaperender(config: &Config, provider: &mut FileProvider) -> Result<()
             .collect();
     }
 
-    let vegetation = provider.path("vegetation.png");
-    if !vegetation.exists() {
+    let vegetation_pgw = "vegetation.pgw";
+    if !provider.exists(vegetation_pgw) {
         info!("Could not find vegetation file");
         return Ok(());
     }
 
     let data = provider
-        .read_to_string("vegetation.pgw")
+        .read_to_string(vegetation_pgw)
         .expect("Can not read input file");
     let d: Vec<&str> = data.split('\n').collect();
 
