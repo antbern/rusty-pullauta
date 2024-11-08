@@ -35,11 +35,10 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut ymin: f64 = f64::MAX;
     let mut ymax: f64 = f64::MIN;
 
-    let mut reader = provider.lines("xyztemp.xyz");
+    let mut reader = provider.xyz("xyztemp.xyz");
     while let Some(line) = reader.next().expect("Could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        let x = line.p.x;
+        let y = line.p.y;
 
         if xmin > x {
             xmin = x;
@@ -153,10 +152,10 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
             let x = line.p.x;
             let y = line.p.y;
             let h = line.p.z;
-            let r3 = line
+            let (_, r3) = line
                 .metadata()
-                .expect("should have metadata")
-                .classification;
+                .classification()
+                .expect("should have metadata");
 
             if r3 == 2 {
                 list_alt[(

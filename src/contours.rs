@@ -37,9 +37,9 @@ pub fn xyz2contours(
         let x = line.p.x;
         let y = line.p.y;
         let h = line.p.z;
-        let m = line.metadata();
+        let m = line.metadata().classification();
 
-        if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
+        if m.is_some_and(|(_, c)| c == 2 || c == water_class) || !ground {
             if xmin > x {
                 xmin = x;
             }
@@ -80,9 +80,9 @@ pub fn xyz2contours(
         let x = line.p.x;
         let y = line.p.y;
         let h = line.p.z;
-        let m = line.metadata();
+        let m = line.metadata().classification();
 
-        if m.is_some_and(|m| m.classification == 2 || m.classification == water_class) || !ground {
+        if m.is_some_and(|(_, c)| c == 2 || c == water_class) || !ground {
             let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
             let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
 

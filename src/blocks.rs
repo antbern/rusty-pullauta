@@ -62,10 +62,10 @@ pub fn blocks(provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
         let x = line.p.x;
         let y = line.p.y;
         let h = line.p.z;
-        let m = line.metadata().expect("should have metadata");
-        let r3 = m.classification;
-        let r4 = m.number_of_returns;
-        let r5 = m.return_number;
+        let m = line.metadata();
+        let (m, r3) = m.classification().expect("should have metadata");
+        let (m, r4) = m.number_of_returns().expect("should have metadata");
+        let (_, r5) = m.return_number().expect("should have metadata");
 
         let xx = ((x - xstartxyz) / size).floor() as u64;
         let yy = ((y - ystartxyz) / size).floor() as u64;

@@ -99,10 +99,10 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
             let x = line.p.x;
             let y = line.p.y;
             let h = line.p.z;
-            let m = line.metadata().expect("should have metadata");
-            let r3 = m.classification;
-            let r4 = m.number_of_returns;
-            let r5 = m.return_number;
+            let m = line.metadata();
+            let (m, r3) = m.classification().expect("should have metadata");
+            let (m, r4) = m.number_of_returns().expect("should have metadata");
+            let (_, r5) = m.return_number().expect("should have metadata");
 
             if xmax < x {
                 xmax = x;
@@ -157,10 +157,10 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
             let x = line.p.x;
             let y = line.p.y;
             let h = line.p.z - zoffset;
-            let m = line.metadata().expect("should have metadata");
-            let r3 = m.classification;
-            let r4 = m.number_of_returns;
-            let r5 = m.return_number;
+            let m = line.metadata();
+            let (m, r3) = m.classification().expect("should have metadata");
+            let (m, r4) = m.number_of_returns().expect("should have metadata");
+            let (_, r5) = m.return_number().expect("should have metadata");
 
             if x > xmin && y > ymin {
                 if r5 == 1 {
@@ -448,8 +448,10 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
         while let Some(line) = reader.next().expect("could not read input file") {
             let x = line.p.x;
             let y = line.p.y;
-            let m = line.metadata().expect("should have metadata");
-            let c = m.classification;
+            let (_, c) = line
+                .metadata()
+                .classification()
+                .expect("should have metadata");
 
             if c == buildings {
                 draw_filled_rect_mut(

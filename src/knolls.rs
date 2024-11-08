@@ -1168,8 +1168,10 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
                 h = tmp + 0.02;
             }
         }
+        let line = line.metadata_split().collect::<Vec<_>>().join(" ");
+
         // with the modified elevation, write the new file
-        writeln!(f2, "{} {} {} {}", x, y, h, line.the_rest()).expect("cannot write to file");
+        writeln!(f2, "{} {} {} {}", x, y, h, line).expect("cannot write to file");
     }
 
     info!("Done");

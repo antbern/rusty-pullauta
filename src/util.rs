@@ -244,34 +244,71 @@ pub struct PartiallyParsedXyz<'a> {
     pub p: PointLocation,
 
     /// The rest of the line that was not parsed, potentially contains metadata.
-    the_rest: Option<&'a str>,
+    split: core::str::Split<'a, char>,
 }
 
 impl<'a> PartiallyParsedXyz<'a> {
     pub fn from_str(line: &'a str) -> Self {
         // only parse the first three values
-        let mut parts = line.splitn(3 + 1, ' ');
+        let mut parts = line.split(' ');
 
         let x = parts.next().unwrap().parse().unwrap();
         let y = parts.next().unwrap().parse().unwrap();
         let z = parts.next().unwrap().parse().unwrap();
         // the last part is the rest of the line
-        let the_rest = parts.next();
 
         Self {
             p: PointLocation { x, y, z },
-            the_rest,
+            split: parts,
         }
     }
     /// Parse the metadata from the rest of the line.
-    pub fn metadata(&self) -> Option<PointMetadata> {
-        let mut parts = self.the_rest?.split(' ');
+    pub fn metadata(self) -> MetadataParser<'a, ClassificationField> {
+        // let mut parts = self.the_rest?.split(' ');
+        //
+        // let classification: u8 = parts.next()?.parse().ok()?;
+        // let number_of_returns: u8 = parts.next()?.parse().ok()?;
+        // let return_number: u8 = parts.next()?.parse().ok()?;
+        // let intensity: u16 = parts.next()?.parse().ok()?;
+        //
+        MetadataParser {
+            split: self.split,
+            _state: Default::default(),
+        }
+    }
 
-        let classification: u8 = parts.next()?.parse().ok()?;
-        let number_of_returns: u8 = parts.next()?.parse().ok()?;
-        let return_number: u8 = parts.next()?.parse().ok()?;
-        let intensity: u16 = parts.next()?.parse().ok()?;
+    pub fn metadata_split(self) -> core::str::Split<'a, char> {
+        self.split
+    }
+}
 
+pub struct MetadataParser<'a, S> {
+    split: core::str::Split<'a, char>,
+    _state: core::marker::PhantomData<S>,
+}
+
+pub struct ClassificationField;
+pub struct NumberOfReturnsField;
+pub struct ReturnNumberField;
+pub struct IntensityField;
+
+impl<'a> MetadataParser<'a, ClassificationField> {
+    pub fn classification(mut self) -> Option<(MetadataParser<'a, NumberOfReturnsField>, u8)> {
+        let value = self.split.next()?.parse().ok()?;
+        Some((
+            MetadataParser {
+                split: self.split,
+                _state: Default::default(),
+            },
+            value,
+        ))
+    }
+
+    pub fn all(self) -> Option<PointMetadata> {
+        let (m, classification) = self.classification()?;
+        let (m, number_of_returns) = m.number_of_returns()?;
+        let (m, return_number) = m.return_number()?;
+        let (m, intensity) = m.intensity()?;
         Some(PointMetadata {
             classification,
             number_of_returns,
@@ -279,9 +316,44 @@ impl<'a> PartiallyParsedXyz<'a> {
             intensity,
         })
     }
+}
 
-    pub fn the_rest(&self) -> &str {
-        self.the_rest.unwrap_or("")
+impl<'a> MetadataParser<'a, NumberOfReturnsField> {
+    pub fn number_of_returns(mut self) -> Option<(MetadataParser<'a, ReturnNumberField>, u8)> {
+        let value = self.split.next()?.parse().ok()?;
+        Some((
+            MetadataParser {
+                split: self.split,
+                _state: Default::default(),
+            },
+            value,
+        ))
+    }
+}
+
+impl<'a> MetadataParser<'a, ReturnNumberField> {
+    pub fn return_number(mut self) -> Option<(MetadataParser<'a, IntensityField>, u8)> {
+        let value = self.split.next()?.parse().ok()?;
+        Some((
+            MetadataParser {
+                split: self.split,
+                _state: Default::default(),
+            },
+            value,
+        ))
+    }
+}
+
+impl<'a> MetadataParser<'a, IntensityField> {
+    pub fn intensity(mut self) -> Option<(MetadataParser<'a, IntensityField>, u16)> {
+        let value = self.split.next()?.parse().ok()?;
+        Some((
+            MetadataParser {
+                split: self.split,
+                _state: Default::default(),
+            },
+            value,
+        ))
     }
 }
 
