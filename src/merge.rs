@@ -530,46 +530,50 @@ pub fn smoothjoin(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut xstart: f64 = f64::NAN;
     let mut ystart: f64 = f64::NAN;
 
-    let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        if i == 0 {
-            xstart = x;
-            ystart = y;
-        } else if i == 1 {
-            size = y - ystart;
-        } else {
-            break;
-        }
-        i += 1;
-    }
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            if i == 0 {
+                xstart = x;
+                ystart = y;
+            } else if i == 1 {
+                size = y - ystart;
+            } else {
+                return Some(());
+            }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let mut xmax: u64 = u64::MIN;
     let mut ymax: u64 = u64::MIN;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
 
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        let xx = ((x - xstart) / size).floor() as u64;
-        let yy = ((y - ystart) / size).floor() as u64;
+            let xx = ((x - xstart) / size).floor() as u64;
+            let yy = ((y - ystart) / size).floor() as u64;
 
-        xyz.insert((xx, yy), h);
+            xyz.insert((xx, yy), h);
 
-        if xmax < xx {
-            xmax = xx;
-        }
-        if ymax < yy {
-            ymax = yy;
-        }
-    }
+            if xmax < xx {
+                xmax = xx;
+            }
+            if ymax < yy {
+                ymax = yy;
+            }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let mut steepness = Vec2D::new((xmax + 1) as usize, (ymax + 1) as usize, f64::NAN);
 

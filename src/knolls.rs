@@ -20,46 +20,50 @@ pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
     let mut size: f64 = 0.0;
 
     let mut i = 0;
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        if i == 0 {
-            xstart = x;
-            ystart = y;
-        } else if i == 1 {
-            size = y - ystart;
-        } else {
-            break;
-        }
-        i += 1;
-    }
+            if i == 0 {
+                xstart = x;
+                ystart = y;
+            } else if i == 1 {
+                size = y - ystart;
+            } else {
+                return Some(());
+            }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
     let mut xmax = 0.0;
     let mut ymax = 0.0;
 
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
 
-        // make sure we have at least 2 items
-        if let (Some(r0), Some(r1)) = (parts.next(), parts.next()) {
-            let x: f64 = r0.parse::<f64>().unwrap();
-            let y: f64 = r1.parse::<f64>().unwrap();
+            // make sure we have at least 2 items
+            if let (Some(r0), Some(r1)) = (parts.next(), parts.next()) {
+                let x: f64 = r0.parse::<f64>().unwrap();
+                let y: f64 = r1.parse::<f64>().unwrap();
 
-            let xx = ((x - xstart) / size).floor();
-            let yy = ((y - ystart) / size).floor();
+                let xx = ((x - xstart) / size).floor();
+                let yy = ((y - ystart) / size).floor();
 
-            if xmax < xx {
-                xmax = xx;
+                if xmax < xx {
+                    xmax = xx;
+                }
+
+                if ymax < yy {
+                    ymax = yy;
+                }
             }
-
-            if ymax < yy {
-                ymax = yy;
-            }
-        }
-    }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let mut im = GrayImage::from_pixel(
         (xmax * size / scalefactor) as u32,
@@ -120,48 +124,50 @@ pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
         }
     }
 
-    let mut reader = provider.lines("dotknolls.txt");
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let parts = line.split(' ');
-        let r = parts.collect::<Vec<&str>>();
-        if r.len() >= 3 {
-            let depression: bool = r[0] == "1";
-            let x: f64 = r[1].parse::<f64>().unwrap();
-            let y: f64 = r[2].parse::<f64>().unwrap();
-            let mut ok = true;
-            let mut i = (x - xstart) / scalefactor - 3.0;
-            while i < (x - xstart) / scalefactor + 4.0 && ok {
-                let mut j = (y - ystart) / scalefactor - 3.0;
-                while j < (y - ystart) / scalefactor + 4.0 && ok {
-                    if (i as u32) >= im.width() || (j as u32) >= im.height() {
-                        ok = false;
-                        break;
+    provider
+        .lines("dotknolls.txt", |line| {
+            let parts = line.split(' ');
+            let r = parts.collect::<Vec<&str>>();
+            if r.len() >= 3 {
+                let depression: bool = r[0] == "1";
+                let x: f64 = r[1].parse::<f64>().unwrap();
+                let y: f64 = r[2].parse::<f64>().unwrap();
+                let mut ok = true;
+                let mut i = (x - xstart) / scalefactor - 3.0;
+                while i < (x - xstart) / scalefactor + 4.0 && ok {
+                    let mut j = (y - ystart) / scalefactor - 3.0;
+                    while j < (y - ystart) / scalefactor + 4.0 && ok {
+                        if (i as u32) >= im.width() || (j as u32) >= im.height() {
+                            ok = false;
+                            break;
+                        }
+                        let pix = im.get_pixel(i as u32, j as u32);
+                        if pix[0] == 0 {
+                            ok = false;
+                            break;
+                        }
+                        j += 1.0;
                     }
-                    let pix = im.get_pixel(i as u32, j as u32);
-                    if pix[0] == 0 {
-                        ok = false;
-                        break;
-                    }
-                    j += 1.0;
+                    i += 1.0;
                 }
-                i += 1.0;
+
+                let layer = match (ok, depression) {
+                    (true, true) => "dotknoll",
+                    (true, false) => "udepression",
+                    (false, true) => "uglydotknoll",
+                    (false, false) => "uglyudepression",
+                };
+
+                write!(
+                    &mut f,
+                    "POINT\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 50\r\n0\r\n  0\r\n",
+                    layer, x, y
+                )
+                .expect("Can not write to file");
             }
-
-            let layer = match (ok, depression) {
-                (true, true) => "dotknoll",
-                (true, false) => "udepression",
-                (false, true) => "uglydotknoll",
-                (false, false) => "uglyudepression",
-            };
-
-            write!(
-                &mut f,
-                "POINT\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 50\r\n0\r\n  0\r\n",
-                layer, x, y
-            )
-            .expect("Can not write to file");
-        }
-    }
+            None::<()>
+        })
+        .expect("Can not read input file");
 
     f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
         .expect("Can not write to file");
@@ -183,54 +189,58 @@ pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(),
     let mut xstart: f64 = f64::NAN;
     let mut ystart: f64 = f64::NAN;
 
-    let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        if i == 0 {
-            xstart = x;
-            ystart = y;
-        } else if i == 1 {
-            size = y - ystart;
-        } else {
-            break;
-        }
-        i += 1;
-    }
+            if i == 0 {
+                xstart = x;
+                ystart = y;
+            } else if i == 1 {
+                size = y - ystart;
+            } else {
+                return Some(());
+            }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let mut xmax: u64 = u64::MIN;
     let mut ymax: u64 = u64::MIN;
     let mut xmin: u64 = u64::MAX;
     let mut ymin: u64 = u64::MAX;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        let xx = ((x - xstart) / size).floor() as u64;
-        let yy = ((y - ystart) / size).floor() as u64;
+            let xx = ((x - xstart) / size).floor() as u64;
+            let yy = ((y - ystart) / size).floor() as u64;
 
-        xyz.insert((xx, yy), h);
+            xyz.insert((xx, yy), h);
 
-        if xmax < xx {
-            xmax = xx;
-        }
-        if ymax < yy {
-            ymax = yy;
-        }
-        if xmin > xx {
-            xmin = xx;
-        }
-        if ymin > yy {
-            ymin = yy;
-        }
-    }
+            if xmax < xx {
+                xmax = xx;
+            }
+            if ymax < yy {
+                ymax = yy;
+            }
+            if xmin > xx {
+                xmin = xx;
+            }
+            if ymin > yy {
+                ymin = yy;
+            }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let data = provider
         .read_to_string("contours03.dxf")
@@ -916,43 +926,47 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
     let mut ystart: f64 = 0.0;
     let mut size: f64 = 0.0;
 
-    let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        if i == 0 {
-            xstart = x;
-            ystart = y;
-        } else if i == 1 {
-            size = y - ystart;
-        } else {
-            break;
-        }
-        i += 1;
-    }
+            if i == 0 {
+                xstart = x;
+                ystart = y;
+            } else if i == 1 {
+                size = y - ystart;
+            } else {
+                return Some(());
+            }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read file");
     let mut xmax: u64 = 0;
     let mut ymax: u64 = 0;
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        let xx = ((x - xstart) / size).floor() as u64;
-        let yy = ((y - ystart) / size).floor() as u64;
-        xyz.insert((xx, yy), h);
-        if xmax < xx {
-            xmax = xx;
-        }
-        if ymax < yy {
-            ymax = yy;
-        }
-    }
+            let xx = ((x - xstart) / size).floor() as u64;
+            let yy = ((y - ystart) / size).floor() as u64;
+            xyz.insert((xx, yy), h);
+            if xmax < xx {
+                xmax = xx;
+            }
+            if ymax < yy {
+                ymax = yy;
+            }
+            None::<()>
+        })
+        .expect("could not read file");
 
     let mut xyz2: HashMap<(u64, u64), f64> = xyz.clone();
     for i in 2..(xmax as usize - 1) {
@@ -995,35 +1009,37 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
 
     let pins_file_in = "pins.txt";
     if provider.exists(pins_file_in) {
-        let mut reader = provider.lines(pins_file_in);
-        while let Some(line) = reader.next().expect("could not read file") {
-            let mut r = line.trim().split(',');
-            let ele = r.nth(2).unwrap().parse::<f64>().unwrap();
-            let xx = r.next().unwrap().parse::<f64>().unwrap();
-            let yy = r.next().unwrap().parse::<f64>().unwrap();
-            let ele2 = r.next().unwrap().parse::<f64>().unwrap();
-            let xlist = r.next().unwrap();
-            let ylist = r.next().unwrap();
-            let mut x: Vec<f64> = xlist
-                .split(' ')
-                .map(|s| s.parse::<f64>().unwrap())
-                .collect();
-            let mut y: Vec<f64> = ylist
-                .split(' ')
-                .map(|s| s.parse::<f64>().unwrap())
-                .collect();
-            x.push(x[0]);
-            y.push(y[0]);
+        provider
+            .lines(pins_file_in, |line| {
+                let mut r = line.trim().split(',');
+                let ele = r.nth(2).unwrap().parse::<f64>().unwrap();
+                let xx = r.next().unwrap().parse::<f64>().unwrap();
+                let yy = r.next().unwrap().parse::<f64>().unwrap();
+                let ele2 = r.next().unwrap().parse::<f64>().unwrap();
+                let xlist = r.next().unwrap();
+                let ylist = r.next().unwrap();
+                let mut x: Vec<f64> = xlist
+                    .split(' ')
+                    .map(|s| s.parse::<f64>().unwrap())
+                    .collect();
+                let mut y: Vec<f64> = ylist
+                    .split(' ')
+                    .map(|s| s.parse::<f64>().unwrap())
+                    .collect();
+                x.push(x[0]);
+                y.push(y[0]);
 
-            pins.push(Pin {
-                xx,
-                yy,
-                ele,
-                ele2,
-                xlist: x,
-                ylist: y,
-            });
-        }
+                pins.push(Pin {
+                    xx,
+                    yy,
+                    ele,
+                    ele2,
+                    xlist: x,
+                    ylist: y,
+                });
+                None::<()>
+            })
+            .expect("could not read file");
     }
 
     // compute closest distance from each pin to another pin
@@ -1160,32 +1176,34 @@ pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
 
     let mut f2 = provider.write("xyz_knolls.xyz");
 
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let parts = line.split(' ');
-        let mut r = parts.collect::<Vec<&str>>();
-        let x: f64 = r[0].parse::<f64>().unwrap();
-        let y: f64 = r[1].parse::<f64>().unwrap();
-        let mut h = *xyz2
-            .get(&(
-                ((x - xstart) / size).floor() as u64,
-                ((y - ystart) / size).floor() as u64,
-            ))
-            .unwrap_or(&0.0);
-        let tmp = (h / interval + 0.5).floor() * interval;
-        if (tmp - h).abs() < 0.02 {
-            if h - tmp < 0.0 {
-                h = tmp - 0.02;
-            } else {
-                h = tmp + 0.02;
+    provider
+        .lines(xyz_file_in, |line| {
+            let parts = line.split(' ');
+            let mut r = parts.collect::<Vec<&str>>();
+            let x: f64 = r[0].parse::<f64>().unwrap();
+            let y: f64 = r[1].parse::<f64>().unwrap();
+            let mut h = *xyz2
+                .get(&(
+                    ((x - xstart) / size).floor() as u64,
+                    ((y - ystart) / size).floor() as u64,
+                ))
+                .unwrap_or(&0.0);
+            let tmp = (h / interval + 0.5).floor() * interval;
+            if (tmp - h).abs() < 0.02 {
+                if h - tmp < 0.0 {
+                    h = tmp - 0.02;
+                } else {
+                    h = tmp + 0.02;
+                }
             }
-        }
-        let new_val = format!("{}", h);
-        r[2] = &new_val;
-        let out = r.join(" ");
-        f2.write_all(out.as_bytes()).expect("cannot write to file");
-        f2.write_all("\n".as_bytes()).expect("cannot write to file");
-    }
+            let new_val = format!("{}", h);
+            r[2] = &new_val;
+            let out = r.join(" ");
+            f2.write_all(out.as_bytes()).expect("cannot write to file");
+            f2.write_all("\n".as_bytes()).expect("cannot write to file");
+            None::<()>
+        })
+        .expect("could not read file");
 
     info!("Done");
     Ok(())

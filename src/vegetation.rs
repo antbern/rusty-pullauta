@@ -19,46 +19,50 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let mut ystart: f64 = 0.0;
     let mut size: f64 = 0.0;
 
-    let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x = parts.next().unwrap().parse::<f64>().unwrap();
-        let y = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x = parts.next().unwrap().parse::<f64>().unwrap();
+            let y = parts.next().unwrap().parse::<f64>().unwrap();
 
-        if i == 0 {
-            xstart = x;
-            ystart = y;
-        } else if i == 1 {
-            size = y - ystart;
-        } else {
-            break;
-        }
-        i += 1;
-    }
+            if i == 0 {
+                xstart = x;
+                ystart = y;
+            } else if i == 1 {
+                size = y - ystart;
+            } else {
+                return Some(());
+            }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let block = config.greendetectsize;
 
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     let mut top: HashMap<(u64, u64), f64> = HashMap::default();
 
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.trim().split(' ');
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.trim().split(' ');
 
-        let x = parts.next().unwrap().parse::<f64>().unwrap();
-        let y = parts.next().unwrap().parse::<f64>().unwrap();
-        let h = parts.next().unwrap().parse::<f64>().unwrap();
+            let x = parts.next().unwrap().parse::<f64>().unwrap();
+            let y = parts.next().unwrap().parse::<f64>().unwrap();
+            let h = parts.next().unwrap().parse::<f64>().unwrap();
 
-        let xx = ((x - xstart) / size).floor() as u64;
-        let yy = ((y - ystart) / size).floor() as u64;
-        xyz.insert((xx, yy), h);
-        let xxx = ((x - xstart) / block).floor() as u64;
-        let yyy = ((y - ystart) / block).floor() as u64;
-        if top.contains_key(&(xxx, yyy)) && h > *top.get(&(xxx, yyy)).unwrap() {
-            top.insert((xxx, yyy), h);
-        }
-    }
+            let xx = ((x - xstart) / size).floor() as u64;
+            let yy = ((y - ystart) / size).floor() as u64;
+            xyz.insert((xx, yy), h);
+            let xxx = ((x - xstart) / block).floor() as u64;
+            let yyy = ((y - ystart) / block).floor() as u64;
+            if top.contains_key(&(xxx, yyy)) && h > *top.get(&(xxx, yyy)).unwrap() {
+                top.insert((xxx, yyy), h);
+            }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let thresholds = &config.thresholds;
 
@@ -96,52 +100,54 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default();
 
     let mut i = 0;
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
-            let mut parts = line.trim().split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let r3 = parts.next().unwrap();
-            let r4 = parts.next().unwrap();
-            let r5 = parts.next().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
+                let mut parts = line.trim().split(' ');
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let r3 = parts.next().unwrap();
+                let r4 = parts.next().unwrap();
+                let r5 = parts.next().unwrap();
 
-            if xmax < x {
-                xmax = x;
-            }
-            if ymax < y {
-                ymax = y;
-            }
-            if x > xmin && y > ymin {
-                let xx = ((x - xmin) / block).floor() as u64;
-                let yy = ((y - ymin) / block).floor() as u64;
-                if h > *top.get(&(xx, yy)).unwrap_or(&0.0) {
-                    top.insert((xx, yy), h);
+                if xmax < x {
+                    xmax = x;
                 }
-                let xx = ((x - xmin) / 3.0).floor() as u64;
-                let yy = ((y - ymin) / 3.0).floor() as u64;
+                if ymax < y {
+                    ymax = y;
+                }
+                if x > xmin && y > ymin {
+                    let xx = ((x - xmin) / block).floor() as u64;
+                    let yy = ((y - ymin) / block).floor() as u64;
+                    if h > *top.get(&(xx, yy)).unwrap_or(&0.0) {
+                        top.insert((xx, yy), h);
+                    }
+                    let xx = ((x - xmin) / 3.0).floor() as u64;
+                    let yy = ((y - ymin) / 3.0).floor() as u64;
 
-                if r3 == "2"
-                    || h < yellowheight
-                        + *xyz
-                            .get(&(
-                                ((x - xmin) / size).floor() as u64,
-                                ((y - ymin) / size).floor() as u64,
-                            ))
-                            .unwrap_or(&0.0)
-                {
-                    *yhit.entry((xx, yy)).or_insert(0) += 1;
-                } else if r4 == "1" && r5 == "1" {
-                    *noyhit.entry((xx, yy)).or_insert(0) += yellowfirstlast;
-                } else {
-                    *noyhit.entry((xx, yy)).or_insert(0) += 1;
+                    if r3 == "2"
+                        || h < yellowheight
+                            + *xyz
+                                .get(&(
+                                    ((x - xmin) / size).floor() as u64,
+                                    ((y - ymin) / size).floor() as u64,
+                                ))
+                                .unwrap_or(&0.0)
+                    {
+                        *yhit.entry((xx, yy)).or_insert(0) += 1;
+                    } else if r4 == "1" && r5 == "1" {
+                        *noyhit.entry((xx, yy)).or_insert(0) += yellowfirstlast;
+                    } else {
+                        *noyhit.entry((xx, yy)).or_insert(0) += 1;
+                    }
                 }
             }
-        }
 
-        i += 1;
-    }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
     // rebind the variables to be non-mut for the rest of the function
     let (yhit, noyhit) = (yhit, noyhit);
 
@@ -154,95 +160,97 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let step: f32 = 6.0;
 
     let mut i = 0;
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("could not read input file") {
-        if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
-            let mut parts = line.trim().split(' ');
+    provider
+        .lines(xyz_file_in, |line| {
+            if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
+                let mut parts = line.trim().split(' ');
 
-            // parse the parts of the line
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap() - zoffset;
-            let r3 = parts.next().unwrap();
-            let r4 = parts.next().unwrap();
-            let r5 = parts.next().unwrap();
+                // parse the parts of the line
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let h: f64 = parts.next().unwrap().parse::<f64>().unwrap() - zoffset;
+                let r3 = parts.next().unwrap();
+                let r4 = parts.next().unwrap();
+                let r5 = parts.next().unwrap();
 
-            if x > xmin && y > ymin {
-                if r5 == "1" {
+                if x > xmin && y > ymin {
+                    if r5 == "1" {
+                        let xx = ((x - xmin) / block + 0.5).floor() as u64;
+                        let yy = ((y - ymin) / block + 0.5).floor() as u64;
+                        *firsthit.entry((xx, yy)).or_insert(0) += 1;
+                    }
+
+                    let xx = ((x - xmin) / size).floor() as u64;
+                    let yy = ((y - ymin) / size).floor() as u64;
+                    let a = *xyz.get(&(xx, yy)).unwrap_or(&0.0);
+                    let b = *xyz.get(&(xx + 1, yy)).unwrap_or(&0.0);
+                    let c = *xyz.get(&(xx, yy + 1)).unwrap_or(&0.0);
+                    let d = *xyz.get(&(xx + 1, yy + 1)).unwrap_or(&0.0);
+
+                    let distx = (x - xmin) / size - xx as f64;
+                    let disty = (y - ymin) / size - yy as f64;
+
+                    let ab = a * (1.0 - distx) + b * distx;
+                    let cd = c * (1.0 - distx) + d * distx;
+                    let thelele = ab * (1.0 - disty) + cd * disty;
+                    let xx = ((x - xmin) / block / (step as f64) + 0.5).floor() as u64;
+                    let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as u64;
+                    let hh = h - thelele;
+                    if hh <= 1.2 {
+                        if r3 == "2" {
+                            *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
+                        } else if hh > 0.25 {
+                            *ug.entry((xx, yy)).or_insert(0) += 1;
+                        } else {
+                            *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
+                        }
+                    } else {
+                        *ugg.entry((xx, yy)).or_insert(0.0) += 0.05;
+                    }
+
                     let xx = ((x - xmin) / block + 0.5).floor() as u64;
                     let yy = ((y - ymin) / block + 0.5).floor() as u64;
-                    *firsthit.entry((xx, yy)).or_insert(0) += 1;
-                }
-
-                let xx = ((x - xmin) / size).floor() as u64;
-                let yy = ((y - ymin) / size).floor() as u64;
-                let a = *xyz.get(&(xx, yy)).unwrap_or(&0.0);
-                let b = *xyz.get(&(xx + 1, yy)).unwrap_or(&0.0);
-                let c = *xyz.get(&(xx, yy + 1)).unwrap_or(&0.0);
-                let d = *xyz.get(&(xx + 1, yy + 1)).unwrap_or(&0.0);
-
-                let distx = (x - xmin) / size - xx as f64;
-                let disty = (y - ymin) / size - yy as f64;
-
-                let ab = a * (1.0 - distx) + b * distx;
-                let cd = c * (1.0 - distx) + d * distx;
-                let thelele = ab * (1.0 - disty) + cd * disty;
-                let xx = ((x - xmin) / block / (step as f64) + 0.5).floor() as u64;
-                let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as u64;
-                let hh = h - thelele;
-                if hh <= 1.2 {
-                    if r3 == "2" {
-                        *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
-                    } else if hh > 0.25 {
-                        *ug.entry((xx, yy)).or_insert(0) += 1;
-                    } else {
-                        *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
-                    }
-                } else {
-                    *ugg.entry((xx, yy)).or_insert(0.0) += 0.05;
-                }
-
-                let xx = ((x - xmin) / block + 0.5).floor() as u64;
-                let yy = ((y - ymin) / block + 0.5).floor() as u64;
-                let yyy = ((y - ymin) / block).floor() as u64; // necessary due to bug in perl version
-                if r3 == "2" || greenground >= hh {
-                    if r4 == "1" && r5 == "1" {
-                        *ghit.entry((xx, yyy)).or_insert(0) += firstandlastreturnasground;
-                    } else {
-                        *ghit.entry((xx, yyy)).or_insert(0) += 1;
-                    }
-                } else {
-                    let mut last = 1.0;
-                    if r4 == r5 {
-                        last = lastfactor;
-                        if hh < 5.0 {
-                            last = firstandlastfactor;
+                    let yyy = ((y - ymin) / block).floor() as u64; // necessary due to bug in perl version
+                    if r3 == "2" || greenground >= hh {
+                        if r4 == "1" && r5 == "1" {
+                            *ghit.entry((xx, yyy)).or_insert(0) += firstandlastreturnasground;
+                        } else {
+                            *ghit.entry((xx, yyy)).or_insert(0) += 1;
                         }
-                    }
-
-                    let top_val = *top.get(&(xx, yy)).unwrap_or(&0.0);
-                    for &Zone {
-                        low,
-                        high,
-                        roof,
-                        factor,
-                    } in config.zones.iter()
-                    {
-                        if hh >= low && hh < high && top_val - thelele < roof {
-                            *greenhit.entry((xx, yy)).or_insert(0.0) += factor * last;
-                            break;
+                    } else {
+                        let mut last = 1.0;
+                        if r4 == r5 {
+                            last = lastfactor;
+                            if hh < 5.0 {
+                                last = firstandlastfactor;
+                            }
                         }
-                    }
 
-                    if greenhigh < hh {
-                        *highit.entry((xx, yy)).or_insert(0) += 1;
+                        let top_val = *top.get(&(xx, yy)).unwrap_or(&0.0);
+                        for &Zone {
+                            low,
+                            high,
+                            roof,
+                            factor,
+                        } in config.zones.iter()
+                        {
+                            if hh >= low && hh < high && top_val - thelele < roof {
+                                *greenhit.entry((xx, yy)).or_insert(0.0) += factor * last;
+                                break;
+                            }
+                        }
+
+                        if greenhigh < hh {
+                            *highit.entry((xx, yy)).or_insert(0) += 1;
+                        }
                     }
                 }
             }
-        }
 
-        i += 1;
-    }
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
     // rebind the variables to be non-mut for the rest of the function
     let (firsthit, ugg, ug, ghit, greenhit, highit) = (firsthit, ugg, ug, ghit, greenhit, highit);
 
@@ -449,46 +457,50 @@ pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        let mut reader = provider.xyz(xyz_file_in);
-        while let Some(line) = reader.next().expect("could not read input file") {
+        provider
+            .lines(xyz_file_in, |line| {
+                let mut parts = line.split(' ');
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                parts.next();
+                let c: u64 = parts.next().unwrap().parse::<u64>().unwrap();
+
+                if c == buildings {
+                    draw_filled_rect_mut(
+                        &mut imgwater,
+                        Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
+                        black,
+                    );
+                }
+                if c == water {
+                    draw_filled_rect_mut(
+                        &mut imgwater,
+                        Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
+                        blue,
+                    );
+                }
+                None::<()>
+            })
+            .expect("could not read input file");
+    }
+
+    provider
+        .lines("xyz2.xyz", |line| {
             let mut parts = line.split(' ');
             let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
             let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            parts.next();
-            let c: u64 = parts.next().unwrap().parse::<u64>().unwrap();
+            let hh: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if c == buildings {
-                draw_filled_rect_mut(
-                    &mut imgwater,
-                    Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
-                    black,
-                );
-            }
-            if c == water {
+            if hh < config.waterele {
                 draw_filled_rect_mut(
                     &mut imgwater,
                     Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
                     blue,
                 );
             }
-        }
-    }
-
-    let mut reader = provider.xyz("xyz2.xyz");
-    while let Some(line) = reader.next().expect("could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let hh: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-
-        if hh < config.waterele {
-            draw_filled_rect_mut(
-                &mut imgwater,
-                Rect::at((x - xmin) as i32 - 1, (ymax - y) as i32 - 1).of_size(3, 3),
-                blue,
-            );
-        }
-    }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     imgwater
         .save(provider.path("blueblack.png"))

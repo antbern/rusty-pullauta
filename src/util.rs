@@ -162,22 +162,23 @@ impl FileProvider {
         }
     }
 
-    /// Read the XYZ records from a file in the base directory.
-    pub fn xyz(&mut self, filename: &str) -> XyzReader {
-        let path = self.base_directory.join(filename);
-        XyzReader {
-            line_reader: LineReader::new(io::BufReader::new(
-                File::open(path).expect("Could not open file"),
-            )),
-        }
-    }
-
     /// Read the lines of a file in the base directory.
-    pub fn lines(&mut self, filename: &str) -> LineReader<io::BufReader<File>> {
+    pub fn lines<T>(
+        &mut self,
+        filename: &str,
+        mut callback: impl FnMut(&str) -> Option<T>,
+    ) -> Result<Option<T>, io::Error> {
         let path = self.base_directory.join(filename);
-        LineReader::new(io::BufReader::new(
+        let mut reader = LineReader::new(io::BufReader::new(
             File::open(path).expect("Could not open file"),
-        ))
+        ));
+
+        while let Some(line) = reader.next()? {
+            if let Some(retval) = callback(line) {
+                return Ok(Some(retval));
+            }
+        }
+        Ok(None)
     }
 
     /// Read the contents of a file into a string.
@@ -210,16 +211,5 @@ impl FileProvider {
     /// Copy files within the base directory.
     pub fn copy(&self, from: &str, to: &str) -> io::Result<()> {
         fs::copy(self.base_directory.join(from), self.base_directory.join(to)).map(|_| ())
-    }
-}
-
-pub struct XyzReader {
-    line_reader: LineReader<io::BufReader<File>>,
-}
-
-impl XyzReader {
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> io::Result<Option<&str>> {
-        self.line_reader.next()
     }
 }

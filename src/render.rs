@@ -1501,16 +1501,18 @@ pub fn render(
 
     let mut pgw_file_out = provider.write(&format!("{}.pgw", filename));
 
-    let mut reader = provider.lines("vegetation.pgw");
     let mut i = 0;
-    while let Some(line) = reader.next().expect("could nore read file") {
-        let mut x: f64 = line.parse::<f64>().unwrap();
-        if i == 0 || i == 3 {
-            x = x / 600.0 * 254.0 * scalefactor;
-        }
-        write!(&mut pgw_file_out, "{}\r\n", x).expect("Unable to write to file");
-        i += 1;
-    }
+    provider
+        .lines("vegetation.pgw", |line| {
+            let mut x: f64 = line.parse::<f64>().unwrap();
+            if i == 0 || i == 3 {
+                x = x / 600.0 * 254.0 * scalefactor;
+            }
+            write!(&mut pgw_file_out, "{}\r\n", x).expect("Unable to write to file");
+            i += 1;
+            None::<()>
+        })
+        .expect("could not read input file");
     info!("Done");
     Ok(())
 }
@@ -1545,23 +1547,25 @@ pub fn draw_curves(
 
     if formline > 0.0 {
         let xyz_file_in = "xyz2.xyz";
-        let mut reader = provider.xyz(xyz_file_in);
         let mut i = 0;
-        while let Some(line) = reader.next().expect("could not read input file") {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        provider
+            .lines(xyz_file_in, |line| {
+                let mut parts = line.split(' ');
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            if i == 0 {
-                xstart = x;
-                ystart = y;
-            } else if i == 1 {
-                size = y - ystart;
-            } else {
-                break;
-            }
-            i += 1;
-        }
+                if i == 0 {
+                    xstart = x;
+                    ystart = y;
+                } else if i == 1 {
+                    size = y - ystart;
+                } else {
+                    return Some(());
+                }
+                i += 1;
+                None::<()>
+            })
+            .expect("could not read input file");
 
         x0 = xstart;
 
@@ -1570,29 +1574,31 @@ pub fn draw_curves(
 
         let mut xyz: HashMap<(usize, usize), f64> = HashMap::default();
 
-        let mut reader = provider.xyz(xyz_file_in);
-        while let Some(line) = reader.next().expect("could not read input file") {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+        provider
+            .lines(xyz_file_in, |line| {
+                let mut parts = line.split(' ');
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            let xx = ((x - xstart) / size).floor() as usize;
-            let yy = ((y - ystart) / size).floor() as usize;
+                let xx = ((x - xstart) / size).floor() as usize;
+                let yy = ((y - ystart) / size).floor() as usize;
 
-            if y > y0 {
-                y0 = y;
-            }
+                if y > y0 {
+                    y0 = y;
+                }
 
-            xyz.insert((xx, yy), h);
+                xyz.insert((xx, yy), h);
 
-            if sxmax < xx {
-                sxmax = xx;
-            }
-            if symax < yy {
-                symax = yy;
-            }
-        }
+                if sxmax < xx {
+                    sxmax = xx;
+                }
+                if symax < yy {
+                    symax = yy;
+                }
+                None::<()>
+            })
+            .expect("could not read input file");
 
         for i in 6..(sxmax - 7) {
             for j in 6..(symax - 7) {

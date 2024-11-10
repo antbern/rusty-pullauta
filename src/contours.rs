@@ -32,45 +32,47 @@ pub fn xyz2contours(
     let mut hmin: f64 = f64::MAX;
     let mut hmax: f64 = f64::MIN;
 
-    let mut reader = provider.xyz(xyzfilein);
-    while let Some(line) = reader.next().expect("could not read file") {
-        let mut parts = line.trim().split(' ');
+    provider
+        .lines(xyzfilein, |line| {
+            let mut parts = line.trim().split(' ');
 
-        let p0 = parts.next().unwrap();
-        let p1 = parts.next().unwrap();
-        let p2 = parts.next().unwrap();
-        let p3 = parts.next();
+            let p0 = parts.next().unwrap();
+            let p1 = parts.next().unwrap();
+            let p2 = parts.next().unwrap();
+            let p3 = parts.next();
 
-        if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
-            let x: f64 = p0.parse::<f64>().unwrap();
-            let y: f64 = p1.parse::<f64>().unwrap();
-            let h: f64 = p2.parse::<f64>().unwrap();
+            if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
+                let x: f64 = p0.parse::<f64>().unwrap();
+                let y: f64 = p1.parse::<f64>().unwrap();
+                let h: f64 = p2.parse::<f64>().unwrap();
 
-            if xmin > x {
-                xmin = x;
+                if xmin > x {
+                    xmin = x;
+                }
+
+                if xmax < x {
+                    xmax = x;
+                }
+
+                if ymin > y {
+                    ymin = y;
+                }
+
+                if ymax < y {
+                    ymax = y;
+                }
+
+                if hmin > h {
+                    hmin = h;
+                }
+
+                if hmax < h {
+                    hmax = h;
+                }
             }
-
-            if xmax < x {
-                xmax = x;
-            }
-
-            if ymin > y {
-                ymin = y;
-            }
-
-            if ymax < y {
-                ymax = y;
-            }
-
-            if hmin > h {
-                hmin = h;
-            }
-
-            if hmax < h {
-                hmax = h;
-            }
-        }
-    }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     xmin = (xmin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
     ymin = (ymin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
@@ -81,28 +83,30 @@ pub fn xyz2contours(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    let mut reader = provider.xyz(xyzfilein);
-    while let Some(line) = reader.next().expect("could not read file") {
-        let mut parts = line.trim().split(' ');
+    provider
+        .lines(xyzfilein, |line| {
+            let mut parts = line.trim().split(' ');
 
-        let p0 = parts.next().unwrap();
-        let p1 = parts.next().unwrap();
-        let p2 = parts.next().unwrap();
-        let p3 = parts.next();
+            let p0 = parts.next().unwrap();
+            let p1 = parts.next().unwrap();
+            let p2 = parts.next().unwrap();
+            let p3 = parts.next();
 
-        if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
-            let x: f64 = p0.parse::<f64>().unwrap();
-            let y: f64 = p1.parse::<f64>().unwrap();
-            let h: f64 = p2.parse::<f64>().unwrap();
+            if p3.is_some_and(|p3| p3 == "2" || p3 == water_class) || !ground {
+                let x: f64 = p0.parse::<f64>().unwrap();
+                let y: f64 = p1.parse::<f64>().unwrap();
+                let h: f64 = p2.parse::<f64>().unwrap();
 
-            let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
-            let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
+                let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
+                let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
 
-            let (sum, count) = &mut list_alt[(idx_x, idx_y)];
-            *sum += h;
-            *count += 1;
-        }
-    }
+                let (sum, count) = &mut list_alt[(idx_x, idx_y)];
+                *sum += h;
+                *count += 1;
+            }
+            None::<()>
+        })
+        .expect("could not read input file");
 
     let mut avg_alt = Vec2D::new(w + 2, h + 2, f64::NAN);
 
@@ -472,35 +476,39 @@ pub fn xyz2contours(
             xmin, ymin, xmax, ymax,
         ).expect("Cannot write dxf file");
 
-        let mut polyline_out = provider.lines(POLYLINE_OUT_TEMP_FILE);
-        while let Some(line) = polyline_out.next().expect("Cannot read file") {
-            let parts = line.trim().split(';');
-            let r = parts.collect::<Vec<&str>>();
-            f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\ncont\r\n  0\r\n".as_bytes())
-                .expect("Cannot write dxf file");
-            for (i, d) in r.iter().enumerate() {
-                if d != &"" {
-                    let ii = i + 1;
-                    let ldata = r.len() - 2;
-                    if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
-                        continue;
-                    }
-                    let mut xy_raw = d.split(',');
-                    let x: f64 =
-                        xy_raw.next().unwrap().parse::<f64>().unwrap() * 2.0 * scalefactor + xmin;
-                    let y: f64 =
-                        xy_raw.next().unwrap().parse::<f64>().unwrap() * 2.0 * scalefactor + ymin;
-                    write!(
-                        &mut f,
-                        "VERTEX\r\n  8\r\ncont\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                        x, y
-                    )
+        provider
+            .lines(POLYLINE_OUT_TEMP_FILE, |line| {
+                let parts = line.trim().split(';');
+                let r = parts.collect::<Vec<&str>>();
+                f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\ncont\r\n  0\r\n".as_bytes())
                     .expect("Cannot write dxf file");
+                for (i, d) in r.iter().enumerate() {
+                    if d != &"" {
+                        let ii = i + 1;
+                        let ldata = r.len() - 2;
+                        if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
+                            continue;
+                        }
+                        let mut xy_raw = d.split(',');
+                        let x: f64 =
+                            xy_raw.next().unwrap().parse::<f64>().unwrap() * 2.0 * scalefactor
+                                + xmin;
+                        let y: f64 =
+                            xy_raw.next().unwrap().parse::<f64>().unwrap() * 2.0 * scalefactor
+                                + ymin;
+                        write!(
+                            &mut f,
+                            "VERTEX\r\n  8\r\ncont\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
+                            x, y
+                        )
+                        .expect("Cannot write dxf file");
+                    }
                 }
-            }
-            f.write_all("SEQEND\r\n  0\r\n".as_bytes())
-                .expect("Cannot write dxf file");
-        }
+                f.write_all("SEQEND\r\n  0\r\n".as_bytes())
+                    .expect("Cannot write dxf file");
+                None::<()>
+            })
+            .expect("could not read input file");
         f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
             .expect("Cannot write dxf file");
         info!("Done");

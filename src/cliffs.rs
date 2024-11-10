@@ -35,28 +35,30 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut ymin: f64 = f64::MAX;
     let mut ymax: f64 = f64::MIN;
 
-    let mut reader = provider.lines("xyztemp.xyz");
-    while let Some(line) = reader.next().expect("Could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines("xyztemp.xyz", |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        if xmin > x {
-            xmin = x;
-        }
+            if xmin > x {
+                xmin = x;
+            }
 
-        if xmax < x {
-            xmax = x;
-        }
+            if xmax < x {
+                xmax = x;
+            }
 
-        if ymin > y {
-            ymin = y;
-        }
+            if ymin > y {
+                ymin = y;
+            }
 
-        if ymax < y {
-            ymax = y;
-        }
-    }
+            if ymax < y {
+                ymax = y;
+            }
+            None::<()>
+        })
+        .expect("Could not read input file");
 
     let xyz_file_in = "xyz2.xyz";
 
@@ -65,23 +67,25 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut ystart: f64 = f64::NAN;
     let mut sxmax: usize = usize::MIN;
     let mut symax: usize = usize::MIN;
-    let mut reader = provider.xyz(xyz_file_in);
     let mut i = 0;
-    while let Some(line) = reader.next().expect("Could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        if i == 0 {
-            xstart = x;
-            ystart = y;
-        } else if i == 1 {
-            size = y - ystart;
-        } else {
-            break;
-        }
-        i += 1;
-    }
+            if i == 0 {
+                xstart = x;
+                ystart = y;
+            } else if i == 1 {
+                size = y - ystart;
+            } else {
+                return Some(());
+            }
+            i += 1;
+            None::<()>
+        })
+        .expect("Could not read input file");
 
     let mut xyz = Vec2D::new(
         ((xmax - xstart) / size).ceil() as usize + 1,
@@ -89,25 +93,27 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
         f64::NAN,
     );
 
-    let mut reader = provider.xyz(xyz_file_in);
-    while let Some(line) = reader.next().expect("Could not read input file") {
-        let mut parts = line.split(' ');
-        let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-        let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines(xyz_file_in, |line| {
+            let mut parts = line.split(' ');
+            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-        let xx = ((x - xstart) / size).floor() as usize;
-        let yy = ((y - ystart) / size).floor() as usize;
+            let xx = ((x - xstart) / size).floor() as usize;
+            let yy = ((y - ystart) / size).floor() as usize;
 
-        xyz[(xx, yy)] = h;
+            xyz[(xx, yy)] = h;
 
-        if sxmax < xx {
-            sxmax = xx;
-        }
-        if symax < yy {
-            symax = yy;
-        }
-    }
+            if sxmax < xx {
+                sxmax = xx;
+            }
+            if symax < yy {
+                symax = yy;
+            }
+            None::<()>
+        })
+        .expect("Could not read input file");
 
     let mut steepness = Vec2D::new(sxmax + 1, symax + 1, f64::NAN);
 
@@ -149,24 +155,26 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
     let mut rng = rand::thread_rng();
     let randdist = distributions::Bernoulli::new(cliff_thin).unwrap();
 
-    let mut reader = provider.xyz("xyztemp.xyz");
-    while let Some(line) = reader.next().expect("Could not read input file") {
-        if cliff_thin == 1.0 || rng.sample(randdist) {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let r3 = parts.next().unwrap();
+    provider
+        .lines("xyztemp.xyz", |line| {
+            if cliff_thin == 1.0 || rng.sample(randdist) {
+                let mut parts = line.split(' ');
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let r3 = parts.next().unwrap();
 
-            if r3 == "2" {
-                list_alt[(
-                    ((x - xmin).floor() / 3.0) as usize,
-                    ((y - ymin).floor() / 3.0) as usize,
-                )]
-                    .push((x, y, h));
+                if r3 == "2" {
+                    list_alt[(
+                        ((x - xmin).floor() / 3.0) as usize,
+                        ((y - ymin).floor() / 3.0) as usize,
+                    )]
+                        .push((x, y, h));
+                }
             }
-        }
-    }
+            None::<()>
+        })
+        .expect("Could not read input file");
 
     let w = ((xmax - xmin).floor() / 3.0) as usize;
     let h = ((ymax - ymin).floor() / 3.0) as usize;
@@ -330,21 +338,23 @@ pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Bo
         Vec::<(f64, f64, f64)>::new(),
     );
 
-    let mut reader = provider.xyz("xyz2.xyz");
-    while let Some(line) = reader.next().expect("Could not read input file") {
-        if cliff_thin == 1.0 || rng.sample(randdist) {
-            let mut parts = line.split(' ');
-            let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
-            let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+    provider
+        .lines("xyz2.xyz", |line| {
+            if cliff_thin == 1.0 || rng.sample(randdist) {
+                let mut parts = line.split(' ');
+                let x: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let y: f64 = parts.next().unwrap().parse::<f64>().unwrap();
+                let h: f64 = parts.next().unwrap().parse::<f64>().unwrap();
 
-            list_alt[(
-                ((x - xmin).floor() / 3.0) as usize,
-                ((y - ymin).floor() / 3.0) as usize,
-            )]
-                .push((x, y, h));
-        }
-    }
+                list_alt[(
+                    ((x - xmin).floor() / 3.0) as usize,
+                    ((y - ymin).floor() / 3.0) as usize,
+                )]
+                    .push((x, y, h));
+            }
+            None::<()>
+        })
+        .expect("Could not read input file");
 
     // temporary vector to reuse memory allocations
     let mut t = Vec::<(f64, f64, f64)>::new();
