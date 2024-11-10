@@ -2,6 +2,8 @@ use std::{
     fs::{self, File},
     io::{self, BufRead, Write},
     path::{Path, PathBuf},
+    rc::Rc,
+    sync::RwLock,
     time::Instant,
 };
 
@@ -214,7 +216,14 @@ impl FileProvider for FileProviderImpl {
     fn read_to_string(&self, filename: &str) -> io::Result<String> {
         let path = self.base_directory.join(filename);
         trace!("Reading file {:?} to string", path);
-        std::fs::read_to_string(path)
+        let started = Instant::now();
+        let result = std::fs::read_to_string(&path);
+        trace!(
+            "Reading file {:?} to string took {:.2?}",
+            path,
+            started.elapsed()
+        );
+        result
     }
 
     /// Write to a file in the base directory.
@@ -246,5 +255,90 @@ impl FileProvider for FileProviderImpl {
     fn copy(&self, from: &str, to: &str) -> io::Result<()> {
         trace!("Copying file from {:?} to {:?}", from, to);
         fs::copy(self.base_directory.join(from), self.base_directory.join(to)).map(|_| ())
+    }
+}
+
+pub struct FileProviderImplMem {
+    inner: FileProviderImpl,
+    cache: RwLock<std::collections::HashMap<String, Rc<String>>>,
+}
+
+impl FileProviderImplMem {
+    pub fn new(inner: FileProviderImpl) -> Self {
+        Self {
+            inner,
+            cache: Default::default(),
+        }
+    }
+}
+
+impl FileProvider for FileProviderImplMem {
+    fn lines<T>(
+        &self,
+        filename: &str,
+        mut callback: impl FnMut(&str) -> Option<T>,
+    ) -> Result<Option<T>, io::Error> {
+        // if we have a stored result, use that
+        // if not, read the file and store the file
+        let cache = self.cache.read().unwrap();
+        if cache.get(filename).is_none() {
+            drop(cache);
+            trace!(
+                "File contents not in mem-cache, lines from file {:?}",
+                filename
+            );
+
+            let data = self.inner.read_to_string(filename)?;
+            self.cache
+                .write()
+                .unwrap()
+                .insert(filename.to_string(), Rc::new(data));
+        } else {
+            trace!(
+                "File contents in mem-cache, lines from cache {:?}",
+                filename
+            );
+        }
+
+        let cache = self.cache.read().unwrap();
+        let data = cache.get(filename).unwrap();
+
+        let mut reader = LineReader::new(data.as_bytes());
+        while let Some(line) = reader.next()? {
+            if let Some(retval) = callback(line) {
+                return Ok(Some(retval));
+            }
+        }
+        Ok(None)
+    }
+
+    fn read_to_string(&self, filename: &str) -> io::Result<String> {
+        self.inner.read_to_string(filename)
+    }
+
+    fn write(&self, filename: &str) -> impl Write {
+        self.inner.write(filename)
+    }
+
+    fn exists(&self, filename: &str) -> bool {
+        self.inner.exists(filename)
+    }
+
+    fn path(&self, filename: &str) -> PathBuf {
+        self.inner.path(filename)
+    }
+
+    fn copy_from_outside(&self, from: &str, to: &str) -> io::Result<()> {
+        self.inner.copy_from_outside(from, to)
+    }
+
+    fn copy(&self, from: &str, to: &str) -> io::Result<()> {
+        // also copy the cached data reference
+        let mut cache = self.cache.write().unwrap();
+        if let Some(data) = cache.get(from).cloned() {
+            trace!("Copying cached data from {:?} to {:?}", from, to);
+            cache.insert(to.to_string(), data);
+        }
+        self.inner.copy(from, to)
     }
 }

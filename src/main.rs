@@ -1,6 +1,7 @@
 use log::info;
 use pullauta::config::Config;
 use pullauta::util::FileProviderImpl;
+use pullauta::util::FileProviderImplMem;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -65,7 +66,8 @@ fn main() {
 
     let tmpfolder = PathBuf::from(format!("temp{}", thread));
     fs::create_dir_all(&tmpfolder).expect("Could not create tmp folder");
-    let mut provider = FileProviderImpl::new(&tmpfolder);
+    let provider = FileProviderImpl::new(&tmpfolder);
+    let mut provider = FileProviderImplMem::new(provider);
 
     let pnorthlinesangle = config.pnorthlinesangle;
     let pnorthlineswidth = config.pnorthlineswidth;
