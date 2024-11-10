@@ -10,7 +10,7 @@ use std::f32::consts::SQRT_2;
 use crate::config::{Config, Zone};
 use crate::util::FileProvider;
 
-pub fn makevege(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn makevege<P: FileProvider>(config: &Config, provider: &mut P) -> Result<(), Box<dyn Error>> {
     info!("Generating vegetation...");
 
     let xyz_file_in = "xyz2.xyz";

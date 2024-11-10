@@ -8,7 +8,7 @@ use std::io::Write;
 use crate::config::Config;
 use crate::util::FileProvider;
 
-pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn dotknolls<P: FileProvider>(config: &Config, provider: &mut P) -> Result<(), Box<dyn Error>> {
     info!("Identifying dotknolls...");
 
     let scalefactor = config.scalefactor;
@@ -174,7 +174,10 @@ pub fn dotknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box
     info!("Done");
     Ok(())
 }
-pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn knolldetector<P: FileProvider>(
+    config: &Config,
+    provider: &mut P,
+) -> Result<(), Box<dyn Error>> {
     info!("Detecting knolls...");
     let scalefactor = config.scalefactor;
     let contour_interval = config.contour_interval;
@@ -913,7 +916,7 @@ pub fn knolldetector(config: &Config, provider: &mut FileProvider) -> Result<(),
     Ok(())
 }
 
-pub fn xyzknolls(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn xyzknolls<P: FileProvider>(config: &Config, provider: &mut P) -> Result<(), Box<dyn Error>> {
     info!("Identifying knolls...");
     let scalefactor = config.scalefactor;
     let contour_interval = config.contour_interval;

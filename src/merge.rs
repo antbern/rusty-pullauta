@@ -504,7 +504,10 @@ pub fn dxfmerge(config: &Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn smoothjoin(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn smoothjoin<P: FileProvider>(
+    config: &Config,
+    provider: &mut P,
+) -> Result<(), Box<dyn Error>> {
     info!("Smooth curves...");
 
     let &Config {

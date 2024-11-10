@@ -150,21 +150,49 @@ impl Drop for Timing {
 ///
 /// Creates and generates file objects that can be read / written to. Provides special
 /// functionality for reading XYZ files in an efficient way. Can provide caching of read data.
-pub struct FileProvider {
+pub trait FileProvider {
+    /// Read the lines of a file in the base directory.
+    fn lines<T>(
+        &self,
+        filename: &str,
+        callback: impl FnMut(&str) -> Option<T>,
+    ) -> Result<Option<T>, io::Error>;
+
+    /// Read the contents of a file into a string.
+    fn read_to_string(&self, filename: &str) -> io::Result<String>;
+
+    /// Write to a file in the base directory.
+    fn write(&self, filename: &str) -> impl Write;
+
+    /// Check if a file exists in the base directory.
+    fn exists(&self, filename: &str) -> bool;
+
+    /// Get the full path to a file in the base directory.
+    fn path(&self, filename: &str) -> PathBuf;
+
+    /// Copy from an external file to the base directory.
+    fn copy_from_outside(&self, from: &str, to: &str) -> io::Result<()>;
+    /// Copy files within the base directory.
+    fn copy(&self, from: &str, to: &str) -> io::Result<()>;
+}
+
+pub struct FileProviderImpl {
     base_directory: PathBuf,
 }
 
-impl FileProvider {
+impl FileProviderImpl {
     pub fn new(base_directory: &Path) -> Self {
         fs::create_dir_all(base_directory).expect("Could not create tmp folder");
         Self {
             base_directory: base_directory.to_path_buf(),
         }
     }
+}
 
+impl FileProvider for FileProviderImpl {
     /// Read the lines of a file in the base directory.
-    pub fn lines<T>(
-        &mut self,
+    fn lines<T>(
+        &self,
         filename: &str,
         mut callback: impl FnMut(&str) -> Option<T>,
     ) -> Result<Option<T>, io::Error> {
@@ -183,39 +211,39 @@ impl FileProvider {
     }
 
     /// Read the contents of a file into a string.
-    pub fn read_to_string(&mut self, filename: &str) -> io::Result<String> {
+    fn read_to_string(&self, filename: &str) -> io::Result<String> {
         let path = self.base_directory.join(filename);
         trace!("Reading file {:?} to string", path);
         std::fs::read_to_string(path)
     }
 
     /// Write to a file in the base directory.
-    pub fn write(&mut self, filename: &str) -> impl Write {
+    fn write(&self, filename: &str) -> impl Write {
         let path = self.base_directory.join(filename);
         trace!("Writing to file {:?}", path);
         io::BufWriter::new(File::create(path).expect("Could not create file"))
     }
 
     /// Check if a file exists in the base directory.
-    pub fn exists(&self, filename: &str) -> bool {
+    fn exists(&self, filename: &str) -> bool {
         let path = self.base_directory.join(filename);
         trace!("Checking if file {:?} exists", path);
         path.exists()
     }
 
     /// Get the full path to a file in the base directory.
-    pub fn path(&self, filename: &str) -> PathBuf {
+    fn path(&self, filename: &str) -> PathBuf {
         trace!("Getting path to file {:?}", filename);
         self.base_directory.join(filename)
     }
 
     /// Copy from an external file to the base directory.
-    pub fn copy_from_outside(&self, from: &str, to: &str) -> io::Result<()> {
+    fn copy_from_outside(&self, from: &str, to: &str) -> io::Result<()> {
         trace!("Copying file from external {:?} to {:?}", from, to);
         fs::copy(from, self.base_directory.join(to)).map(|_| ())
     }
     /// Copy files within the base directory.
-    pub fn copy(&self, from: &str, to: &str) -> io::Result<()> {
+    fn copy(&self, from: &str, to: &str) -> io::Result<()> {
         trace!("Copying file from {:?} to {:?}", from, to);
         fs::copy(self.base_directory.join(from), self.base_directory.join(to)).map(|_| ())
     }

@@ -6,7 +6,7 @@ use std::error::Error;
 
 use crate::util::FileProvider;
 
-pub fn blocks(provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn blocks<P: FileProvider>(provider: &mut P) -> Result<(), Box<dyn Error>> {
     info!("Identifying blocks...");
     let xyz_file_in = "xyz2.xyz";
     let mut size: f64 = f64::NAN;

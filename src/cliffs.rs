@@ -10,7 +10,10 @@ use crate::config::Config;
 use crate::util::FileProvider;
 use crate::vec2d::Vec2D;
 
-pub fn makecliffs(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn makecliffs<P: FileProvider>(
+    config: &Config,
+    provider: &mut P,
+) -> Result<(), Box<dyn Error>> {
     info!("Identifying cliffs...");
 
     let &Config {

@@ -18,13 +18,14 @@ use crate::merge;
 use crate::render;
 use crate::util::read_lines;
 use crate::util::FileProvider;
+use crate::util::FileProviderImpl;
 use crate::util::Timing;
 use crate::vegetation;
 
-pub fn process_zip(
+pub fn process_zip<P: FileProvider>(
     config: &Config,
     thread: &String,
-    provider: &mut FileProvider,
+    provider: &mut P,
     filenames: &[String],
 ) -> Result<(), Box<dyn Error>> {
     let mut timing = Timing::start_now("process_zip");
@@ -65,9 +66,9 @@ pub fn process_zip(
     Ok(())
 }
 
-pub fn unzipmtk(
+pub fn unzipmtk<P: FileProvider>(
     config: &Config,
-    provider: &mut FileProvider,
+    provider: &mut P,
     filenames: &[String],
 ) -> Result<(), Box<dyn Error>> {
     let low_file = provider.path("low.png");
@@ -91,10 +92,10 @@ pub fn unzipmtk(
     Ok(())
 }
 
-pub fn process_tile(
+pub fn process_tile<P: FileProvider>(
     config: &Config,
     thread: &String,
-    provider: &mut FileProvider,
+    provider: &mut P,
     filename: &str,
     skip_rendering: bool,
 ) -> Result<(), Box<dyn Error>> {
@@ -456,7 +457,7 @@ pub fn batch_process(conf: &Config, thread: &String) {
         tmp_fp.flush().unwrap();
 
         let tmpfolder = PathBuf::from(format!("temp{}", thread));
-        let mut provider = FileProvider::new(&tmpfolder);
+        let mut provider = FileProviderImpl::new(&tmpfolder);
         if zip_files.is_empty() {
             process_tile(
                 conf,

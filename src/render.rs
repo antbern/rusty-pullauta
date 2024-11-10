@@ -14,7 +14,10 @@ use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-pub fn mtkshaperender(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
+pub fn mtkshaperender<P: FileProvider>(
+    config: &Config,
+    provider: &mut P,
+) -> Result<(), Box<dyn Error>> {
     let scalefactor = config.scalefactor;
 
     let vectorconf = &config.vectorconf;
@@ -1102,10 +1105,10 @@ pub fn mtkshaperender(config: &Config, provider: &mut FileProvider) -> Result<()
     Ok(())
 }
 
-pub fn render(
+pub fn render<P: FileProvider>(
     config: &Config,
     thread: &String,
-    provider: &mut FileProvider,
+    provider: &mut P,
     angle_deg: f64,
     nwidth: usize,
     nodepressions: bool,
@@ -1519,10 +1522,10 @@ pub fn render(
     Ok(())
 }
 
-pub fn draw_curves(
+pub fn draw_curves<P: FileProvider>(
     config: &Config,
     canvas: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
-    provider: &mut FileProvider,
+    provider: &mut P,
     nodepressions: bool,
     draw_image: bool,
 ) -> Result<(), Box<dyn Error>> {

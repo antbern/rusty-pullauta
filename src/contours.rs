@@ -9,9 +9,9 @@ use crate::vec2d::Vec2D;
 
 const POLYLINE_OUT_TEMP_FILE: &str = "temp_polylines.txt";
 
-pub fn xyz2contours(
+pub fn xyz2contours<P: FileProvider>(
     config: &Config,
-    provider: &mut FileProvider,
+    provider: &mut P,
     cinterval: f64,
     xyzfilein: &str,
     xyzfileout: &str,
