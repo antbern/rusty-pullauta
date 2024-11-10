@@ -10,8 +10,8 @@ use shapefile::dbase::{FieldValue, Record};
 use shapefile::{Shape, ShapeType};
 use std::error::Error;
 use std::f64::consts::PI;
-use std::fs;
-use std::io::Write;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 pub fn mtkshaperender(config: &Config, provider: &mut FileProvider) -> Result<(), Box<dyn Error>> {
@@ -1499,7 +1499,9 @@ pub fn render(
     img.save(&format!("{}.png", filename))
         .expect("could not save output png");
 
-    let mut pgw_file_out = provider.write(&format!("{}.pgw", filename));
+    // this file lives outside the temporary folder
+    let mut pgw_file_out =
+        BufWriter::new(File::create(format!("{}.pgw", filename)).expect("Unable to create file"));
 
     let mut i = 0;
     provider
@@ -1508,7 +1510,7 @@ pub fn render(
             if i == 0 || i == 3 {
                 x = x / 600.0 * 254.0 * scalefactor;
             }
-            write!(&mut pgw_file_out, "{}\r\n", x).expect("Unable to write to file");
+            write!(pgw_file_out, "{}\r\n", x).expect("Unable to write to file");
             i += 1;
             None::<()>
         })
