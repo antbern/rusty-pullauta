@@ -264,7 +264,7 @@ fn main() {
                 .unwrap();
 
         if xyzfileout != "null" && !xyzfileout.is_empty() {
-            hmap.to_file(xyzfileout).unwrap();
+            hmap.to_file(&fs, xyzfileout).unwrap();
         }
 
         pullauta::contours::heightmap2contours(&fs, &tmpfolder, cinterval, &hmap, &dxffile)
