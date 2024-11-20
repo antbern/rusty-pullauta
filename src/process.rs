@@ -687,9 +687,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
                 .expect("Unable to write to file");
                 pgw_file_out.flush().unwrap();
 
-                let mut orig_img_reader =
-                    image::ImageReader::open(Path::new(&format!("temp{}/undergrowth.png", thread)))
-                        .expect("Opening undergrowth image failed");
+                let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                    fs.open(format!("temp{}/undergrowth.png", thread))
+                        .expect("Opening undergrowth image failed"),
+                ));
+                orig_img_reader.set_format(image::ImageFormat::Png);
                 orig_img_reader.no_limits();
                 let orig_img = orig_img_reader.decode().unwrap();
                 let mut img = RgbaImage::from_pixel(
@@ -712,9 +714,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
                 )
                 .expect("could not save output png");
 
-                let mut orig_img_reader =
-                    image::ImageReader::open(Path::new(&format!("temp{}/vegetation.png", thread)))
-                        .expect("Opening vegetation image failed");
+                let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                    fs.open(format!("temp{}/vegetation.png", thread))
+                        .expect("Opening vegetation image failed"),
+                ));
+                orig_img_reader.set_format(image::ImageFormat::Png);
                 orig_img_reader.no_limits();
                 let orig_img = orig_img_reader.decode().unwrap();
                 let mut img = RgbImage::from_pixel(
@@ -747,11 +751,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
                 pgw_file_out.flush().unwrap();
 
                 if vege_bitmode {
-                    let mut orig_img_reader = image::ImageReader::open(Path::new(&format!(
-                        "temp{}/vegetation_bit.png",
-                        thread
-                    )))
-                    .expect("Opening vegetation bit image failed");
+                    let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                        fs.open(format!("temp{}/vegetation_bit.png", thread))
+                            .expect("Opening vegetation bit bit image failed"),
+                    ));
+                    orig_img_reader.set_format(image::ImageFormat::Png);
                     orig_img_reader.no_limits();
                     let orig_img = orig_img_reader.decode().unwrap();
                     let mut img = GrayImage::from_pixel(
@@ -773,11 +777,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
                     )
                     .expect("could not save output png");
 
-                    let mut orig_img_reader = image::ImageReader::open(Path::new(&format!(
-                        "temp{}/undergrowth_bit.png",
-                        thread
-                    )))
-                    .expect("Opening undergrowth bit image failed");
+                    let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                        fs.open(format!("temp{}/undergrowth_bit.png", thread))
+                            .expect("Opening undergrowth bit image failed"),
+                    ));
+                    orig_img_reader.set_format(image::ImageFormat::Png);
                     orig_img_reader.no_limits();
                     let orig_img = orig_img_reader.decode().unwrap();
                     let mut img = GrayImage::from_pixel(
