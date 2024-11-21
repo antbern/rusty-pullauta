@@ -1,4 +1,6 @@
+#[cfg(feature = "shapefile")]
 use crate::canvas::Canvas;
+
 use crate::config::Config;
 use crate::io::bytes::FromToBytes;
 use crate::io::heightmap::HeightMap;
@@ -83,6 +85,7 @@ impl FromStr for Mapping {
     }
 }
 
+#[cfg(feature = "shapefile")]
 pub fn mtkshaperender(config: &Config, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     let scalefactor = config.scalefactor;
 

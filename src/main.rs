@@ -240,10 +240,12 @@ fn main() {
         pullauta::knolls::xyzknolls(&config, &tmpfolder).unwrap();
     }
 
+    #[cfg(feature = "shapefile")]
     if command == "unzipmtk" {
         pullauta::process::unzipmtk(&config, &tmpfolder, &args).unwrap();
     }
 
+    #[cfg(feature = "shapefile")]
     if command == "mtkshaperender" {
         pullauta::render::mtkshaperender(&config, &tmpfolder).unwrap();
     }

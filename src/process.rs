@@ -38,6 +38,7 @@ pub fn process_zip(
 
     info!("Rendering shape files");
     timing.start_section("unzip and render shape files");
+    #[cfg(feature = "shapefile")]
     unzipmtk(config, tmpfolder, filenames).unwrap();
 
     info!("Rendering png map with depressions");
@@ -67,6 +68,7 @@ pub fn process_zip(
     Ok(())
 }
 
+#[cfg(feature = "shapefile")]
 pub fn unzipmtk(
     config: &Config,
     tmpfolder: &Path,
