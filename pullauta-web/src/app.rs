@@ -1,7 +1,14 @@
-use std::io::{BufWriter, Write};
+use std::{
+    io::{BufWriter, Write},
+    path::PathBuf,
+};
 
-use log::{debug, warn};
-use pullauta::io::fs::FileSystem;
+use egui::CollapsingHeader;
+use log::{debug, info, warn};
+use pullauta::io::fs::{
+    memory::{Directory, MemoryFileSystem},
+    FileSystem,
+};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -9,12 +16,15 @@ use pullauta::io::fs::FileSystem;
 pub struct TemplateApp {
     #[serde(skip)]
     fs: pullauta::io::fs::memory::MemoryFileSystem,
+    #[serde(skip)]
+    radio: PathBuf,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
             fs: Default::default(),
+            radio: PathBuf::new(),
         }
     }
 }
@@ -74,8 +84,13 @@ impl eframe::App for TemplateApp {
 
                 ui.label("File system:");
 
+                if ui.button("Create directory").clicked() {
+                    self.fs.create_dir_all("new_directory/deep/subdir").unwrap();
+                }
+
                 // TODO: a file system tree
-                ui.label(format!("{:?}", self.fs));
+                // ui.label(format!("{:?}", self.fs));
+                show_file_system_tree(ui, &self.fs, &mut self.radio);
 
                 preview_files_being_dropped(ctx);
 
@@ -106,23 +121,74 @@ impl eframe::App for TemplateApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
+            // use selected file to display more information
+            ui.label(format!("Selected file: {:?}", self.radio));
+            if let Ok(size) = self.fs.file_size(&self.radio) {
+                ui.label(format!("File size: {}", size));
+            }
 
-            ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
+            // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            //     powered_by_egui_and_eframe(ui);
+            //     egui::warn_if_debug_build(ui);
+            // });
         });
     }
 }
+
+/// Recursively show the file system as a tree.
+fn show_file_system_tree(ui: &mut egui::Ui, fs: &MemoryFileSystem, radio: &mut PathBuf) {
+    // open fs for reading
+    let root = fs.root();
+    let root = root.read().unwrap();
+    recursive_dir_header(ui, &root.0, PathBuf::new(), "root", 0, radio);
+}
+
+fn recursive_dir_header(
+    ui: &mut egui::Ui,
+    dir: &Directory,
+    parent: PathBuf,
+    name: &str,
+    depth: usize,
+    radio: &mut PathBuf,
+) {
+    let response = CollapsingHeader::new(name)
+        .default_open(depth < 1)
+        .show(ui, |ui| recursive_dir(ui, dir, parent, depth, radio));
+    response.header_response.context_menu(|ui| {
+        if ui.button("Delete").clicked() {
+            info!("Delete {:?}", name);
+        };
+    });
+}
+fn recursive_dir(
+    ui: &mut egui::Ui,
+    dir: &Directory,
+    parent: PathBuf,
+    depth: usize,
+    radio: &mut PathBuf,
+) {
+    // iterate all subfolder recusively
+    let mut subdirs = dir.subdirs.iter().collect::<Vec<_>>();
+    subdirs.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (name, sub_dir) in subdirs {
+        recursive_dir_header(
+            ui,
+            sub_dir,
+            parent.clone().join(&name),
+            name,
+            depth + 1,
+            radio,
+        );
+    }
+
+    // iterate all files
+    let mut files = dir.files.iter().collect::<Vec<_>>();
+    files.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (name, _) in files {
+        ui.radio_value(radio, parent.join(&name), name);
+    }
+}
+
 /// Preview hovering files:
 fn preview_files_being_dropped(ctx: &egui::Context) {
     use egui::{Align2, Color32, Id, LayerId, Order, TextStyle};
