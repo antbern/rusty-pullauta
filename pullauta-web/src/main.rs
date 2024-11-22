@@ -4,7 +4,9 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    // env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+
+    egui_logger::builder().init().unwrap();
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -30,7 +32,8 @@ fn main() {
     use eframe::wasm_bindgen::JsCast as _;
 
     // Redirect `log` message to `console.log` and friends:
-    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+    // eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+    egui_logger::builder().init().unwrap();
 
     let web_options = eframe::WebOptions::default();
 
