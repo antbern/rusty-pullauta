@@ -92,25 +92,36 @@ impl eframe::App for TemplateApp {
                 // ui.label(format!("{:?}", self.fs));
                 show_file_system_tree(ui, &self.fs, &mut self.radio);
 
-                preview_files_being_dropped(ctx);
+                ui.separator();
 
-                // Collect dropped files:
-                ctx.input(|i| {
-                    if !i.raw.dropped_files.is_empty() {
-                        // copy the files into the in-memory file system:
-                        for file in &i.raw.dropped_files {
-                            debug!("Importing dropped file: {:?}", file.name);
+                if ui.button("Delete selected file").clicked() {
+                    self.fs.remove_file(&self.radio).unwrap();
+                    self.radio = PathBuf::new();
+                }
 
-                            if let Some(bytes) = &file.bytes {
-                                let mut writer =
-                                    BufWriter::new(self.fs.create(&file.name).unwrap());
-                                writer.write_all(bytes).unwrap();
-                            } else {
-                                warn!("Dropped file has no bytes");
-                            }
+                if let Some(name) = self.radio.file_name() {
+                    let name = name.to_string_lossy();
+
+                    if name.ends_with(".laz") {
+                        if ui.button("Process LAZ").clicked() {
+                            info!("Processing LAZ file: {:?}", self.radio);
+                            // TODO: call pullauta function to process LAZ file
+                            let fs = self.fs.clone();
+                            let config = pullauta::config::Config::default();
+                            let thread = String::new();
+                            let tmpfolder = PathBuf::from(format!("temp{}", thread));
+                            pullauta::process::process_tile(
+                                &fs,
+                                &config,
+                                &thread,
+                                &tmpfolder,
+                                &self.radio,
+                                false,
+                            )
+                            .expect("Failed to process LAZ file");
                         }
                     }
-                });
+                }
             });
 
         egui::TopBottomPanel::bottom("bottom_panel")
@@ -131,6 +142,25 @@ impl eframe::App for TemplateApp {
             //     powered_by_egui_and_eframe(ui);
             //     egui::warn_if_debug_build(ui);
             // });
+        });
+
+        preview_files_being_dropped(ctx);
+
+        // Collect dropped files:
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                // copy the files into the in-memory file system:
+                for file in &i.raw.dropped_files {
+                    debug!("Importing dropped file: {:?}", file.name);
+
+                    if let Some(bytes) = &file.bytes {
+                        let mut writer = BufWriter::new(self.fs.create(&file.name).unwrap());
+                        writer.write_all(bytes).unwrap();
+                    } else {
+                        warn!("Dropped file has no bytes");
+                    }
+                }
+            }
         });
     }
 }
