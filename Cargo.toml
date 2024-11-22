@@ -26,6 +26,8 @@ imageproc = { version = "0.25.0", default-features = false, features = [
 	"rayon",
 ] }
 
+web-time = "1.1"
+
 las = { version = "0.9", features = ["laz", "laz-parallel"] }
 rand = "0.9"
 rust-ini = "0.21"
