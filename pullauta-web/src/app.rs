@@ -1,3 +1,5 @@
+use log::info;
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -65,6 +67,25 @@ impl eframe::App for TemplateApp {
             });
         });
 
+        egui::SidePanel::left("side_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                // The side panel is often a good place for tools and options.
+
+                ui.heading("Side Panel");
+
+                ui.label("File system:");
+
+                // TODO: a file system tree
+            });
+
+        egui::TopBottomPanel::bottom("bottom_panel")
+            .resizable(true)
+            .min_height(200.0)
+            .show(ctx, |ui| {
+                egui_logger::logger_ui().show(ui);
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("eframe template");
@@ -77,6 +98,7 @@ impl eframe::App for TemplateApp {
             ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
             if ui.button("Increment").clicked() {
                 self.value += 1.0;
+                info!("value: {}", self.value);
             }
 
             ui.separator();

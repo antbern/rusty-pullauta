@@ -26,6 +26,8 @@ serde = { version = "1", features = ["derive"] }
 # Access the pullauta library and make sure that the "shapefile" feature is not enabled (for now)
 pullauta = { path = "../", default-features = false }
 
+egui_logger = "0.6.1"
+
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
