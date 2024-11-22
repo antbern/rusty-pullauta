@@ -16,7 +16,7 @@ default = ["shapefile"]
 shapefile = ["dep:skia-safe", "dep:shapefile", "dep:zip"]
 
 [dependencies]
-image = { version = "0.25", default-features = false, features = [
+image = { version = "0.25.2", default-features = false, features = [
 	"rayon",
 	"png",
 	"jpeg",
