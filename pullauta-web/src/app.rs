@@ -1,22 +1,20 @@
-use log::info;
+use std::io::{BufWriter, Write};
+
+use log::{debug, warn};
+use pullauta::io::fs::FileSystem;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
-
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+    #[serde(skip)]
+    fs: pullauta::io::fs::memory::MemoryFileSystem,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            fs: Default::default(),
         }
     }
 }
@@ -77,6 +75,27 @@ impl eframe::App for TemplateApp {
                 ui.label("File system:");
 
                 // TODO: a file system tree
+                ui.label(format!("{:?}", self.fs));
+
+                preview_files_being_dropped(ctx);
+
+                // Collect dropped files:
+                ctx.input(|i| {
+                    if !i.raw.dropped_files.is_empty() {
+                        // copy the files into the in-memory file system:
+                        for file in &i.raw.dropped_files {
+                            debug!("Importing dropped file: {:?}", file.name);
+
+                            if let Some(bytes) = &file.bytes {
+                                let mut writer =
+                                    BufWriter::new(self.fs.create(&file.name).unwrap());
+                                writer.write_all(bytes).unwrap();
+                            } else {
+                                warn!("Dropped file has no bytes");
+                            }
+                        }
+                    }
+                });
             });
 
         egui::TopBottomPanel::bottom("bottom_panel")
@@ -90,17 +109,6 @@ impl eframe::App for TemplateApp {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("eframe template");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
-
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
-                info!("value: {}", self.value);
-            }
-
             ui.separator();
 
             ui.add(egui::github_link_file!(
@@ -113,6 +121,40 @@ impl eframe::App for TemplateApp {
                 egui::warn_if_debug_build(ui);
             });
         });
+    }
+}
+/// Preview hovering files:
+fn preview_files_being_dropped(ctx: &egui::Context) {
+    use egui::{Align2, Color32, Id, LayerId, Order, TextStyle};
+    use std::fmt::Write as _;
+
+    if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
+        let text = ctx.input(|i| {
+            let mut text = "Dropping files:\n".to_owned();
+            for file in &i.raw.hovered_files {
+                if let Some(path) = &file.path {
+                    write!(text, "\n{}", path.display()).ok();
+                } else if !file.mime.is_empty() {
+                    write!(text, "\n{}", file.mime).ok();
+                } else {
+                    text += "\n???";
+                }
+            }
+            text
+        });
+
+        let painter =
+            ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
+
+        let screen_rect = ctx.screen_rect();
+        painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(192));
+        painter.text(
+            screen_rect.center(),
+            Align2::CENTER_CENTER,
+            text,
+            TextStyle::Heading.resolve(&ctx.style()),
+            Color32::WHITE,
+        );
     }
 }
 
