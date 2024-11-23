@@ -1,9 +1,10 @@
 use std::{
     io::{BufWriter, Write},
     path::PathBuf,
+    sync::Arc,
 };
 
-use egui::CollapsingHeader;
+use egui::{CollapsingHeader, Color32, ColorImage, ImageData, TextureHandle, TextureOptions};
 use log::{debug, info, warn};
 use pullauta::io::fs::{
     memory::{Directory, MemoryFileSystem},
@@ -18,6 +19,11 @@ pub struct TemplateApp {
     fs: pullauta::io::fs::memory::MemoryFileSystem,
     #[serde(skip)]
     radio: PathBuf,
+    #[serde(skip)]
+    old_radio: PathBuf,
+
+    #[serde(skip)]
+    screen_texture: Option<TextureHandle>,
 }
 
 impl Default for TemplateApp {
@@ -25,6 +31,8 @@ impl Default for TemplateApp {
         Self {
             fs: Default::default(),
             radio: PathBuf::new(),
+            old_radio: PathBuf::new(),
+            screen_texture: None,
         }
     }
 }
@@ -37,11 +45,20 @@ impl TemplateApp {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
+        let mut s = if let Some(storage) = cc.storage {
+            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        } else {
+            Self::default()
+        };
 
-        Default::default()
+        let screen_texture = cc.egui_ctx.load_texture(
+            "screen",
+            ImageData::Color(Arc::new(ColorImage::new([320, 80], Color32::TRANSPARENT))),
+            TextureOptions::default(),
+        );
+
+        s.screen_texture = Some(screen_texture);
+        s
     }
 }
 
@@ -138,10 +155,29 @@ impl eframe::App for TemplateApp {
                 ui.label(format!("File size: {}", size));
             }
 
-            // ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            //     powered_by_egui_and_eframe(ui);
-            //     egui::warn_if_debug_build(ui);
-            // });
+            if self.radio != self.old_radio {
+                self.old_radio = self.radio.clone();
+                if self.fs.exists(&self.radio) {
+                    if let Ok(img) = self.fs.read_image(&self.radio) {
+                        if let Some(texture) = &mut self.screen_texture {
+                            // upload the image data to the texture
+                            texture.set(
+                                ColorImage::from_rgb(
+                                    [img.width() as usize, img.height() as usize],
+                                    &img.to_rgb8().into_raw(),
+                                ),
+                                TextureOptions::default(),
+                            );
+                        }
+                    }
+                }
+            }
+
+            if let Some(texture) = &self.screen_texture {
+                // TODO: how can we scae the image to fit the screen? And how can we zoom in/out
+                // and pan?
+                ui.image(&texture.clone());
+            }
         });
 
         preview_files_being_dropped(ctx);
