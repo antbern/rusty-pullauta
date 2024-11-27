@@ -8,7 +8,6 @@ use crate::config::Config;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::io::xyz::XyzInternalReader;
-use crate::util::read_lines_no_alloc;
 use crate::vec2d::Vec2D;
 
 /// Create a heightmap from a point cloud file.
@@ -276,10 +275,8 @@ pub fn heightmap2contours(
     let v = cinterval;
 
     let mut level: f64 = (hmin / v).floor() * v;
-    let polyline_out = tmpfolder.join("temp_polylines.txt");
 
-    let f = fs.create(&polyline_out).expect("Unable to create file");
-    let mut f = BufWriter::new(f);
+    let mut polylines = Vec::<Vec<(f64, f64)>>::new();
 
     loop {
         if level >= hmax {
@@ -438,14 +435,14 @@ pub fn heightmap2contours(
 
         for k in obj.iter() {
             if curves.contains_key(k) {
+                let mut polyline = Vec::<(f64, f64)>::new();
                 let (x, y, _) = *k;
-                write!(&mut f, "{},{};", x as f64 / 100.0, y as f64 / 100.0)
-                    .expect("Cannot write to output file");
+                polyline.push((x as f64 / 100.0, y as f64 / 100.0));
+
                 let mut res = (x, y);
 
                 let (x, y) = *curves.get(k).unwrap();
-                write!(&mut f, "{},{};", x as f64 / 100.0, y as f64 / 100.0)
-                    .expect("Cannot write to output file");
+                polyline.push((x as f64 / 100.0, y as f64 / 100.0));
                 curves.remove(k);
 
                 let mut head = (x, y);
@@ -461,8 +458,7 @@ pub fn heightmap2contours(
                         res = head;
 
                         let (x, y) = *curves.get(&(head.0, head.1, 1)).unwrap();
-                        write!(&mut f, "{},{};", x as f64 / 100.0, y as f64 / 100.0)
-                            .expect("Cannot write to output file");
+                        polyline.push((x as f64 / 100.0, y as f64 / 100.0));
                         curves.remove(&(head.0, head.1, 1));
 
                         head = (x, y);
@@ -476,8 +472,7 @@ pub fn heightmap2contours(
                         res = head;
 
                         let (x, y) = *curves.get(&(head.0, head.1, 2)).unwrap();
-                        write!(&mut f, "{},{};", x as f64 / 100.0, y as f64 / 100.0)
-                            .expect("Cannot write to output file");
+                        polyline.push((x as f64 / 100.0, y as f64 / 100.0));
                         curves.remove(&(head.0, head.1, 2));
 
                         head = (x, y);
@@ -488,8 +483,7 @@ pub fn heightmap2contours(
                             curves.remove(&(head.0, head.1, 2));
                         }
                     } else {
-                        f.write_all("\r\n".as_bytes())
-                            .expect("Cannot write to output file");
+                        polylines.push(polyline);
                         break;
                     }
                 }
@@ -497,8 +491,6 @@ pub fn heightmap2contours(
         }
         level += v;
     }
-    // explicitly flush and drop to close the file
-    drop(f);
 
     let f = fs
         .create(tmpfolder.join(dxffile))
@@ -510,32 +502,26 @@ pub fn heightmap2contours(
         "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
     ).expect("Cannot write dxf file");
 
-    read_lines_no_alloc(fs, polyline_out, |line| {
-        let parts = line.trim().split(';');
-        let r = parts.collect::<Vec<&str>>();
+    for polyline in polylines {
         f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\ncont\r\n  0\r\n".as_bytes())
             .expect("Cannot write dxf file");
-        for (i, d) in r.iter().enumerate() {
-            if d != &"" {
-                let ii = i + 1;
-                let ldata = r.len() - 2;
-                if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
-                    continue;
-                }
-                let mut xy_raw = d.split(',');
-                let x: f64 = xy_raw.next().unwrap().parse::<f64>().unwrap() * size + xmin;
-                let y: f64 = xy_raw.next().unwrap().parse::<f64>().unwrap() * size + ymin;
-                write!(
-                    &mut f,
-                    "VERTEX\r\n  8\r\ncont\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n  0\r\n"
-                )
-                .expect("Cannot write dxf file");
+        for (i, (x, y)) in polyline.iter().enumerate() {
+            let ii = i + 1;
+            let ldata = polyline.len() - 2;
+            if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
+                continue;
             }
+            let x: f64 = x * size + xmin;
+            let y: f64 = y * size + ymin;
+            write!(
+                &mut f,
+                "VERTEX\r\n  8\r\ncont\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n  0\r\n",
+            )
+            .expect("Cannot write dxf file");
         }
         f.write_all("SEQEND\r\n  0\r\n".as_bytes())
             .expect("Cannot write dxf file");
-    })
-    .expect("Cannot read file");
+    }
     f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
         .expect("Cannot write dxf file");
     info!("Done");
