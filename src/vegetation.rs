@@ -70,7 +70,10 @@ pub fn makevege(
     let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default();
 
     let mut i = 0;
-    let mut reader = XyzInternalReader::new(BufReader::new(fs.open(&xyz_file_in)?))?;
+    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
+        crate::ONE_MEGABYTE,
+        fs.open(&xyz_file_in)?,
+    ))?;
     while let Some(r) = reader.next()? {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let x: f64 = r.x;
@@ -125,7 +128,10 @@ pub fn makevege(
     let step: f32 = 6.0;
 
     let mut i = 0;
-    let mut reader = XyzInternalReader::new(BufReader::new(fs.open(&xyz_file_in)?))?;
+    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
+        crate::ONE_MEGABYTE,
+        fs.open(&xyz_file_in)?,
+    ))?;
     while let Some(r) = reader.next()? {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let x: f64 = r.x;
@@ -464,7 +470,10 @@ pub fn makevege(
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        let mut reader = XyzInternalReader::new(BufReader::new(fs.open(&xyz_file_in)?))?;
+        let mut reader = XyzInternalReader::new(BufReader::with_capacity(
+            crate::ONE_MEGABYTE,
+            fs.open(&xyz_file_in)?,
+        ))?;
         while let Some(r) = reader.next()? {
             let (x, y) = (r.x, r.y);
             let c: u8 = r.classification;

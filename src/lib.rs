@@ -19,3 +19,5 @@ pub mod vegetation;
 
 #[cfg(feature = "shapefile")]
 pub mod shapefile;
+
+const ONE_MEGABYTE: usize = 1024 * 1024;
