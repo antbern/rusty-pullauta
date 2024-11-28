@@ -39,7 +39,7 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     let white = Rgba([255, 255, 255, 255]);
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz.bin");
-    let file = BufReader::new(fs.open(&xyz_file_in)?);
+    let file = BufReader::with_capacity(crate::ONE_MEGABYTE, fs.open(&xyz_file_in)?);
     let mut reader = XyzInternalReader::new(file).unwrap();
     while let Some(r) = reader.next().unwrap() {
         let (x, y, h) = (r.x, r.y, r.z);

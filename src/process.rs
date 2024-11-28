@@ -112,7 +112,8 @@ pub fn process_tile(
         info!("Converting points from .xyz to internal binary format");
 
         debug!("Writing records to {:?}", &target_file);
-        let mut writer = XyzInternalWriter::new(BufWriter::new(
+        let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
+            crate::ONE_MEGABYTE,
             fs.create(&target_file).expect("Could not create writer"),
         ));
         read_lines_no_alloc(fs, input_file, |line| {
