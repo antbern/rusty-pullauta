@@ -157,13 +157,15 @@ pub fn process_tile(
         let mut rng = rand::thread_rng();
         let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
 
-        let mut reader = Reader::new(BufReader::new(
+        let mut reader = Reader::new(BufReader::with_capacity(
+            crate::ONE_MEGABYTE,
             fs.open(input_file).expect("Could not open file"),
         ))
         .expect("Could not create reader");
 
         debug!("Writing records to {:?}", &target_file);
-        let mut writer = XyzInternalWriter::new(BufWriter::new(
+        let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
+            crate::ONE_MEGABYTE,
             fs.create(&target_file).expect("Could not create writer"),
         ));
 
@@ -415,7 +417,8 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
 
         let tmp_filename = PathBuf::from(format!("temp{}.xyz.bin", thread));
         debug!("Writing records to {:?}", &tmp_filename);
-        let mut writer = XyzInternalWriter::new(BufWriter::new(
+        let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
+            crate::ONE_MEGABYTE,
             fs.create(&tmp_filename).expect("Could not create writer"),
         ));
 
@@ -428,9 +431,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
                 && header.max_y > miny2
                 && header.min_y < maxy2
             {
-                let mut reader =
-                    Reader::new(BufReader::new(fs.open(laz_p).expect("Could not open file")))
-                        .expect("Could not create reader");
+                let mut reader = Reader::new(BufReader::with_capacity(
+                    crate::ONE_MEGABYTE,
+                    fs.open(laz_p).expect("Could not open file"),
+                ))
+                .expect("Could not create reader");
                 for ptu in reader.points() {
                     let pt = ptu.unwrap();
                     if pt.x > minx2
