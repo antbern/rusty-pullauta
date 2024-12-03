@@ -20,4 +20,6 @@ pub mod vegetation;
 #[cfg(feature = "shapefile")]
 pub mod shapefile;
 
+/// The size of a megabyte in bytes. Used for Read/Write buffer sizes for large files, instead of
+/// the default 8KB.
 const ONE_MEGABYTE: usize = 1024 * 1024;
