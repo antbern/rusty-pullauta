@@ -34,13 +34,13 @@ pub struct XyzInternalWriter<W: Write + Seek> {
 /// each dimension.
 #[derive(Debug, PartialEq)]
 pub struct Header {
-    n_records: u64,
-    min_x: f64,
-    max_x: f64,
-    min_y: f64,
-    max_y: f64,
-    min_z: f64,
-    max_z: f64,
+    pub n_records: u64,
+    pub min_x: f64,
+    pub max_x: f64,
+    pub min_y: f64,
+    pub max_y: f64,
+    pub min_z: f64,
+    pub max_z: f64,
 }
 
 impl FromToBytes for Header {

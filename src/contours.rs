@@ -24,49 +24,11 @@ pub fn xyz2heightmap(
     let scalefactor = config.scalefactor;
     let water_class = config.water_class;
 
-    let mut xmin: f64 = f64::MAX;
-    let mut xmax: f64 = f64::MIN;
-
-    let mut ymin: f64 = f64::MAX;
-    let mut ymax: f64 = f64::MIN;
-
-    let mut hmin: f64 = f64::MAX;
-    let mut hmax: f64 = f64::MIN;
-
     let xyz_file_in = tmpfolder.join(xyzfilein);
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(chunk) = reader.next_chunk()? {
-        for r in chunk {
-            let x: f64 = r.x;
-            let y: f64 = r.y;
-            let h: f64 = r.z as f64;
 
-            if xmin > x {
-                xmin = x;
-            }
-
-            if xmax < x {
-                xmax = x;
-            }
-
-            if ymin > y {
-                ymin = y;
-            }
-
-            if ymax < y {
-                ymax = y;
-            }
-
-            if hmin > h {
-                hmin = h;
-            }
-
-            if hmax < h {
-                hmax = h;
-            }
-        }
-    }
-    drop(reader);
+    let header = reader.header();
+    let (mut xmin, xmax, mut ymin, ymax) = (header.min_x, header.max_x, header.min_y, header.max_y);
 
     xmin = (xmin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
     ymin = (ymin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
@@ -77,9 +39,9 @@ pub fn xyz2heightmap(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
+            // we only care about ground and water points
             if r.classification == 2 || r.classification == water_class {
                 let x: f64 = r.x;
                 let y: f64 = r.y;
