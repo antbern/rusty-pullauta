@@ -163,7 +163,7 @@ impl eframe::App for TemplateApp {
                     let filename = self.radio.file_name().unwrap_or_default().to_string_lossy();
 
                     if filename.ends_with(".png") {
-                        if let Ok(img) = self.fs.read_image(&self.radio) {
+                        if let Ok(img) = self.fs.read_image_png(&self.radio) {
                             if let Some(texture) = &mut self.screen_texture {
                                 // upload the image data to the texture
                                 texture.set(
@@ -231,13 +231,26 @@ impl eframe::App for TemplateApp {
             if !i.raw.dropped_files.is_empty() {
                 // copy the files into the in-memory file system:
                 for file in &i.raw.dropped_files {
-                    debug!("Importing dropped file: {:?}", file.name);
+                    debug!("Importing dropped file: {:?}", file);
 
                     if let Some(bytes) = &file.bytes {
                         let mut writer = BufWriter::new(self.fs.create(&file.name).unwrap());
                         writer.write_all(bytes).unwrap();
                     } else {
-                        warn!("Dropped file has no bytes");
+                        if let Some(path) = &file.path {
+                            let target = if let Some(name) = path.file_name() {
+                                std::path::Path::new(name)
+                            } else {
+                                std::path::Path::new("dropped_file.laz")
+                            };
+
+                            warn!("Loading dropped file from disk: {:?} -> {:?}", path, target);
+                            self.fs
+                                .load_from_disk(&path, target)
+                                .expect("Failed to load file");
+                        } else {
+                            warn!("Dropped file has no bytes nor a path, could not load!");
+                        }
                     }
                 }
             }
@@ -334,16 +347,16 @@ fn preview_files_being_dropped(ctx: &egui::Context) {
     }
 }
 
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
-}
+// fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
+//     ui.horizontal(|ui| {
+//         ui.spacing_mut().item_spacing.x = 0.0;
+//         ui.label("Powered by ");
+//         ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+//         ui.label(" and ");
+//         ui.hyperlink_to(
+//             "eframe",
+//             "https://github.com/emilk/egui/tree/master/crates/eframe",
+//         );
+//         ui.label(".");
+//     });
+// }
