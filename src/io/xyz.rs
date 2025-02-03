@@ -1,8 +1,6 @@
 use crate::io::bytes::FromToBytes;
-use std::{
-    io::{Read, Seek, Write},
-    time::Instant,
-};
+use std::io::{Read, Seek, Write};
+use web_time::Instant;
 
 use log::debug;
 
