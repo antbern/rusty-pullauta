@@ -27,11 +27,11 @@ imageproc = { version = "0.25.0", default-features = false, features = [
 ] }
 
 las = { version = "0.9", features = ["laz"] }
-rand = "0.8.5"
+rand = "0.9"
 rust-ini = "0.21"
 rustc-hash = "2.0"
 shapefile = { version = "0.6.0", optional = true }
-skia-safe = { version = "0.78", optional = true }
+skia-safe = { version = "0.82", optional = true }
 zip = { version = "2.2", default-features = false, features = [
 	"bzip2",
 	"deflate",

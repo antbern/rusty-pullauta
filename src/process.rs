@@ -2,7 +2,6 @@ use image::{GrayImage, Luma, Rgb, RgbImage, Rgba, RgbaImage};
 use las::{raw::Header, Reader};
 use log::debug;
 use log::info;
-use rand::distributions;
 use rand::prelude::*;
 use std::error::Error;
 use std::io::BufRead;
@@ -154,8 +153,8 @@ pub fn process_tile(
             info!("Using thinning factor {}", thinfactor);
         }
 
-        let mut rng = rand::thread_rng();
-        let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
+        let mut rng = rand::rng();
+        let randdist = rand::distr::Bernoulli::new(thinfactor).unwrap();
 
         let mut reader = Reader::new(BufReader::with_capacity(
             crate::ONE_MEGABYTE,
@@ -369,8 +368,8 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
         ..
     } = conf;
 
-    let mut rng = rand::thread_rng();
-    let randdist = distributions::Bernoulli::new(thinfactor).unwrap();
+    let mut rng = rand::rng();
+    let randdist = rand::distr::Bernoulli::new(thinfactor).unwrap();
 
     fs.create_dir_all(batchoutfolder)
         .expect("Could not create output folder");
