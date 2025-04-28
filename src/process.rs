@@ -461,6 +461,16 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
 
         let tmpfolder = PathBuf::from(format!("temp{}", thread));
         if zip_files.is_empty() {
+            // Delete artifacts of a previous run where there would have been a zip
+            let low_file = tmpfolder.join("low.png");
+            if fs.exists(&low_file) {
+                fs.remove_file(low_file).unwrap();
+            }
+            let high_file = tmpfolder.join("high.png");
+            if fs.exists(&high_file) {
+                fs.remove_file(high_file).unwrap();
+            }
+            // Process the tile
             process_tile(fs, conf, thread, &tmpfolder, &tmp_filename, false).unwrap();
         } else {
             process_tile(fs, conf, thread, &tmpfolder, &tmp_filename, true).unwrap();
