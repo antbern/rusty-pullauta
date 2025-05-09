@@ -2,8 +2,9 @@ use std::{
     fmt::Debug,
     io::{self, BufRead, BufReader},
     path::Path,
-    time::Instant,
 };
+
+use web_time::Instant;
 
 use log::debug;
 
