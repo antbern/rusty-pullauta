@@ -1,6 +1,6 @@
 use skia_safe::{
-    surfaces, Color, Data, EncodedImageFormat, Image, Paint, PaintCap, PaintStyle, Path,
-    PathEffect, Surface,
+    Color, Data, EncodedImageFormat, Image, Paint, PaintCap, PaintStyle, Path, PathEffect, Surface,
+    surfaces,
 };
 use std::fs::File;
 use std::io::Write;

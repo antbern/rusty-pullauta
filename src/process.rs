@@ -1,5 +1,5 @@
 use image::{GrayImage, Luma, Rgb, RgbImage, Rgba, RgbaImage};
-use las::{raw::Header, Reader};
+use las::{Reader, raw::Header};
 use log::debug;
 use log::info;
 use rand::prelude::*;
@@ -20,8 +20,8 @@ use crate::io::xyz::XyzInternalWriter;
 use crate::knolls;
 use crate::merge;
 use crate::render;
-use crate::util::read_lines_no_alloc;
 use crate::util::Timing;
+use crate::util::read_lines_no_alloc;
 use crate::vegetation;
 
 pub fn process_zip(

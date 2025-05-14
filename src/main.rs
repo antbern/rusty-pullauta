@@ -1,8 +1,8 @@
 use log::debug;
 use log::info;
 use pullauta::config::Config;
-use pullauta::io::fs::memory::MemoryFileSystem;
 use pullauta::io::fs::FileSystem;
+use pullauta::io::fs::memory::MemoryFileSystem;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -102,7 +102,9 @@ fn main() {
     }
 
     if command.is_empty() && !batch {
-        println!("USAGE:\npullauta [parameter 1] [parameter 2] [parameter 3] ... [parameter n]\nSee README.MD for more details");
+        println!(
+            "USAGE:\npullauta [parameter 1] [parameter 2] [parameter 3] ... [parameter n]\nSee README.MD for more details"
+        );
         return;
     }
 

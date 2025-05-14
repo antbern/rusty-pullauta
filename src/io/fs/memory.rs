@@ -70,7 +70,7 @@ impl Root {
                     return Err(io::Error::new(
                         io::ErrorKind::NotFound,
                         "directory not found",
-                    ))
+                    ));
                 }
             };
         }
@@ -89,7 +89,7 @@ impl Root {
                     return Err(io::Error::new(
                         io::ErrorKind::NotFound,
                         "directory not found",
-                    ))
+                    ));
                 }
             };
         }
@@ -479,9 +479,10 @@ mod test {
         assert!(root.resolve_path(Path::new("..")).is_err());
         assert!(root.resolve_path(Path::new("../a")).is_err());
         assert!(root.resolve_path(Path::new("folder/../..")).is_err());
-        assert!(root
-            .resolve_path(Path::new("folder/folder2/../../.."))
-            .is_err());
+        assert!(
+            root.resolve_path(Path::new("folder/folder2/../../.."))
+                .is_err()
+        );
     }
 
     #[test]
