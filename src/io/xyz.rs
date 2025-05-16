@@ -73,11 +73,10 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
     }
 
     pub fn write_record(&mut self, record: &XyzRecord) -> std::io::Result<()> {
-        let inner = self.inner.as_mut().ok_or_else(|| {
-            std::io::Error::other(
-                "writer has already been finished",
-            )
-        })?;
+        let inner = self
+            .inner
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("writer has already been finished"))?;
 
         // write the header (format + length) on the first write
         if self.records_written == 0 {
@@ -94,11 +93,10 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
     }
 
     pub fn finish(&mut self) -> std::io::Result<W> {
-        let mut inner = self.inner.take().ok_or_else(|| {
-            std::io::Error::other(
-                "writer has already been finished",
-            )
-        })?;
+        let mut inner = self
+            .inner
+            .take()
+            .ok_or_else(|| std::io::Error::other("writer has already been finished"))?;
 
         // seek to the beginning of the file and write the number of records
         inner.seek(std::io::SeekFrom::Start(XYZ_MAGIC.len() as u64))?;
