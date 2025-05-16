@@ -1,0 +1,49 @@
+name: "Build for windows arm64"
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    name: release windows x86_64
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: hecrj/setup-rust-action@v1.4.0
+        with:
+          rust-version: stable
+
+      - name: Compile
+        shell: bash
+        run: |
+          cargo clean
+          cargo build --release
+
+      - run: copy target/release/pullauta.exe .
+
+      - name: 'Compress binaries'
+        if: true
+        uses: a7ul/tar-action@v1.1.2
+        with:
+          command: c
+          files: |
+            pullauta.exe
+            LICENSE
+            README.md
+            osm.txt
+            fastighetskartan.txt
+          outPath: '${{ runner.temp }}/karttapullautin-arm64-win.tar.gz'
+
+      - name: 'Release binaries'
+        if: true
+        uses: pragmatrix/release-action@v1.11.1-rs
+        with:
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: '${{ runner.temp }}/karttapullautin-arm64-win.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifactErrorsFailBuild: true
+          prerelease: true
