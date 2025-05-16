@@ -74,8 +74,7 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
 
     pub fn write_record(&mut self, record: &XyzRecord) -> std::io::Result<()> {
         let inner = self.inner.as_mut().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
+            std::io::Error::other(
                 "writer has already been finished",
             )
         })?;
@@ -96,8 +95,7 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
 
     pub fn finish(&mut self) -> std::io::Result<W> {
         let mut inner = self.inner.take().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
+            std::io::Error::other(
                 "writer has already been finished",
             )
         })?;
