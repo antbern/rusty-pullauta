@@ -12,9 +12,9 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install Rust
-        uses: hecrj/setup-rust-action@v2.0.1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          rust-version: stable
+          toolchain: stable
 
       - name: Compile
         shell: bash
