@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "pullauta"
-version = "2.5.2"
+version = "2.5.4"
 dependencies = [
  "env_logger",
  "image",
