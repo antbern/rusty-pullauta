@@ -2,6 +2,7 @@ name: "Build for windows arm64"
 on:
   release:
     types: [created]
+  push:
 
 jobs:
   release:
@@ -38,7 +39,7 @@ jobs:
           outPath: '${{ runner.temp }}/karttapullautin-arm64-win.tar.gz'
 
       - name: 'Release binaries'
-        if: true
+        if: false
         uses: pragmatrix/release-action@v1.11.1-rs
         with:
           allowUpdates: true
