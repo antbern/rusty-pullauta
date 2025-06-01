@@ -120,11 +120,15 @@ pub fn makevege(
     let (yhit, noyhit) = (yhit, noyhit);
 
     let mut firsthit: HashMap<(u64, u64), u64> = HashMap::default();
-    let mut ugg: HashMap<(u64, u64), f64> = HashMap::default();
-    let mut ug: HashMap<(u64, u64), u64> = HashMap::default();
     let mut ghit: HashMap<(u64, u64), u64> = HashMap::default();
     let mut greenhit: HashMap<(u64, u64), f64> = HashMap::default();
     let mut highit: HashMap<(u64, u64), u64> = HashMap::default();
+    #[derive(Default, Clone, Copy)]
+    struct UggItem {
+        ugg: f64,
+        ug: u64,
+    }
+    let mut ug: HashMap<(u64, u64), UggItem> = HashMap::default(); // block / step
     let step: f32 = 6.0;
 
     let mut i = 0;
@@ -164,16 +168,17 @@ pub fn makevege(
                 let xx = ((x - xmin) / block / (step as f64) + 0.5).floor() as u64;
                 let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as u64;
                 let hh = h - thelele;
+                let ug_entry = ug.entry((xx, yy)).or_default();
                 if hh <= 1.2 {
                     if r3 == 2 {
-                        *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
+                        ug_entry.ugg += 1.0;
                     } else if hh > 0.25 {
-                        *ug.entry((xx, yy)).or_insert(0) += 1;
+                        ug_entry.ug += 1;
                     } else {
-                        *ugg.entry((xx, yy)).or_insert(0.0) += 1.0;
+                        ug_entry.ugg += 1.0;
                     }
                 } else {
-                    *ugg.entry((xx, yy)).or_insert(0.0) += 0.05;
+                    ug_entry.ugg += 0.05;
                 }
 
                 let xx = ((x - xmin) / block + 0.5).floor() as u64;
@@ -218,7 +223,7 @@ pub fn makevege(
         i += 1;
     }
     // rebind the variables to be non-mut for the rest of the function
-    let (firsthit, ugg, ug, ghit, greenhit, highit) = (firsthit, ugg, ug, ghit, greenhit, highit);
+    let (firsthit, ug, ghit, greenhit, highit) = (firsthit, ug, ghit, greenhit, highit);
 
     let w = (xmax - xmin).floor() / block;
     let h = (ymax - ymin).floor() / block;
@@ -547,10 +552,9 @@ pub fn makevege(
             }
             let xx = ((x / bf32 / step).floor()) as u64;
             let yy = ((y / bf32 / step).floor()) as u64;
-            let value = *ug.get(&(xx, yy)).unwrap_or(&0) as f64
-                / (*ug.get(&(xx, yy)).unwrap_or(&0) as f64
-                    + { *ugg.get(&(xx, yy)).unwrap_or(&0.0) }
-                    + 0.01);
+
+            let ug_entry = ug.get(&(xx, yy)).cloned().unwrap_or_default();
+            let value = ug_entry.ug as f64 / (ug_entry.ug as f64 + ug_entry.ugg + 0.01);
             if value > uglimit {
                 draw_line_segment_mut(
                     &mut imgug,
