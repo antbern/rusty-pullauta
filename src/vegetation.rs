@@ -66,9 +66,15 @@ pub fn makevege(
     let mut xmax: f64 = f64::MIN;
     let mut ymax: f64 = f64::MIN;
 
-    let mut top: HashMap<(u64, u64), f64> = HashMap::default(); // block
-    let mut yhit: HashMap<(u64, u64), u64> = HashMap::default(); // 3.0
-    let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default(); // 3.0
+    let w_block = ((hmap.maxx() - xmin) / block).ceil() as usize;
+    let h_block = ((hmap.maxy() - ymin) / block).ceil() as usize;
+
+    let w_3 = ((hmap.maxx() - xmin) / 3.0).ceil() as usize;
+    let h_3 = ((hmap.maxy() - ymin) / 3.0).ceil() as usize;
+
+    let mut top = Vec2D::new(w_block, h_block, 0.0); // block
+    let mut yhit = Vec2D::new(w_3, h_3, 0_u64); // 3.0
+    let mut noyhit = Vec2D::new(w_3, h_3, 0_u64); // 3.0
 
     let mut i = 0;
     let mut reader = XyzInternalReader::new(BufReader::with_capacity(
@@ -91,13 +97,14 @@ pub fn makevege(
                 ymax = y;
             }
             if x > xmin && y > ymin {
-                let xx = ((x - xmin) / block).floor() as u64;
-                let yy = ((y - ymin) / block).floor() as u64;
-                if h > *top.get(&(xx, yy)).unwrap_or(&0.0) {
-                    top.insert((xx, yy), h);
+                let xx = ((x - xmin) / block).floor() as usize;
+                let yy = ((y - ymin) / block).floor() as usize;
+                let t = &mut top[(xx, yy)];
+                if h > *t {
+                    *t = h;
                 }
-                let xx = ((x - xmin) / 3.0).floor() as u64;
-                let yy = ((y - ymin) / 3.0).floor() as u64;
+                let xx = ((x - xmin) / 3.0).floor() as usize;
+                let yy = ((y - ymin) / 3.0).floor() as usize;
 
                 if r3 == 2
                     || h < yellowheight
@@ -106,11 +113,11 @@ pub fn makevege(
                             ((y - ymin) / size).floor() as usize,
                         )]
                 {
-                    *yhit.entry((xx, yy)).or_insert(0) += 1;
+                    yhit[(xx, yy)] += 1;
                 } else if r4 == 1 && r5 == 1 {
-                    *noyhit.entry((xx, yy)).or_insert(0) += yellowfirstlast;
+                    noyhit[(xx, yy)] += yellowfirstlast;
                 } else {
-                    *noyhit.entry((xx, yy)).or_insert(0) += 1;
+                    noyhit[(xx, yy)] += 1;
                 }
             }
         }
@@ -120,38 +127,10 @@ pub fn makevege(
     // rebind the variables to be non-mut for the rest of the function
     let (top, yhit, noyhit) = (top, yhit, noyhit);
 
-    println!(
-        "xmax: {}, ymax: {}, hh: {}, hw: {}",
-        xmax,
-        ymax,
-        hmap.maxx(),
-        hmap.maxy()
-    );
-    println!(
-        "block: {}x{}={}",
-        (xmax - xmin) / block,
-        (ymax - ymin) / block,
-        ((xmax - xmin) / block) * ((ymax - ymin) / block)
-    );
-    println!(
-        "top: {}, yhit: {}, noyhit: {}",
-        top.len(),
-        yhit.len(),
-        noyhit.len()
-    );
-
-    let w_block = ((xmax - xmin) / block).ceil() as usize;
-    let h_block = ((ymax - ymin) / block).ceil() as usize;
-
     let mut firsthit = Vec2D::new(w_block, h_block, 0_u64); // block
     let mut ghit = Vec2D::new(w_block, h_block, 0_u64); // block
     let mut greenhit = Vec2D::new(w_block, h_block, 0_f64); // block
     let mut highit = Vec2D::new(w_block, h_block, 0_u64); // block
-
-    // let mut firsthit: HashMap<(u64, u64), u64> = HashMap::default(); // block
-    // let mut ghit: HashMap<(u64, u64), u64> = HashMap::default(); // block
-    // let mut greenhit: HashMap<(u64, u64), f64> = HashMap::default(); // block
-    // let mut highit: HashMap<(u64, u64), u64> = HashMap::default(); // block
 
     #[derive(Default, Clone, Copy)]
     struct UggItem {
@@ -230,7 +209,7 @@ pub fn makevege(
                         }
                     }
 
-                    let top_val = *top.get(&(xx as u64, yy as u64)).unwrap_or(&0.0);
+                    let top_val = top[(xx, yy)];
                     for &Zone {
                         low,
                         high,
@@ -311,8 +290,8 @@ pub fn makevege(
 
             for i in x..x + 2 {
                 for j in y..y + 2 {
-                    ghit2 += *yhit.get(&(i as u64, j as u64)).unwrap_or(&0);
-                    highhit2 += *noyhit.get(&(i as u64, j as u64)).unwrap_or(&0);
+                    ghit2 += yhit[(i, j)];
+                    highhit2 += noyhit[(i, j)];
                 }
             }
             if ghit2 as f64 / (highhit2 as f64 + ghit2 as f64 + 0.01) > yellowthreshold {
@@ -328,7 +307,7 @@ pub fn makevege(
     let mut imggr1 = RgbImage::from_pixel(img_width, img_height, Rgb([255, 255, 255]));
     for x in 2..w as usize {
         for y in 2..h as usize {
-            let roof = *top.get(&(x as u64, y as u64)).unwrap_or(&0.0)
+            let roof = top[(x, y)]
                 - xyz[(
                     (x as f64 * block / size).floor() as usize,
                     (y as f64 * block / size).floor() as usize,
