@@ -14,6 +14,7 @@ use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::io::xyz::XyzInternalReader;
+use crate::vec2d::Vec2D;
 
 pub fn makevege(
     fs: &impl FileSystem,
@@ -65,9 +66,9 @@ pub fn makevege(
     let mut xmax: f64 = f64::MIN;
     let mut ymax: f64 = f64::MIN;
 
-    let mut top: HashMap<(u64, u64), f64> = HashMap::default();
-    let mut yhit: HashMap<(u64, u64), u64> = HashMap::default();
-    let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default();
+    let mut top: HashMap<(u64, u64), f64> = HashMap::default(); // block
+    let mut yhit: HashMap<(u64, u64), u64> = HashMap::default(); // 3.0
+    let mut noyhit: HashMap<(u64, u64), u64> = HashMap::default(); // 3.0
 
     let mut i = 0;
     let mut reader = XyzInternalReader::new(BufReader::with_capacity(
@@ -117,18 +118,48 @@ pub fn makevege(
         i += 1;
     }
     // rebind the variables to be non-mut for the rest of the function
-    let (yhit, noyhit) = (yhit, noyhit);
+    let (top, yhit, noyhit) = (top, yhit, noyhit);
 
-    let mut firsthit: HashMap<(u64, u64), u64> = HashMap::default();
-    let mut ghit: HashMap<(u64, u64), u64> = HashMap::default();
-    let mut greenhit: HashMap<(u64, u64), f64> = HashMap::default();
-    let mut highit: HashMap<(u64, u64), u64> = HashMap::default();
+    println!(
+        "xmax: {}, ymax: {}, hh: {}, hw: {}",
+        xmax,
+        ymax,
+        hmap.maxx(),
+        hmap.maxy()
+    );
+    println!(
+        "block: {}x{}={}",
+        (xmax - xmin) / block,
+        (ymax - ymin) / block,
+        ((xmax - xmin) / block) * ((ymax - ymin) / block)
+    );
+    println!(
+        "top: {}, yhit: {}, noyhit: {}",
+        top.len(),
+        yhit.len(),
+        noyhit.len()
+    );
+
+    let w_block = ((xmax - xmin) / block).ceil() as usize;
+    let h_block = ((ymax - ymin) / block).ceil() as usize;
+
+    let mut firsthit = Vec2D::new(w_block, h_block, 0_u64); // block
+    let mut ghit = Vec2D::new(w_block, h_block, 0_u64); // block
+    let mut greenhit = Vec2D::new(w_block, h_block, 0_f64); // block
+    let mut highit = Vec2D::new(w_block, h_block, 0_u64); // block
+
+    // let mut firsthit: HashMap<(u64, u64), u64> = HashMap::default(); // block
+    // let mut ghit: HashMap<(u64, u64), u64> = HashMap::default(); // block
+    // let mut greenhit: HashMap<(u64, u64), f64> = HashMap::default(); // block
+    // let mut highit: HashMap<(u64, u64), u64> = HashMap::default(); // block
+
     #[derive(Default, Clone, Copy)]
     struct UggItem {
         ugg: f64,
         ug: u64,
     }
     let mut ug: HashMap<(u64, u64), UggItem> = HashMap::default(); // block / step
+
     let step: f32 = 6.0;
 
     let mut i = 0;
@@ -147,9 +178,9 @@ pub fn makevege(
 
             if x > xmin && y > ymin {
                 if r5 == 1 {
-                    let xx = ((x - xmin) / block + 0.5).floor() as u64;
-                    let yy = ((y - ymin) / block + 0.5).floor() as u64;
-                    *firsthit.entry((xx, yy)).or_insert(0) += 1;
+                    let xx = ((x - xmin) / block + 0.5).floor() as usize;
+                    let yy = ((y - ymin) / block + 0.5).floor() as usize;
+                    firsthit[(xx, yy)] += 1;
                 }
 
                 let xx = ((x - xmin) / size).floor() as usize;
@@ -181,14 +212,14 @@ pub fn makevege(
                     ug_entry.ugg += 0.05;
                 }
 
-                let xx = ((x - xmin) / block + 0.5).floor() as u64;
-                let yy = ((y - ymin) / block + 0.5).floor() as u64;
-                let yyy = ((y - ymin) / block).floor() as u64; // necessary due to bug in perl version
+                let xx = ((x - xmin) / block + 0.5).floor() as usize;
+                let yy = ((y - ymin) / block + 0.5).floor() as usize;
+                let yyy = ((y - ymin) / block).floor() as usize; // necessary due to bug in perl version
                 if r3 == 2 || greenground >= hh {
                     if r4 == 1 && r5 == 1 {
-                        *ghit.entry((xx, yyy)).or_insert(0) += firstandlastreturnasground;
+                        ghit[(xx, yyy)] += firstandlastreturnasground;
                     } else {
-                        *ghit.entry((xx, yyy)).or_insert(0) += 1;
+                        ghit[(xx, yyy)] += 1;
                     }
                 } else {
                     let mut last = 1.0;
@@ -199,7 +230,7 @@ pub fn makevege(
                         }
                     }
 
-                    let top_val = *top.get(&(xx, yy)).unwrap_or(&0.0);
+                    let top_val = *top.get(&(xx as u64, yy as u64)).unwrap_or(&0.0);
                     for &Zone {
                         low,
                         high,
@@ -208,13 +239,13 @@ pub fn makevege(
                     } in config.zones.iter()
                     {
                         if hh >= low && hh < high && top_val - thelele < roof {
-                            *greenhit.entry((xx, yy)).or_insert(0.0) += factor * last;
+                            greenhit[(xx, yy)] += factor * last;
                             break;
                         }
                     }
 
                     if greenhigh < hh {
-                        *highit.entry((xx, yy)).or_insert(0) += 1;
+                        highit[(xx, yy)] += 1;
                     }
                 }
             }
@@ -224,6 +255,20 @@ pub fn makevege(
     }
     // rebind the variables to be non-mut for the rest of the function
     let (firsthit, ug, ghit, greenhit, highit) = (firsthit, ug, ghit, greenhit, highit);
+
+    // println!(
+    //     "firsthit: {}, ug: {}, ghit: {}, greenhit: {}, highit: {}",
+    //     firsthit.len(),
+    //     ug.len(),
+    //     ghit.len(),
+    //     greenhit.len(),
+    //     highit.len()
+    // );
+    // print!(
+    //     "ugg: {}x{}",
+    //     (xmax - xmin) / (block * step as f64),
+    //     (ymax - ymin) / (block * step as f64)
+    // );
 
     let w = (xmax - xmin).floor() / block;
     let h = (ymax - ymin).floor() / block;
@@ -250,10 +295,8 @@ pub fn makevege(
 
     for x in 1..(h as usize) {
         for y in 1..(h as usize) {
-            let xx = x as u64;
-            let yy = y as u64;
-            if *ghit.get(&(xx, yy)).unwrap_or(&0) > 1 {
-                aveg += *firsthit.get(&(xx, yy)).unwrap_or(&0);
+            if ghit[(x, y)] > 1 {
+                aveg += firsthit[(x, y)];
                 avecount += 1;
             }
         }
@@ -291,19 +334,19 @@ pub fn makevege(
                     (y as f64 * block / size).floor() as usize,
                 )];
 
-            let mut firsthit2 = *firsthit.get(&(x as u64, y as u64)).unwrap_or(&0);
+            let mut firsthit2 = firsthit[(x, y)];
             for i in (x - 2)..x + 3_usize {
                 for j in (y - 2)..y + 3_usize {
-                    let value = *firsthit.get(&(i as u64, j as u64)).unwrap_or(&0);
+                    let value = firsthit[(i, j)];
                     if value < firsthit2 {
                         firsthit2 = value;
                     }
                 }
             }
 
-            let greenhit2 = *greenhit.get(&(x as u64, y as u64)).unwrap_or(&0.0);
-            let highit2 = *highit.get(&(x as u64, y as u64)).unwrap_or(&0);
-            let ghit2 = *ghit.get(&(x as u64, y as u64)).unwrap_or(&0);
+            let greenhit2 = greenhit[(x, y)];
+            let highit2 = highit[(x, y)];
+            let ghit2 = ghit[(x, y)];
 
             let mut greenlimit = 9999.0;
             for &(v0, v1, v2) in thresholds.iter() {
