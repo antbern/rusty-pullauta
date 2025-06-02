@@ -3,7 +3,6 @@ use imageproc::drawing::{draw_filled_circle_mut, draw_filled_rect_mut, draw_line
 use imageproc::filter::median_filter;
 use imageproc::rect::Rect;
 use log::info;
-use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
 use std::f32::consts::SQRT_2;
 use std::io::{BufReader, BufWriter, Write};
@@ -132,14 +131,17 @@ pub fn makevege(
     let mut greenhit = Vec2D::new(w_block, h_block, 0_f64); // block
     let mut highit = Vec2D::new(w_block, h_block, 0_u64); // block
 
-    #[derive(Default, Clone, Copy)]
+    let step: f32 = 6.0;
+
+    let w_block_step = ((xmax - xmin) / (block * step as f64)).ceil() as usize + 1;
+    let h_block_step = ((ymax - ymin) / (block * step as f64)).ceil() as usize + 1;
+
+    #[derive(Default, Clone)]
     struct UggItem {
         ugg: f64,
         ug: u64,
     }
-    let mut ug: HashMap<(u64, u64), UggItem> = HashMap::default(); // block / step
-
-    let step: f32 = 6.0;
+    let mut ug = Vec2D::new(w_block_step, h_block_step, UggItem::default()); // block / step
 
     let mut i = 0;
     let mut reader = XyzInternalReader::new(BufReader::with_capacity(
@@ -175,10 +177,10 @@ pub fn makevege(
                 let ab = a * (1.0 - distx) + b * distx;
                 let cd = c * (1.0 - distx) + d * distx;
                 let thelele = ab * (1.0 - disty) + cd * disty;
-                let xx = ((x - xmin) / block / (step as f64) + 0.5).floor() as u64;
-                let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as u64;
+                let xx = ((x - xmin) / block / (step as f64) + 0.5).floor() as usize;
+                let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as usize;
                 let hh = h - thelele;
-                let ug_entry = ug.entry((xx, yy)).or_default();
+                let ug_entry = &mut ug[(xx, yy)];
                 if hh <= 1.2 {
                     if r3 == 2 {
                         ug_entry.ugg += 1.0;
@@ -234,20 +236,6 @@ pub fn makevege(
     }
     // rebind the variables to be non-mut for the rest of the function
     let (firsthit, ug, ghit, greenhit, highit) = (firsthit, ug, ghit, greenhit, highit);
-
-    // println!(
-    //     "firsthit: {}, ug: {}, ghit: {}, greenhit: {}, highit: {}",
-    //     firsthit.len(),
-    //     ug.len(),
-    //     ghit.len(),
-    //     greenhit.len(),
-    //     highit.len()
-    // );
-    // print!(
-    //     "ugg: {}x{}",
-    //     (xmax - xmin) / (block * step as f64),
-    //     (ymax - ymin) / (block * step as f64)
-    // );
 
     let w = (xmax - xmin).floor() / block;
     let h = (ymax - ymin).floor() / block;
@@ -572,10 +560,10 @@ pub fn makevege(
             if y >= hh {
                 break;
             }
-            let xx = ((x / bf32 / step).floor()) as u64;
-            let yy = ((y / bf32 / step).floor()) as u64;
+            let xx = ((x / bf32 / step).floor()) as usize;
+            let yy = ((y / bf32 / step).floor()) as usize;
 
-            let ug_entry = ug.get(&(xx, yy)).cloned().unwrap_or_default();
+            let ug_entry = &ug[(xx, yy)];
             let value = ug_entry.ug as f64 / (ug_entry.ug as f64 + ug_entry.ugg + 0.01);
             if value > uglimit {
                 draw_line_segment_mut(
