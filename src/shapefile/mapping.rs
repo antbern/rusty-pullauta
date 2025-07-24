@@ -49,8 +49,7 @@ impl FromStr for Mapping {
                     (Operator::Equal, param.splitn(2, "=").collect())
                 } else {
                     return Err(format!(
-                        "Condition does not contain a valid operator: {}",
-                        param
+                        "Condition does not contain a valid operator: {param}"
                     ));
                 };
                 Ok(Condition {

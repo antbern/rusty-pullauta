@@ -28,7 +28,7 @@ pub fn unzip_and_render(
     }
 
     for zip_name in filenames.iter() {
-        info!("Opening zip file {}", zip_name);
+        info!("Opening zip file {zip_name}");
         let file = fs.open(zip_name).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         info!(

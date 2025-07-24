@@ -417,14 +417,14 @@ pub fn render(
     }
 
     let filename = if nodepressions {
-        format!("pullautus{}", thread)
+        format!("pullautus{thread}")
     } else {
-        format!("pullautus_depr{}", thread)
+        format!("pullautus_depr{thread}")
     };
 
     img.write_to(
         &mut BufWriter::new(
-            fs.create(format!("{}.png", filename))
+            fs.create(format!("{filename}.png"))
                 .expect("could not save output png"),
         ),
         image::ImageFormat::Png,
@@ -433,7 +433,7 @@ pub fn render(
 
     let file_in = tmpfolder.join("vegetation.pgw");
     let pgw_file_out = fs
-        .create(format!("{}.pgw", filename))
+        .create(format!("{filename}.pgw"))
         .expect("Unable to create file");
     let mut pgw_file_out = BufWriter::new(pgw_file_out);
 
@@ -445,7 +445,7 @@ pub fn render(
                 write!(&mut pgw_file_out, "{}\r\n", x / 600.0 * 254.0 * scalefactor)
                     .expect("Unable to write to file");
             } else {
-                write!(&mut pgw_file_out, "{}\r\n", ip).expect("Unable to write to file");
+                write!(&mut pgw_file_out, "{ip}\r\n").expect("Unable to write to file");
             }
         }
     }
@@ -874,7 +874,7 @@ pub fn draw_curves(
                 if curvew != 1.5 || formline == 0.0 || help2[i] || smallringtest {
                     if let (Some(fp), true) = (fp.as_mut(), curvew == 1.5) {
                         if !formlinestart {
-                            write!(fp, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{}\r\n  0\r\n", f_label)
+                            write!(fp, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{f_label}\r\n  0\r\n")
                                 .expect("Could not write file");
                             formlinestart = true;
                         }

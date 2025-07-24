@@ -27,7 +27,7 @@ fn merge_png(
     let mut res = f64::NAN;
     for png in png_files.iter() {
         let filename = png.as_path().file_name().unwrap().to_str().unwrap();
-        let full_filename = format!("{}/{}", batchoutfolder, filename);
+        let full_filename = format!("{batchoutfolder}/{filename}");
         let img = fs
             .read_image_png(&full_filename)
             .expect("Opening image failed");
@@ -67,7 +67,7 @@ fn merge_png(
     );
     for png in png_files.iter() {
         let filename = png.as_path().file_name().unwrap().to_str().unwrap();
-        let png = format!("{}/{}", batchoutfolder, filename);
+        let png = format!("{batchoutfolder}/{filename}");
         let pgw = png.replace(".png", ".pgw");
         let png = Path::new(&png);
         let pgw = Path::new(&pgw);
@@ -98,7 +98,7 @@ fn merge_png(
 
     im.write_to(
         &mut BufWriter::new(
-            fs.create(format!("{}.jpg", outfilename))
+            fs.create(format!("{outfilename}.jpg"))
                 .expect("could not save output jpg"),
         ),
         image::ImageFormat::Jpeg,
@@ -107,7 +107,7 @@ fn merge_png(
 
     im.write_to(
         &mut BufWriter::new(
-            fs.create(format!("{}.png", outfilename))
+            fs.create(format!("{outfilename}.png"))
                 .expect("could not save output png"),
         ),
         image::ImageFormat::Png,
@@ -115,7 +115,7 @@ fn merge_png(
     .expect("could not save output Png");
 
     let tfw_file = fs
-        .create(format!("{}.pgw", outfilename))
+        .create(format!("{outfilename}.pgw"))
         .expect("Unable to create file");
     let mut tfw_out = BufWriter::new(tfw_file);
     write!(
@@ -129,8 +129,8 @@ fn merge_png(
     .expect("Could not write to file");
     tfw_out.flush().expect("Cannot flush");
     fs.copy(
-        Path::new(&format!("{}.pgw", outfilename)),
-        Path::new(&format!("{}.jgw", outfilename)),
+        Path::new(&format!("{outfilename}.pgw")),
+        Path::new(&format!("{outfilename}.jgw")),
     )
     .expect("Could not copy file");
     Ok(())
@@ -223,7 +223,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("contours.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -270,7 +270,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("_c2f.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -308,7 +308,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("_c2g.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -352,7 +352,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
         for dx in dxf_files.iter() {
             let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-            let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+            let dxf_filename = format!("{batchoutfolder}/{dxf}");
             let input = Path::new(&dxf_filename);
             if fs.exists(input) && dxf_filename.ends_with("_basemap.dxf") {
                 let data = fs.read_to_string(input).expect("Can not read input file");
@@ -391,7 +391,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("_c3g.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -429,7 +429,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("_formlines.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -469,7 +469,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("_dotknolls.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -509,7 +509,7 @@ pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Err
 
     for dx in dxf_files.iter() {
         let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{}/{}", batchoutfolder, dxf);
+        let dxf_filename = format!("{batchoutfolder}/{dxf}");
         let input = Path::new(&dxf_filename);
         if fs.exists(input) && dxf_filename.ends_with("_detected.dxf") {
             let data = fs.read_to_string(input).expect("Can not read input file");
@@ -603,7 +603,7 @@ pub fn smoothjoin(
     let mut dxfheadtmp = data[0];
     dxfheadtmp = dxfheadtmp.split("ENDSEC").collect::<Vec<&str>>()[0];
     dxfheadtmp = dxfheadtmp.split("HEADER").collect::<Vec<&str>>()[1];
-    let dxfhead = &format!("HEADER{}ENDSEC", dxfheadtmp);
+    let dxfhead = &format!("HEADER{dxfheadtmp}ENDSEC");
 
     let output = tmpfolder.join("out2.dxf");
     let fp = fs.create(output).expect("Unable to create file");
@@ -667,14 +667,14 @@ pub fn smoothjoin(
             let xl = x.last().unwrap();
             let y0 = y.first().unwrap();
             let yl = y.last().unwrap();
-            let head = format!("{}x{}", x0, y0);
-            let tail = format!("{}x{}", xl, yl);
+            let head = format!("{x0}x{y0}");
+            let tail = format!("{xl}x{yl}");
 
             heads.push(head);
             tails.push(tail);
 
-            let head = format!("{}x{}", x0, y0);
-            let tail = format!("{}x{}", xl, yl);
+            let head = format!("{x0}x{y0}");
+            let tail = format!("{xl}x{yl}");
             el_x.push(x);
             el_y.push(y);
             if *heads1.get(&head).unwrap_or(&0) == 0 {
@@ -933,7 +933,7 @@ pub fn smoothjoin(
                 }
                 x_avg /= (el_x_len - 1) as f64;
                 y_avg /= (el_x_len - 1) as f64;
-                write!(&mut dotknoll_fp, "{} {} {}\r\n", depression, x_avg, y_avg)
+                write!(&mut dotknoll_fp, "{depression} {x_avg} {y_avg}\r\n")
                     .expect("Unable to write to file");
                 skip = true;
             }
@@ -1122,8 +1122,7 @@ pub fn smoothjoin(
                 }
                 write!(
                     fp,
-                    "POLYLINE\r\n 66\r\n1\r\n  8\r\n{}\r\n 38\r\n{}\r\n  0\r\n",
-                    layer, h
+                    "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n 38\r\n{h}\r\n  0\r\n"
                 )
                 .expect("Unable to write file");
 

@@ -170,8 +170,7 @@ impl Config {
         let mut thinfactor: f64 = parse_typed(gs, "thinfactor", 1.0);
         if !(0.0..=1.0).contains(&thinfactor) {
             return Err(format!(
-                "Value {} of `thinfactor` is outside the allowed range of 0.0 to 1.0",
-                thinfactor
+                "Value {thinfactor} of `thinfactor` is outside the allowed range of 0.0 to 1.0"
             )
             .into());
         }
@@ -222,8 +221,7 @@ impl Config {
         let cliff_thin: f64 = parse_typed(gs, "cliffthin", 1.0);
         if !(0.0..=1.0).contains(&cliff_thin) {
             return Err(format!(
-                "Value {} of `cliffthin` is outside the allowed range of 0.0 to 1.0",
-                cliff_thin
+                "Value {cliff_thin} of `cliffthin` is outside the allowed range of 0.0 to 1.0"
             )
             .into());
         }
@@ -236,7 +234,7 @@ impl Config {
         let mut zones = vec![];
         let mut i: u32 = 1;
         loop {
-            let zone = gs.get(format!("zone{}", i)).unwrap_or("");
+            let zone = gs.get(format!("zone{i}")).unwrap_or("");
             if zone.is_empty() {
                 break;
             }
@@ -255,7 +253,7 @@ impl Config {
             let mut thresholds = vec![];
             let mut i: u32 = 1;
             loop {
-                let last_threshold = gs.get(format!("thresold{}", i)).unwrap_or("");
+                let last_threshold = gs.get(format!("thresold{i}")).unwrap_or("");
                 if last_threshold.is_empty() {
                     break;
                 }

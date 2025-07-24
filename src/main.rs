@@ -61,14 +61,13 @@ fn main() {
     {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
         println!(
-            "Karttapullautin v{}\nThere is no warranty. Use it at your own risk!\n",
-            VERSION
+            "Karttapullautin v{VERSION}\nThere is no warranty. Use it at your own risk!\n"
         );
     }
 
     let batch: bool = config.batch;
 
-    let tmpfolder = PathBuf::from(format!("temp{}", thread));
+    let tmpfolder = PathBuf::from(format!("temp{thread}"));
     fs::create_dir_all(&tmpfolder).expect("Could not create tmp folder");
 
     let pnorthlinesangle = config.pnorthlinesangle;
@@ -374,7 +373,7 @@ fn main() {
         if config.experimental_use_in_memory_fs {
             let fs = pullauta::io::fs::memory::MemoryFileSystem::new();
 
-            debug!("Copying input file into memory fs: {}", command);
+            debug!("Copying input file into memory fs: {command}");
             // copy the input file into the memory file system
             fs.load_from_disk(Path::new(&command), Path::new("input.laz"))
                 .expect("Could not copy input file into memory fs");
@@ -395,7 +394,7 @@ fn main() {
             // now write the output files to disk
             fn copy(fs: &MemoryFileSystem, name: &str) {
                 if fs.exists(name) {
-                    info!("Copying {} from memory fs to disk", name);
+                    info!("Copying {name} from memory fs to disk");
                     fs.save_to_disk(name, name)
                         .expect("Could not copy from memory fs to disk");
                 }

@@ -213,8 +213,7 @@ pub fn xyz2heightmap(
         for y in 0..avg_alt.height() {
             if avg_alt[(x, y)].is_nan() {
                 panic!(
-                    "heightmap should not have any nans, found NaN at ({}, {})",
-                    x, y
+                    "heightmap should not have any nans, found NaN at ({x}, {y})"
                 );
             }
         }
@@ -510,8 +509,7 @@ pub fn heightmap2contours(
 
     write!(
         &mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-        xmin, ymin, xmax, ymax,
+        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
     ).expect("Cannot write dxf file");
 
     read_lines_no_alloc(fs, polyline_out, |line| {
@@ -531,8 +529,7 @@ pub fn heightmap2contours(
                 let y: f64 = xy_raw.next().unwrap().parse::<f64>().unwrap() * size + ymin;
                 write!(
                     &mut f,
-                    "VERTEX\r\n  8\r\ncont\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                    x, y
+                    "VERTEX\r\n  8\r\ncont\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n  0\r\n"
                 )
                 .expect("Cannot write dxf file");
             }

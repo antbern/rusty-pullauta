@@ -692,8 +692,7 @@ pub fn makevege(
     );
     write!(
         &mut writer,
-        "1.0\r\n0.0\r\n0.0\r\n-1.0\r\n{}\r\n{}\r\n",
-        xmin, ymax
+        "1.0\r\n0.0\r\n0.0\r\n-1.0\r\n{xmin}\r\n{ymax}\r\n"
     )
     .expect("Cannot write pgw file");
 

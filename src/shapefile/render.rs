@@ -98,13 +98,13 @@ pub fn render(
         }
     }
 
-    info!("Processing shapefiles: {:?}", shp_files);
+    info!("Processing shapefiles: {shp_files:?}");
 
     for shp_file in shp_files.iter() {
         let file = shp_file.as_path().file_name().unwrap().to_str().unwrap();
         let mut file = tmpfolder.join(file);
 
-        info!("Processing shapefile: {:?}", file);
+        info!("Processing shapefile: {file:?}");
         // drawshape comes here
         let mut reader = shapefile::Reader::from_path(&file)?;
         for shape_record in reader.iter_shapes_and_records() {
@@ -125,7 +125,7 @@ pub fn render(
                 let mut luokka = String::new();
                 if let Some(fv) = record.get("LUOKKA") {
                     if let FieldValue::Numeric(Some(f_luokka)) = fv {
-                        luokka = format!("{}", f_luokka);
+                        luokka = format!("{f_luokka}");
                     }
                     if let FieldValue::Character(Some(c_luokka)) = fv {
                         luokka = c_luokka.to_string();
@@ -677,7 +677,7 @@ pub fn render(
         for ext in ["dbf", "sbx", "prj", "shx", "sbn", "cpg", "qmd"].iter() {
             file.set_extension(ext);
             if fs.exists(&file) {
-                println!("Removing file: {:?}", file);
+                println!("Removing file: {file:?}");
                 fs.remove_file(&file).unwrap();
             }
         }
