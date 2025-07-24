@@ -352,10 +352,10 @@ pub fn makevege(
     }
     if proceed_yellows {
         if med > 0 {
-            imggr1 = median_filter(&imggr1, med / 2, med / 2);
+            imgye2 = median_filter(&imgye2, med / 2, med / 2);
         }
         if med2 > 0 {
-            imggr1 = median_filter(&imggr1, med2 / 2, med2 / 2);
+            imgye2 = median_filter(&imgye2, med2 / 2, med2 / 2);
         }
     } else if medyellow > 0 {
         imgye2 = median_filter(&imgye2, medyellow / 2, medyellow / 2);
