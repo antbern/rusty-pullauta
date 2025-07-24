@@ -72,8 +72,8 @@ pub fn makevege(
     let h_3 = ((hmap.maxy() - ymin) / 3.0).ceil() as usize;
 
     let mut top = Vec2D::new(w_block, h_block, 0.0); // block
-    let mut yhit = Vec2D::new(w_3, h_3, 0_u64); // 3.0
-    let mut noyhit = Vec2D::new(w_3, h_3, 0_u64); // 3.0
+    let mut yhit = Vec2D::new(w_3, h_3, 0_u32); // 3.0
+    let mut noyhit = Vec2D::new(w_3, h_3, 0_u32); // 3.0
 
     let mut i = 0;
     let mut reader = XyzInternalReader::new(BufReader::with_capacity(
@@ -126,10 +126,10 @@ pub fn makevege(
     // rebind the variables to be non-mut for the rest of the function
     let (top, yhit, noyhit) = (top, yhit, noyhit);
 
-    let mut firsthit = Vec2D::new(w_block, h_block, 0_u64); // block
-    let mut ghit = Vec2D::new(w_block, h_block, 0_u64); // block
-    let mut greenhit = Vec2D::new(w_block, h_block, 0_f64); // block
-    let mut highit = Vec2D::new(w_block, h_block, 0_u64); // block
+    let mut firsthit = Vec2D::new(w_block, h_block, 0_u32); // block
+    let mut ghit = Vec2D::new(w_block, h_block, 0_u32); // block
+    let mut greenhit = Vec2D::new(w_block, h_block, 0_f32); // block
+    let mut highit = Vec2D::new(w_block, h_block, 0_u32); // block
 
     let step: f32 = 6.0;
 
@@ -138,8 +138,8 @@ pub fn makevege(
 
     #[derive(Default, Clone)]
     struct UggItem {
-        ugg: f64,
-        ug: u64,
+        ugg: f32,
+        ug: u32,
     }
     let mut ug = Vec2D::new(w_block_step, h_block_step, UggItem::default()); // block / step
 
@@ -220,7 +220,7 @@ pub fn makevege(
                     } in config.zones.iter()
                     {
                         if hh >= low && hh < high && top_val - thelele < roof {
-                            greenhit[(xx, yy)] += factor * last;
+                            greenhit[(xx, yy)] += (factor * last) as f32;
                             break;
                         }
                     }
@@ -311,9 +311,9 @@ pub fn makevege(
                 }
             }
 
-            let greenhit2 = greenhit[(x, y)];
+            let greenhit2 = greenhit[(x, y)] as f64;
             let highit2 = highit[(x, y)];
-            let ghit2 = ghit[(x, y)];
+            let ghit2 = ghit[(x, y)] as f64;
 
             let mut greenlimit = 9999.0;
             for &(v0, v1, v2) in thresholds.iter() {
@@ -564,7 +564,7 @@ pub fn makevege(
             let yy = ((y / bf32 / step).floor()) as usize;
 
             let ug_entry = &ug[(xx, yy)];
-            let value = ug_entry.ug as f64 / (ug_entry.ug as f64 + ug_entry.ugg + 0.01);
+            let value = ug_entry.ug as f64 / (ug_entry.ug as f64 + ug_entry.ugg as f64 + 0.01);
             if value > uglimit {
                 draw_line_segment_mut(
                     &mut imgug,
