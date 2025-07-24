@@ -96,21 +96,18 @@ pub fn makevege(
                 ymax = y;
             }
             if x > xmin && y > ymin {
-                let xx = ((x - xmin) / block).floor() as usize;
-                let yy = ((y - ymin) / block).floor() as usize;
+                let xx = ((x - xmin) / block) as usize;
+                let yy = ((y - ymin) / block) as usize;
                 let t = &mut top[(xx, yy)];
                 if h > *t {
                     *t = h;
                 }
-                let xx = ((x - xmin) / 3.0).floor() as usize;
-                let yy = ((y - ymin) / 3.0).floor() as usize;
+                let xx = ((x - xmin) / 3.0) as usize;
+                let yy = ((y - ymin) / 3.0) as usize;
 
                 if r3 == 2
                     || h < yellowheight
-                        + xyz[(
-                            ((x - xmin) / size).floor() as usize,
-                            ((y - ymin) / size).floor() as usize,
-                        )]
+                        + xyz[(((x - xmin) / size) as usize, ((y - ymin) / size) as usize)]
                 {
                     yhit[(xx, yy)] += 1;
                 } else if r4 == 1 && r5 == 1 {
@@ -159,13 +156,13 @@ pub fn makevege(
 
             if x > xmin && y > ymin {
                 if r5 == 1 {
-                    let xx = ((x - xmin) / block + 0.5).floor() as usize;
-                    let yy = ((y - ymin) / block + 0.5).floor() as usize;
+                    let xx = ((x - xmin) / block + 0.5) as usize;
+                    let yy = ((y - ymin) / block + 0.5) as usize;
                     firsthit[(xx, yy)] += 1;
                 }
 
-                let xx = ((x - xmin) / size).floor() as usize;
-                let yy = ((y - ymin) / size).floor() as usize;
+                let xx = ((x - xmin) / size) as usize;
+                let yy = ((y - ymin) / size) as usize;
                 let a = xyz[(xx, yy)];
                 let b = xyz[(xx + 1, yy)];
                 let c = xyz[(xx, yy + 1)];
@@ -177,8 +174,8 @@ pub fn makevege(
                 let ab = a * (1.0 - distx) + b * distx;
                 let cd = c * (1.0 - distx) + d * distx;
                 let thelele = ab * (1.0 - disty) + cd * disty;
-                let xx = ((x - xmin) / block / (step as f64) + 0.5).floor() as usize;
-                let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5).floor() as usize;
+                let xx = ((x - xmin) / block / (step as f64) + 0.5) as usize;
+                let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5) as usize;
                 let hh = h - thelele;
                 let ug_entry = &mut ug[(xx, yy)];
                 if hh <= 1.2 {
@@ -193,9 +190,9 @@ pub fn makevege(
                     ug_entry.ugg += 0.05;
                 }
 
-                let xx = ((x - xmin) / block + 0.5).floor() as usize;
-                let yy = ((y - ymin) / block + 0.5).floor() as usize;
-                let yyy = ((y - ymin) / block).floor() as usize; // necessary due to bug in perl version
+                let xx = ((x - xmin) / block + 0.5) as usize;
+                let yy = ((y - ymin) / block + 0.5) as usize;
+                let yyy = ((y - ymin) / block) as usize; // necessary due to bug in perl version
                 if r3 == 2 || greenground >= hh {
                     if r4 == 1 && r5 == 1 {
                         ghit[(xx, yyy)] += firstandlastreturnasground;
@@ -297,8 +294,8 @@ pub fn makevege(
         for y in 2..h as usize {
             let roof = top[(x, y)]
                 - xyz[(
-                    (x as f64 * block / size).floor() as usize,
-                    (y as f64 * block / size).floor() as usize,
+                    (x as f64 * block / size) as usize,
+                    (y as f64 * block / size) as usize,
                 )];
 
             let mut firsthit2 = firsthit[(x, y)];
@@ -560,8 +557,8 @@ pub fn makevege(
             if y >= hh {
                 break;
             }
-            let xx = ((x / bf32 / step).floor()) as usize;
-            let yy = ((y / bf32 / step).floor()) as usize;
+            let xx = (x / bf32 / step) as usize;
+            let yy = (y / bf32 / step) as usize;
 
             let ug_entry = &ug[(xx, yy)];
             let value = ug_entry.ug as f64 / (ug_entry.ug as f64 + ug_entry.ugg as f64 + 0.01);
