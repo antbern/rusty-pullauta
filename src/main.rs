@@ -60,9 +60,7 @@ fn main() {
         || command_lowercase.ends_with(".xyz.bin")
     {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
-        println!(
-            "Karttapullautin v{VERSION}\nThere is no warranty. Use it at your own risk!\n"
-        );
+        println!("Karttapullautin v{VERSION}\nThere is no warranty. Use it at your own risk!\n");
     }
 
     let batch: bool = config.batch;

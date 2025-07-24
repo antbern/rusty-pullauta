@@ -212,9 +212,7 @@ pub fn xyz2heightmap(
     for x in 0..avg_alt.width() {
         for y in 0..avg_alt.height() {
             if avg_alt[(x, y)].is_nan() {
-                panic!(
-                    "heightmap should not have any nans, found NaN at ({x}, {y})"
-                );
+                panic!("heightmap should not have any nans, found NaN at ({x}, {y})");
             }
         }
     }
