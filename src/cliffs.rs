@@ -76,8 +76,8 @@ pub fn makecliffs(
     }
 
     let mut img = RgbImage::from_pixel(
-        (xmax - xmin).floor() as u32,
-        (ymax - ymin).floor() as u32,
+        (xmax - xmin) as u32,
+        (ymax - ymin) as u32,
         Rgb([255, 255, 255]),
     );
 
@@ -172,7 +172,7 @@ pub fn makecliffs(
                     let d = d.to_mut();
 
                     // if d has too many points, thin it by keeping every b point
-                    let b = ((d.len() - 1) as f64 / 30.0).floor() as usize + 1;
+                    let b = ((d.len() - 1) as f64 / 30.0) as usize + 1;
                     let mut idx = 0;
                     d.retain(|_| {
                         idx += 1;
@@ -181,7 +181,7 @@ pub fn makecliffs(
                 }
                 if t.len() > 301 {
                     // if t has too many points, thin it by keeping every b point
-                    let b = ((t.len() - 1) as f64 / 300.0).floor() as usize + 1;
+                    let b = ((t.len() - 1) as f64 / 300.0) as usize + 1;
                     let mut idx = 0;
                     t.retain(|_| {
                         idx += 1;
@@ -207,8 +207,8 @@ pub fn makecliffs(
                 for &(x0, y0, h0) in d.iter() {
                     let cliff_length = 1.47;
                     let mut steep = steepness[(
-                        ((x0 - xstart) / size + 0.5).floor() as usize,
-                        ((y0 - ystart) / size + 0.5).floor() as usize,
+                        ((x0 - xstart) / size + 0.5) as usize,
+                        ((y0 - ystart) / size + 0.5) as usize,
                     )] - flat_place;
                     if steep.is_nan() {
                         steep = -flat_place;
@@ -228,8 +228,8 @@ pub fn makecliffs(
                         let temp = h0 - ht;
                         let dist = ((x0 - xt).powi(2) + (y0 - yt).powi(2)).sqrt();
                         if dist > 0.0 {
-                            let imgx = ((x0 + xt) / 2.0 - xmin + 0.5).floor() as u32;
-                            let imgy = ((y0 + yt) / 2.0 - ymin + 0.5).floor() as u32;
+                            let imgx = ((x0 + xt) / 2.0 - xmin + 0.5) as u32;
+                            let imgy = ((y0 + yt) / 2.0 - ymin + 0.5) as u32;
                             if steep < no_small_ciffs
                                 && temp > limit
                                 && temp > (limit + (dist - limit) * 0.85)

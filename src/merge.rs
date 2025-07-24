@@ -794,8 +794,8 @@ pub fn smoothjoin(
                     let xm = el_x[l][m];
                     let ym = el_y[l][m];
                     if (xm - xstart) / size == ((xm - xstart) / size).floor() {
-                        let xx = ((xm - xstart) / size).floor() as usize;
-                        let yy = ((ym - ystart) / size).floor() as usize;
+                        let xx = ((xm - xstart) / size) as usize;
+                        let yy = ((ym - ystart) / size) as usize;
                         let h1 = xyz[(xx, yy)];
                         let h2 = xyz[(xx, yy + 1)];
                         let h3 = h1 * (yy as f64 + 1.0 - (ym - ystart) / size)
@@ -805,8 +805,8 @@ pub fn smoothjoin(
                     } else if m < el_x_len - 1
                         && (el_y[l][m] - ystart) / size == ((el_y[l][m] - ystart) / size).floor()
                     {
-                        let xx = ((xm - xstart) / size).floor() as usize;
-                        let yy = ((ym - ystart) / size).floor() as usize;
+                        let xx = ((xm - xstart) / size) as usize;
+                        let yy = ((ym - ystart) / size) as usize;
                         let h1 = xyz[(xx, yy)];
                         let h2 = xyz[(xx + 1, yy)];
                         let h3 = h1 * (xx as f64 + 1.0 - (xm - xstart) / size)
@@ -845,8 +845,8 @@ pub fn smoothjoin(
                     }
                     m += 1;
                 }
-                let foo_x = ((x_avg - xstart) / size).floor() as usize;
-                let foo_y = ((y_avg - ystart) / size).floor() as usize;
+                let foo_x = ((x_avg - xstart) / size) as usize;
+                let foo_y = ((y_avg - ystart) / size) as usize;
 
                 let h_center = xyz[(foo_x, foo_y)];
 
@@ -886,8 +886,8 @@ pub fn smoothjoin(
                     let mut minele = f64::MAX;
                     let mut maxele = f64::MIN;
                     for k in 0..(el_x_len - 1) {
-                        let xx = ((el_x[l][k] - xstart) / size + 0.5).floor() as usize;
-                        let yy = ((el_y[l][k] - ystart) / size + 0.5).floor() as usize;
+                        let xx = ((el_x[l][k] - xstart) / size + 0.5) as usize;
+                        let yy = ((el_y[l][k] - ystart) / size + 0.5) as usize;
                         let ss = steepness[(xx, yy)];
                         if minele > h - 0.5 * ss {
                             minele = h - 0.5 * ss;
@@ -953,8 +953,8 @@ pub fn smoothjoin(
                     newy.push(el_y[l][0]);
 
                     for k in 1..(el_x_len - 1) {
-                        let xx = ((el_x[l][k] - xstart) / size + 0.5).floor() as usize;
-                        let yy = ((el_y[l][k] - ystart) / size + 0.5).floor() as usize;
+                        let xx = ((el_x[l][k] - xstart) / size + 0.5) as usize;
+                        let yy = ((el_y[l][k] - ystart) / size + 0.5) as usize;
                         let ss = steepness[(xx, yy)];
                         if ss.is_nan() || ss < 0.5 {
                             if ((xpre - el_x[l][k]).powi(2) + (ypre - el_y[l][k]).powi(2)).sqrt()
