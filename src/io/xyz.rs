@@ -1,6 +1,8 @@
 use crate::io::bytes::FromToBytes;
 use std::{
     io::{Read, Seek, Write},
+    mem::offset_of,
+    ptr::addr_of,
     time::Instant,
 };
 
@@ -10,7 +12,10 @@ use log::debug;
 const XYZ_MAGIC: &[u8] = b"XYZB";
 
 /// A single record of an observed laser data point needed by the algorithms.
-#[derive(Debug, Clone, PartialEq)]
+// #[derive(Debug, Default, Clone, PartialEq, zerocopy::FromBytes, zerocopy::IntoBytes)]
+// #[repr(C)]
+#[derive(Debug, Default, Clone, PartialEq)]
+#[repr(C)]
 pub struct XyzRecord {
     pub x: f64,
     pub y: f64,
@@ -22,6 +27,22 @@ pub struct XyzRecord {
 
 impl FromToBytes for XyzRecord {
     fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut record = Self::default();
+        let buffer = unsafe {
+            std::slice::from_raw_parts_mut(
+                &mut record as *mut Self as *mut u8,
+                // cannot use std::mem::size_of::<Self>() here because that includes the padding
+                // bytes at the end, instead we can use the offset of the last field,
+                offset_of!(XyzRecord, return_number) + size_of::<u8>(),
+            )
+        };
+
+        // println!("buffer: {} {:?}", buffer.len(), buffer);
+
+        reader.read_exact(buffer)?;
+
+        return Ok(record);
+
         let x = f64::from_bytes(reader)?;
         let y = f64::from_bytes(reader)?;
         let z = f64::from_bytes(reader)?;
@@ -42,6 +63,18 @@ impl FromToBytes for XyzRecord {
     }
 
     fn to_bytes<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let buffer = unsafe {
+            std::slice::from_raw_parts(
+                self as *const Self as *const u8,
+                // cannot use std::mem::size_of::<Self>() here because that includes the padding
+                // bytes at the end, instead we can use the offset of the last field,
+                offset_of!(XyzRecord, return_number) + size_of::<u8>(),
+            )
+        };
+
+        writer.write_all(buffer)?;
+        return Ok(());
+
         // write the x, y, z coordinates
         self.x.to_bytes(writer)?;
         self.y.to_bytes(writer)?;
