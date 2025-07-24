@@ -1075,10 +1075,9 @@ pub fn xyzknolls(
                 if ii > 0.0 && ii < xmax as f64 && jj > 0.0 && jj < ymax as f64 {
                     let coords = format!("{ii}_{jj}");
                     if !*touched.get(&coords).unwrap_or(&false) {
-                        let tmp = xyz2.grid[(ii.floor() as usize, jj.floor() as usize)]
-                            + (range - (xx - ii).abs()) / range * (range - (yy - jj).abs()) / range
+                        xyz2.grid[(ii as usize, jj as usize)] +=
+                            (range - (xx - ii).abs()) / range * (range - (yy - jj).abs()) / range
                                 * move2;
-                        xyz2.grid[(ii.floor() as usize, jj.floor() as usize)] = tmp;
                     }
                 }
             }
