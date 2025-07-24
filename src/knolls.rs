@@ -131,8 +131,7 @@ pub fn dotknolls(
 
             write!(
                 &mut f,
-                "POINT\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 50\r\n0\r\n  0\r\n",
-                layer, x, y
+                "POINT\r\n  8\r\n{layer}\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n 50\r\n0\r\n  0\r\n"
             )
             .expect("Can not write to file");
         }
@@ -188,8 +187,7 @@ pub fn knolldetector(
         .expect("Unable to create file");
     let mut f = BufWriter::new(f);
     write!(&mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-        xmin, ymin, xmax, ymax
+        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n"
     ).expect("Cannot write dxf file");
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
@@ -234,14 +232,14 @@ pub fn knolldetector(
                 let y0 = y.first().unwrap();
                 let yl = y.last().unwrap();
 
-                let head = format!("{}x{}", x0, y0);
-                let tail = format!("{}x{}", xl, yl);
+                let head = format!("{x0}x{y0}");
+                let tail = format!("{xl}x{yl}");
 
                 heads.push(head);
                 tails.push(tail);
 
-                let head = format!("{}x{}", x0, y0);
-                let tail = format!("{}x{}", xl, yl);
+                let head = format!("{x0}x{y0}");
+                let tail = format!("{xl}x{yl}");
 
                 el_x.push(x);
                 el_y.push(y);
@@ -1062,7 +1060,7 @@ pub fn xyzknolls(
                 if hit % 2 == 1 {
                     let tmp = xyz2.grid[(ii, jj)] + move1;
                     xyz2.grid[(ii, jj)] = tmp;
-                    let coords = format!("{}_{}", ii, jj);
+                    let coords = format!("{ii}_{jj}");
                     touched.insert(coords, true);
                 }
             }
@@ -1075,7 +1073,7 @@ pub fn xyzknolls(
                 let ii: f64 = xx - range + iii as f64;
                 let jj: f64 = yy - range + jjj as f64;
                 if ii > 0.0 && ii < xmax as f64 && jj > 0.0 && jj < ymax as f64 {
-                    let coords = format!("{}_{}", ii, jj);
+                    let coords = format!("{ii}_{jj}");
                     if !*touched.get(&coords).unwrap_or(&false) {
                         let tmp = xyz2.grid[(ii.floor() as usize, jj.floor() as usize)]
                             + (range - (xx - ii).abs()) / range * (range - (yy - jj).abs()) / range

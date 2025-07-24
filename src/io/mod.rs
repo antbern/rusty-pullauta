@@ -34,10 +34,10 @@ pub fn internal2xyz(fs: &impl FileSystem, input: &str, output: &str) -> std::io:
         let mut writer = BufWriter::new(fs.create(output)?);
 
         for (x, y, h) in hmap.iter() {
-            writeln!(writer, "{} {} {}", x, y, h)?;
+            writeln!(writer, "{x} {y} {h}")?;
         }
     } else {
-        panic!("Unknown internal file format: {}", input);
+        panic!("Unknown internal file format: {input}");
     }
 
     Ok(())
