@@ -310,7 +310,7 @@ pub fn makevege(
 
             let greenhit2 = greenhit[(x, y)] as f64;
             let highit2 = highit[(x, y)];
-            let ghit2 = ghit[(x, y)] as f64;
+            let ghit2 = ghit[(x, y)];
 
             let mut greenlimit = 9999.0;
             for &(v0, v1, v2) in thresholds.iter() {
