@@ -65,8 +65,8 @@ pub fn makevege(
     let mut xmax: f64 = f64::MIN;
     let mut ymax: f64 = f64::MIN;
 
-    let w_block = ((hmap.maxx() - xmin) / block).ceil() as usize;
-    let h_block = ((hmap.maxy() - ymin) / block).ceil() as usize;
+    let w_block = ((hmap.maxx() - xmin) / block + 0.5).ceil() as usize;
+    let h_block = ((hmap.maxy() - ymin) / block + 0.5).ceil() as usize;
 
     let w_3 = ((hmap.maxx() - xmin) / 3.0).ceil() as usize;
     let h_3 = ((hmap.maxy() - ymin) / 3.0).ceil() as usize;
@@ -175,7 +175,7 @@ pub fn makevege(
                 let cd = c * (1.0 - distx) + d * distx;
                 let thelele = ab * (1.0 - disty) + cd * disty;
                 let xx = ((x - xmin) / block / (step as f64) + 0.5) as usize;
-                let yy = (((y - ymin) / block / (step as f64)).floor() + 0.5) as usize;
+                let yy = ((y - ymin) / block / (step as f64) + 0.5) as usize;
                 let hh = h - thelele;
                 let ug_entry = &mut ug[(xx, yy)];
                 if hh <= 1.2 {
@@ -257,7 +257,7 @@ pub fn makevege(
     let mut aveg = 0;
     let mut avecount = 0;
 
-    for x in 1..(h as usize) {
+    for x in 1..(w as usize) {
         for y in 1..(h as usize) {
             if ghit[(x, y)] > 1 {
                 aveg += firsthit[(x, y)];
