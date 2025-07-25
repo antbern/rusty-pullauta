@@ -507,7 +507,7 @@ pub fn heightmap2contours(
             .expect("Cannot write dxf file");
         for (i, (x, y)) in polyline.iter().enumerate() {
             let ii = i + 1;
-            let ldata = polyline.len() - 2;
+            let ldata = polyline.len() - 1;
             if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
                 continue;
             }
