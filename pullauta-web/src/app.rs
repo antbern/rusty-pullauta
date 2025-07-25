@@ -56,7 +56,10 @@ impl TemplateApp {
 
         let screen_texture = cc.egui_ctx.load_texture(
             "screen",
-            ImageData::Color(Arc::new(ColorImage::new([320, 80], Color32::TRANSPARENT))),
+            ImageData::Color(Arc::new(ColorImage::filled(
+                [320, 80],
+                Color32::TRANSPARENT,
+            ))),
             TextureOptions::default(),
         );
 
@@ -79,7 +82,7 @@ impl eframe::App for TemplateApp {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
                 let is_web = cfg!(target_arch = "wasm32");
                 if !is_web {
@@ -146,7 +149,7 @@ impl eframe::App for TemplateApp {
             .resizable(true)
             .min_height(200.0)
             .show(ctx, |ui| {
-                egui_logger::logger_ui().show(ui);
+                egui_logger::logger_ui().log_levels([true; 5]).show(ui);
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -231,7 +234,7 @@ impl eframe::App for TemplateApp {
             if !i.raw.dropped_files.is_empty() {
                 // copy the files into the in-memory file system:
                 for file in &i.raw.dropped_files {
-                    debug!("Importing dropped file: {:?}", file);
+                    debug!("Importing dropped file: {} ({:?})", file.name, file.path,);
 
                     if let Some(bytes) = &file.bytes {
                         let mut writer = BufWriter::new(self.fs.create(&file.name).unwrap());
