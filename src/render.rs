@@ -291,38 +291,53 @@ fn draw_cliffs(
 
     let input = tmpfolder.join(file);
     let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
 
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
+    // allocate the vectors here to reuse them across iterations
+    let mut x = Vec::<f64>::new();
+    let mut y = Vec::<f64>::new();
+    let mut r = Vec::<&str>::new();
+    let mut val = Vec::<&str>::new();
+    let mut val2 = Vec::<&str>::new();
+    for (j, rec) in data.split("POLYLINE").enumerate() {
+        x.clear();
+        y.clear();
+
         let mut layer = "";
         if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
+            r.clear();
+            r.extend(rec.split("VERTEX"));
+
+            val.clear();
+            val.extend(r[1].split('\n'));
+
             layer = val[2].trim();
+
+            let mut xline = 0;
+            let mut yline = 0;
             for (i, v) in val.iter().enumerate() {
                 let vt = v.trim_end();
                 if vt == " 10" {
                     xline = i + 1;
-                }
-                if vt == " 20" {
+                } else if vt == " 20" {
                     yline = i + 1;
                 }
             }
+
+            // pre-reserve memory for all x and y values to fit without intermediate allocations
+            x.reserve(r.len());
+            y.reserve(r.len());
             for (i, v) in r.iter().enumerate() {
                 if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
+                    val2.clear();
+                    val2.extend(v.trim_end().split('\n'));
+
                     x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
+                        (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
                             / 254.0
                             / scalefactor,
                     );
                     y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
+                        (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
                             / 254.0
                             / scalefactor,
                     );
@@ -342,8 +357,8 @@ fn draw_cliffs(
             Rgba([0, 0, 0, 255]) // black
         };
 
-        let last_idx = x.len() - 1;
         if x.first() != x.last() || y.first() != y.last() {
+            let last_idx = x.len() - 1;
             let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
             if dist > 0.0 {
                 let dx = x[0] - x[last_idx];
