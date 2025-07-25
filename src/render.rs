@@ -7,7 +7,6 @@ use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
 use log::info;
-use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::io::BufRead;

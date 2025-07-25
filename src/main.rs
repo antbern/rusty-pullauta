@@ -275,7 +275,7 @@ fn main() {
 
     if command == "render" {
         let angle: f64 = args
-            .get(0)
+            .first()
             .and_then(|s| s.parse::<f64>().ok())
             .expect("expected first argument to be angle");
         let nwidth: usize = args
