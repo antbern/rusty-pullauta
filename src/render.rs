@@ -288,17 +288,6 @@ fn draw_cliffs(
     y0: f64,
 ) -> Result<(), Box<dyn Error>> {
     let scalefactor = config.scalefactor;
-    let black = Rgba([0, 0, 0, 255]);
-
-    let cliffcolor = if config.cliffdebug {
-        HashMap::from_iter([
-            ("cliff2", Rgba([100, 0, 100, 255])),
-            ("cliff3", Rgba([0, 100, 100, 255])),
-            ("cliff4", Rgba([100, 100, 0, 255])),
-        ])
-    } else {
-        HashMap::from_iter([("cliff2", black), ("cliff3", black), ("cliff4", black)])
-    };
 
     let input = tmpfolder.join(file);
     let data = fs.read_to_string(input).expect("Can not read input file");
@@ -340,6 +329,19 @@ fn draw_cliffs(
                 }
             }
         }
+
+        // based on the layer we select the cliffcolor
+        let cliffcolor = if config.cliffdebug {
+            match layer {
+                "cliff2" => Rgba([100, 0, 100, 255]),
+                "cliff3" => Rgba([0, 100, 100, 255]),
+                "cliff4" => Rgba([100, 100, 0, 255]),
+                _ => Rgba([0, 0, 0, 255]), // black
+            }
+        } else {
+            Rgba([0, 0, 0, 255]) // black
+        };
+
         let last_idx = x.len() - 1;
         if x.first() != x.last() || y.first() != y.last() {
             let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
@@ -350,17 +352,12 @@ fn draw_cliffs(
                 y[0] += dy / dist * 1.5;
                 x[last_idx] -= dx / dist * 1.5;
                 y[last_idx] -= dy / dist * 1.5;
-                draw_filled_circle_mut(
-                    img,
-                    (x[0] as i32, y[0] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
+                draw_filled_circle_mut(img, (x[0] as i32, y[0] as i32), 3, cliffcolor);
                 draw_filled_circle_mut(
                     img,
                     (x[last_idx] as i32, y[last_idx] as i32),
                     3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
+                    cliffcolor,
                 );
             }
         }
@@ -377,7 +374,7 @@ fn draw_cliffs(
                             (x[i] + (n as f64) - 3.0).floor() as f32,
                             (y[i] + (m as f64) - 3.0).floor() as f32,
                         ),
-                        *cliffcolor.get(&layer).unwrap_or(&black),
+                        cliffcolor,
                     )
                 }
             }
