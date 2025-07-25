@@ -133,31 +133,26 @@ pub fn render(
     let data = fs.read_to_string(input).expect("Can not read input file");
     let data = data.split("POINT");
 
-    for (j, rec) in data.enumerate() {
+    for rec in data.skip(1) {
         let mut x: f64 = 0.0;
         let mut y: f64 = 0.0;
-        if j > 0 {
-            let val = rec.split('\n').collect::<Vec<&str>>();
-            let layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    x = (val[i + 1].trim().parse::<f64>().unwrap() - x0) * 600.0
-                        / 254.0
-                        / scalefactor;
-                }
-                if vt == " 20" {
-                    y = (y0 - val[i + 1].trim().parse::<f64>().unwrap()) * 600.0
-                        / 254.0
-                        / scalefactor;
-                }
-            }
-            if layer == "dotknoll" {
-                let color = Rgba([166, 85, 43, 255]);
+        let val = rec.split('\n').collect::<Vec<&str>>();
 
-                draw_filled_circle_mut(&mut img, (x as i32, y as i32), 7, color)
+        let layer = val[2].trim();
+        if layer != "dotknoll" {
+            continue;
+        }
+        for (i, v) in val.iter().enumerate() {
+            let vt = v.trim_end();
+            if vt == " 10" {
+                x = (val[i + 1].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor;
+            } else if vt == " 20" {
+                y = (y0 - val[i + 1].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor;
             }
         }
+
+        let color = Rgba([166, 85, 43, 255]);
+        draw_filled_circle_mut(&mut img, (x as i32, y as i32), 7, color)
     }
     // blocks -------------
     let blocks_file = tmpfolder.join("blocks.png");
@@ -576,9 +571,9 @@ pub fn draw_curves(
     // keep the x & y vectors outside the loop to reuse their memory
     let mut x = Vec::<f64>::new();
     let mut y = Vec::<f64>::new();
-    let mut split_vertex = Vec::<&str>::new();
-    let mut split_newline_1 = Vec::<&str>::new();
-    let mut split_newline_2 = Vec::<&str>::new();
+    let mut r = Vec::<&str>::new();
+    let mut val = Vec::<&str>::new();
+    let mut val2 = Vec::<&str>::new();
     for (j, rec) in data.enumerate() {
         x.clear();
         y.clear();
@@ -587,16 +582,16 @@ pub fn draw_curves(
             let mut xline = 0;
             let mut yline = 0;
 
-            // reuse split_vertex across iterations
-            split_vertex.clear();
-            split_vertex.extend(rec.split("VERTEX"));
+            // reuse r across iterations
+            r.clear();
+            r.extend(rec.split("VERTEX"));
 
-            // reuse split_newline_1 across iterations
-            split_newline_1.clear();
-            split_newline_1.extend(split_vertex[1].split('\n'));
+            // reuse val across iterations
+            val.clear();
+            val.extend(r[1].split('\n'));
 
-            layer = split_newline_1[2].trim();
-            for (i, v) in split_newline_1.iter().enumerate() {
+            layer = val[2].trim();
+            for (i, v) in val.iter().enumerate() {
                 let vt = v.trim_end();
                 if vt == " 10" {
                     xline = i + 1;
@@ -605,22 +600,22 @@ pub fn draw_curves(
                 }
             }
             // pre-reserve memory for all x and y values to fit without intermediate allocations
-            x.reserve(split_vertex.len());
-            y.reserve(split_vertex.len());
+            x.reserve(r.len());
+            y.reserve(r.len());
 
-            for (i, v) in split_vertex.iter().enumerate() {
+            for (i, v) in r.iter().enumerate() {
                 if i > 0 {
                     // reuse the vector to split the values between iterations
-                    split_newline_2.clear();
-                    split_newline_2.extend(v.trim_end().split('\n'));
+                    val2.clear();
+                    val2.extend(v.trim_end().split('\n'));
 
                     x.push(
-                        (split_newline_2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
+                        (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
                             / 254.0
                             / scalefactor,
                     );
                     y.push(
-                        (y0 - split_newline_2[yline].trim().parse::<f64>().unwrap()) * 600.0
+                        (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
                             / 254.0
                             / scalefactor,
                     );
