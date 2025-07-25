@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
+use crate::vec2d::Vec2D;
 use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
@@ -493,12 +494,13 @@ pub fn draw_curves(
         .expect("Could not read line 6")
         .parse::<f64>()
         .unwrap();
-    let mut steepness: HashMap<(usize, usize), f64> = HashMap::default();
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
     let mut reader = BufReader::new(fs.open(heightmap_in)?);
     let hmap = HeightMap::from_bytes(&mut reader)?;
     let xyz = &hmap.grid;
+
+    let mut steepness = Vec2D::new(xyz.width(), xyz.height(), 0f64);
 
     if formline > 0.0 {
         xstart = hmap.xoffset;
@@ -601,7 +603,7 @@ pub fn draw_curves(
                 if high > val {
                     val = high;
                 }
-                steepness.insert((i, j), val);
+                steepness[(i, j)] = val;
             }
         }
     }
@@ -696,10 +698,10 @@ pub fn draw_curves(
                         as usize;
                     if curvew != 1.5
                         || formline == 0.0
-                        || steepness.get(&(xx, yy)).unwrap_or(&0.0) < &formlinesteepness
-                        || steepness.get(&(xx, yy + 1)).unwrap_or(&0.0) < &formlinesteepness
-                        || steepness.get(&(xx + 1, yy)).unwrap_or(&0.0) < &formlinesteepness
-                        || steepness.get(&(xx + 1, yy + 1)).unwrap_or(&0.0) < &formlinesteepness
+                        || steepness[(xx, yy)] < formlinesteepness
+                        || steepness[(xx, yy + 1)] < formlinesteepness
+                        || steepness[(xx + 1, yy)] < formlinesteepness
+                        || steepness[(xx + 1, yy + 1)] < formlinesteepness
                     {
                         help[i] = true;
                     }
