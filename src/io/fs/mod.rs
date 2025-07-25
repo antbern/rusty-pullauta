@@ -29,6 +29,9 @@ pub trait FileSystem: std::fmt::Debug {
     /// Remove a file.
     fn remove_file(&self, path: impl AsRef<Path>) -> Result<(), io::Error>;
 
+    /// Remove a dir.
+    fn remove_dir_all(&self, path: impl AsRef<Path>) -> Result<(), io::Error>;
+
     /// Get the size of a file in bytes.
     fn file_size(&self, path: impl AsRef<Path>) -> Result<u64, io::Error>;
 

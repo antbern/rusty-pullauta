@@ -364,6 +364,25 @@ impl FileSystem for MemoryFileSystem {
         Ok(())
     }
 
+    fn remove_dir_all(&self, path: impl AsRef<Path>) -> Result<(), io::Error> {
+        let mut root = self.root.write().expect("root lock poisoned");
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the parent directory
+        let dir = root.get_directory_mut(parent)?;
+
+        // get the dir name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        dir.subdirs
+            .remove(&name)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "subdir not found"))?;
+
+        Ok(())
+    }
+
     fn file_size(&self, path: impl AsRef<Path>) -> Result<u64, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
         let path = path.as_ref();
