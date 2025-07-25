@@ -220,185 +220,9 @@ pub fn render(
         image::imageops::overlay(&mut img, &imgbb_thumb, 0, 0);
     }
 
-    let black = Rgba([0, 0, 0, 255]);
+    draw_cliffs(fs, config, tmpfolder, "c2g.dxf", &mut img, x0, y0).expect("draw cliffs c2g.dxf");
+    draw_cliffs(fs, config, tmpfolder, "c3g.dxf", &mut img, x0, y0).expect("draw cliffs c3g.dxf");
 
-    let mut cliffcolor =
-        HashMap::from_iter([("cliff2", black), ("cliff3", black), ("cliff4", black)]);
-    if config.cliffdebug {
-        cliffcolor = HashMap::from_iter([
-            ("cliff2", Rgba([100, 0, 100, 255])),
-            ("cliff3", Rgba([0, 100, 100, 255])),
-            ("cliff4", Rgba([100, 100, 0, 255])),
-        ]);
-    }
-    let input = tmpfolder.join("c2g.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        let mut layer = "";
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
-        }
-        let last_idx = x.len() - 1;
-        if x.first() != x.last() || y.first() != y.last() {
-            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
-            if dist > 0.0 {
-                let dx = x[0] - x[last_idx];
-                let dy = y[0] - y[last_idx];
-                x[0] += dx / dist * 1.5;
-                y[0] += dy / dist * 1.5;
-                x[last_idx] -= dx / dist * 1.5;
-                y[last_idx] -= dy / dist * 1.5;
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[0] as i32, y[0] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[last_idx] as i32, y[last_idx] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-            }
-        }
-        for i in 1..x.len() {
-            for n in 0..6 {
-                for m in 0..6 {
-                    draw_line_segment_mut(
-                        &mut img,
-                        (
-                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
-                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        (
-                            (x[i] + (n as f64) - 3.0).floor() as f32,
-                            (y[i] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        *cliffcolor.get(&layer).unwrap_or(&black),
-                    )
-                }
-            }
-        }
-    }
-
-    let input = &tmpfolder.join("c3g.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        let mut layer = "";
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
-        }
-        let last_idx = x.len() - 1;
-        if x.first() != x.last() || y.first() != y.last() {
-            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
-            if dist > 0.0 {
-                let dx = x[0] - x[last_idx];
-                let dy = y[0] - y[last_idx];
-                x[0] += dx / dist * 1.5;
-                y[0] += dy / dist * 1.5;
-                x[last_idx] -= dx / dist * 1.5;
-                y[last_idx] -= dy / dist * 1.5;
-
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[0] as i32, y[0] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[last_idx] as i32, y[last_idx] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-            }
-        }
-        for i in 1..x.len() {
-            for n in 0..6 {
-                for m in 0..6 {
-                    draw_line_segment_mut(
-                        &mut img,
-                        (
-                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
-                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        (
-                            (x[i] + (n as f64) - 3.0).floor() as f32,
-                            (y[i] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        *cliffcolor.get(&layer).unwrap_or(&black),
-                    )
-                }
-            }
-        }
-    }
     // high -------------
     let high_file = tmpfolder.join("high.png");
     if fs.exists(&high_file) {
@@ -451,6 +275,114 @@ pub fn render(
         }
     }
     info!("Done");
+    Ok(())
+}
+
+fn draw_cliffs(
+    fs: &impl FileSystem,
+    config: &Config,
+    tmpfolder: &Path,
+    file: &str,
+    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    x0: f64,
+    y0: f64,
+) -> Result<(), Box<dyn Error>> {
+    let scalefactor = config.scalefactor;
+    let black = Rgba([0, 0, 0, 255]);
+
+    let cliffcolor = if config.cliffdebug {
+        HashMap::from_iter([
+            ("cliff2", Rgba([100, 0, 100, 255])),
+            ("cliff3", Rgba([0, 100, 100, 255])),
+            ("cliff4", Rgba([100, 100, 0, 255])),
+        ])
+    } else {
+        HashMap::from_iter([("cliff2", black), ("cliff3", black), ("cliff4", black)])
+    };
+
+    let input = tmpfolder.join(file);
+    let data = fs.read_to_string(input).expect("Can not read input file");
+    let data: Vec<&str> = data.split("POLYLINE").collect();
+
+    for (j, rec) in data.iter().enumerate() {
+        let mut x = Vec::<f64>::new();
+        let mut y = Vec::<f64>::new();
+        let mut xline = 0;
+        let mut yline = 0;
+        let mut layer = "";
+        if j > 0 {
+            let r = rec.split("VERTEX").collect::<Vec<&str>>();
+            let apu = r[1];
+            let val = apu.split('\n').collect::<Vec<&str>>();
+            layer = val[2].trim();
+            for (i, v) in val.iter().enumerate() {
+                let vt = v.trim_end();
+                if vt == " 10" {
+                    xline = i + 1;
+                }
+                if vt == " 20" {
+                    yline = i + 1;
+                }
+            }
+            for (i, v) in r.iter().enumerate() {
+                if i > 0 {
+                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
+                    x.push(
+                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
+                            / 254.0
+                            / scalefactor,
+                    );
+                    y.push(
+                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
+                            / 254.0
+                            / scalefactor,
+                    );
+                }
+            }
+        }
+        let last_idx = x.len() - 1;
+        if x.first() != x.last() || y.first() != y.last() {
+            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
+            if dist > 0.0 {
+                let dx = x[0] - x[last_idx];
+                let dy = y[0] - y[last_idx];
+                x[0] += dx / dist * 1.5;
+                y[0] += dy / dist * 1.5;
+                x[last_idx] -= dx / dist * 1.5;
+                y[last_idx] -= dy / dist * 1.5;
+                draw_filled_circle_mut(
+                    img,
+                    (x[0] as i32, y[0] as i32),
+                    3,
+                    *cliffcolor.get(&layer).unwrap_or(&black),
+                );
+                draw_filled_circle_mut(
+                    img,
+                    (x[last_idx] as i32, y[last_idx] as i32),
+                    3,
+                    *cliffcolor.get(&layer).unwrap_or(&black),
+                );
+            }
+        }
+        for i in 1..x.len() {
+            for n in 0..6 {
+                for m in 0..6 {
+                    draw_line_segment_mut(
+                        img,
+                        (
+                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
+                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
+                        ),
+                        (
+                            (x[i] + (n as f64) - 3.0).floor() as f32,
+                            (y[i] + (m as f64) - 3.0).floor() as f32,
+                        ),
+                        *cliffcolor.get(&layer).unwrap_or(&black),
+                    )
+                }
+            }
+        }
+    }
     Ok(())
 }
 
