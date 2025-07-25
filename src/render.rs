@@ -610,51 +610,73 @@ pub fn draw_curves(
 
     let input = &tmpfolder.join("out2.dxf");
     let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
+    let mut data = data.split("POLYLINE").peekable();
 
     // only create the file if condition is met
     let mut fp = if formline == 2.0 && !nodepressions {
         let output = tmpfolder.join("formlines.dxf");
         let fp = fs.create(output).expect("Unable to create file");
         let mut fp = BufWriter::new(fp);
-        fp.write_all(data[0].as_bytes())
-            .expect("Could not write file");
+        fp.write_all(
+            data.peek()
+                .expect("should have at least one element")
+                .as_bytes(),
+        )
+        .expect("Could not write file");
 
         Some(fp)
     } else {
         None
     };
 
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
+    // keep the x & y vectors outside the loop to reuse their memory
+    let mut x = Vec::<f64>::new();
+    let mut y = Vec::<f64>::new();
+    let mut split_vertex = Vec::<&str>::new();
+    let mut split_newline_1 = Vec::<&str>::new();
+    let mut split_newline_2 = Vec::<&str>::new();
+    for (j, rec) in data.enumerate() {
+        x.clear();
+        y.clear();
         let mut layer = "";
         if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
+            let mut xline = 0;
+            let mut yline = 0;
+
+            // reuse split_vertex across iterations
+            split_vertex.clear();
+            split_vertex.extend(rec.split("VERTEX"));
+
+            // reuse split_newline_1 across iterations
+            split_newline_1.clear();
+            split_newline_1.extend(split_vertex[1].split('\n'));
+
+            layer = split_newline_1[2].trim();
+            for (i, v) in split_newline_1.iter().enumerate() {
                 let vt = v.trim_end();
                 if vt == " 10" {
                     xline = i + 1;
-                }
-                if vt == " 20" {
+                } else if vt == " 20" {
                     yline = i + 1;
                 }
             }
-            for (i, v) in r.iter().enumerate() {
+            // pre-reserve memory for all x and y values to fit without intermediate allocations
+            x.reserve(split_vertex.len());
+            y.reserve(split_vertex.len());
+
+            for (i, v) in split_vertex.iter().enumerate() {
                 if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
+                    // reuse the vector to split the values between iterations
+                    split_newline_2.clear();
+                    split_newline_2.extend(v.trim_end().split('\n'));
+
                     x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
+                        (split_newline_2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
                             / 254.0
                             / scalefactor,
                     );
                     y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
+                        (y0 - split_newline_2[yline].trim().parse::<f64>().unwrap()) * 600.0
                             / 254.0
                             / scalefactor,
                     );
