@@ -275,6 +275,8 @@ pub fn makecliffs(
 
     f2.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
         .expect("Cannot write dxf file");
+    drop(f2); // close the file
+
     let c2_limit = 2.6 * 2.75;
 
     // if we drop this already here, we can reuse the memory for the second list_alt
@@ -286,8 +288,6 @@ pub fn makecliffs(
         Vec::<(f64, f64, f64)>::new(),
     );
 
-    let mut reader = BufReader::new(fs.open(&heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
     for (x, y, h) in hmap.iter() {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             list_alt[(
