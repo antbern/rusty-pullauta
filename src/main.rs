@@ -274,8 +274,14 @@ fn main() {
     }
 
     if command == "render" {
-        let angle: f64 = args[0].parse::<f64>().unwrap();
-        let nwidth: usize = args[1].parse::<usize>().unwrap();
+        let angle: f64 = args
+            .first()
+            .and_then(|s| s.parse::<f64>().ok())
+            .expect("expected first argument to be angle");
+        let nwidth: usize = args
+            .get(1)
+            .and_then(|s| s.parse::<usize>().ok())
+            .expect("expected second argument to be nwidth");
         let nodepressions: bool = args.len() > 2 && args[2] == "nodepressions";
         pullauta::render::render(
             &fs,
