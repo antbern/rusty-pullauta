@@ -322,16 +322,8 @@ fn draw_cliffs(
             val2.clear();
             val2.extend(v.trim_end().split('\n'));
 
-            x.push(
-                (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                    / 254.0
-                    / scalefactor,
-            );
-            y.push(
-                (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
-                    / 254.0
-                    / scalefactor,
-            );
+            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
+            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
         }
 
         // based on the layer we select the cliffcolor
@@ -571,7 +563,7 @@ pub fn draw_curves(
     for rec in data.skip(1) {
         x.clear();
         y.clear();
-        
+
         let mut xline = 0;
         let mut yline = 0;
 
@@ -601,16 +593,8 @@ pub fn draw_curves(
             val2.clear();
             val2.extend(v.trim_end().split('\n'));
 
-            x.push(
-                (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                    / 254.0
-                    / scalefactor,
-            );
-            y.push(
-                (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
-                    / 254.0
-                    / scalefactor,
-            );
+            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
+            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
         }
         let mut color = Rgba([200, 0, 200, 255]); // purple
         if layer.contains("contour") {
