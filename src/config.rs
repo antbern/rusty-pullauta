@@ -331,8 +331,16 @@ impl Config {
         let label_depressions: bool = gs.get("label_formlines_depressions").unwrap_or("0") == "1";
         let remove_touching_contours: bool =
             gs.get("remove_touching_contours").unwrap_or("0") == "1";
+        let batch = gs.get("batch").unwrap() == "1";
+        if batch && processes == 0 {
+            return Err(
+                "Value of `processes` cannot be zero if parameter `batch` is 1"
+                    .to_string()
+                    .into(),
+            );
+        }
         Ok(Self {
-            batch: gs.get("batch").unwrap() == "1",
+            batch,
             processes,
             experimental_use_in_memory_fs,
             vegeonly,

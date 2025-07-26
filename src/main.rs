@@ -296,7 +296,7 @@ fn main() {
         return;
     }
     let proc = config.processes;
-    if command.is_empty() && batch && proc > 1 {
+    if command.is_empty() && batch {
         // inner function to reduce code duplication
         fn launch_threads<F: FileSystem + Send + Clone + 'static>(
             fs: F,
@@ -364,37 +364,6 @@ fn main() {
             launch_threads(fs, proc, &config, &zip_files);
         }
         return;
-    }
-
-    if (command.is_empty() && batch && proc < 2) || (command == "startthread" && batch) {
-        thread = String::from("0");
-        if !args.is_empty() {
-            thread.clone_from(&args[0]);
-        }
-        if thread == "0" {
-            thread = String::from("");
-        }
-
-        let Config { lazfolder, .. } = &*config;
-
-        let shapefiletmpdir = PathBuf::from("temp_shapefiles".to_string());
-
-        let mut zip_files: Vec<String> = Vec::new();
-        for path in fs.list(lazfolder).unwrap() {
-            if let Some(extension) = path.extension() {
-                if extension == "zip" {
-                    zip_files.push(String::from(path.to_str().unwrap()));
-                }
-            }
-        }
-        fs.create_dir_all(&shapefiletmpdir)
-            .expect("Could not create output folder");
-        if !zip_files.is_empty() {
-            crate::shapefile::unzip_shapefiles(&fs, &zip_files).unwrap();
-        }
-        pullauta::process::batch_process(&config, &fs, &thread, !zip_files.is_empty());
-
-        fs.remove_dir_all(&shapefiletmpdir).unwrap();
     }
 
     if command_lowercase.ends_with(".zip") {
