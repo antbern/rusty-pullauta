@@ -27,6 +27,7 @@ imageproc = { version = "0.25.0", default-features = false, features = [
 ] }
 
 las = { version = "0.9", features = ["laz"] }
+liblzma = { version = "*", features = ["static"] }
 rand = "0.9"
 rust-ini = "0.21"
 rustc-hash = "2.0"
