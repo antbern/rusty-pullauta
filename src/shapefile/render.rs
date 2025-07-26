@@ -16,7 +16,7 @@ use crate::{
     },
 };
 use shapefile::dbase::{FieldValue, Record};
-use shapefile::{Point, Polygon, Polyline, Shape, ShapeType};
+use shapefile::{Polygon, Polyline, Shape, ShapeType};
 
 pub fn render(
     fs: &impl FileSystem,
@@ -138,29 +138,10 @@ pub fn render(
             let (shape, record) = shape_record
                 .unwrap_or_else(|_err: shapefile::Error| (Shape::NullShape, Record::default()));
 
-            let shapetype = shape.shapetype();
-
-            // There is probably a better rusty way, but I can't figure it out...
-            let mut polyline = Polyline::new(vec![Point::new(0.0, 0.0), Point::new(1.0, 1.0)]);
-            let mut polygon = Polygon::new(
-                vec![
-                    Point::new(0.0, 0.0),
-                    Point::new(1.0, 1.0),
-                    Point::new(0.0, 0.0),
-                ]
-                .into(),
-            );
-
-            let (is_polyline, bbox) = if shapetype == ShapeType::Polyline {
-                polyline = Polyline::try_from(shape).unwrap();
-                let bbox = polyline.bbox();
-                (true, bbox)
-            } else if shapetype == ShapeType::Polygon {
-                polygon = Polygon::try_from(shape).unwrap();
-                let bbox = polygon.bbox();
-                (false, bbox)
-            } else {
-                continue;
+            let bbox = match shape {
+                Shape::Polygon(ref p) => p.bbox(),
+                Shape::Polyline(ref p) => p.bbox(),
+                _ => continue, // we don't care about other types
             };
 
             let minx = (600.0 / 254.0 / scalefactor * (bbox.min.x - x0)).floor();
@@ -586,7 +567,9 @@ pub fn render(
 
             // if there was a match, do the drawing!
             if let Some(color) = color {
-                if !area && is_polyline {
+                let shapetype = shape.shapetype();
+                if !area && shapetype == ShapeType::Polyline {
+                    let polyline = Polyline::try_from(shape).unwrap();
                     let mut poly: Vec<(f32, f32)> = vec![];
                     for points in polyline.parts().iter() {
                         for point in points.iter() {
@@ -681,7 +664,8 @@ pub fn render(
                             imgbrown.unset_stroke_cap();
                         }
                     }
-                } else if area && !is_polyline {
+                } else if area && shapetype == ShapeType::Polygon {
+                    let polygon = Polygon::try_from(shape).unwrap();
                     let mut polys: Vec<Vec<(f32, f32)>> = vec![];
                     for ring in polygon.rings().iter() {
                         let mut poly: Vec<(f32, f32)> = vec![];
