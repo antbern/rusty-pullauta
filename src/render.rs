@@ -292,51 +292,46 @@ fn draw_cliffs(
     let mut r = Vec::<&str>::new();
     let mut val = Vec::<&str>::new();
     let mut val2 = Vec::<&str>::new();
-    for (j, rec) in data.split("POLYLINE").enumerate() {
+    for rec in data.split("POLYLINE").skip(1) {
         x.clear();
         y.clear();
 
-        let mut layer = "";
-        if j > 0 {
-            r.clear();
-            r.extend(rec.split("VERTEX"));
+        r.clear();
+        r.extend(rec.split("VERTEX"));
 
-            val.clear();
-            val.extend(r[1].split('\n'));
+        val.clear();
+        val.extend(r[1].split('\n'));
 
-            layer = val[2].trim();
+        let layer = val[2].trim();
 
-            let mut xline = 0;
-            let mut yline = 0;
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                } else if vt == " 20" {
-                    yline = i + 1;
-                }
+        let mut xline = 0;
+        let mut yline = 0;
+        for (i, v) in val.iter().enumerate() {
+            let vt = v.trim_end();
+            if vt == " 10" {
+                xline = i + 1;
+            } else if vt == " 20" {
+                yline = i + 1;
             }
+        }
 
-            // pre-reserve memory for all x and y values to fit without intermediate allocations
-            x.reserve(r.len());
-            y.reserve(r.len());
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    val2.clear();
-                    val2.extend(v.trim_end().split('\n'));
+        // pre-reserve memory for all x and y values to fit without intermediate allocations
+        x.reserve(r.len());
+        y.reserve(r.len());
+        for v in r.iter().skip(1) {
+            val2.clear();
+            val2.extend(v.trim_end().split('\n'));
 
-                    x.push(
-                        (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
+            x.push(
+                (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
+                    / 254.0
+                    / scalefactor,
+            );
+            y.push(
+                (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
+                    / 254.0
+                    / scalefactor,
+            );
         }
 
         // based on the layer we select the cliffcolor
@@ -573,53 +568,49 @@ pub fn draw_curves(
     let mut r = Vec::<&str>::new();
     let mut val = Vec::<&str>::new();
     let mut val2 = Vec::<&str>::new();
-    for (j, rec) in data.enumerate() {
+    for rec in data.skip(1) {
         x.clear();
         y.clear();
-        let mut layer = "";
-        if j > 0 {
-            let mut xline = 0;
-            let mut yline = 0;
+        
+        let mut xline = 0;
+        let mut yline = 0;
 
-            // reuse r across iterations
-            r.clear();
-            r.extend(rec.split("VERTEX"));
+        // reuse r across iterations
+        r.clear();
+        r.extend(rec.split("VERTEX"));
 
-            // reuse val across iterations
-            val.clear();
-            val.extend(r[1].split('\n'));
+        // reuse val across iterations
+        val.clear();
+        val.extend(r[1].split('\n'));
 
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                } else if vt == " 20" {
-                    yline = i + 1;
-                }
+        let layer = val[2].trim();
+        for (i, v) in val.iter().enumerate() {
+            let vt = v.trim_end();
+            if vt == " 10" {
+                xline = i + 1;
+            } else if vt == " 20" {
+                yline = i + 1;
             }
-            // pre-reserve memory for all x and y values to fit without intermediate allocations
-            x.reserve(r.len());
-            y.reserve(r.len());
+        }
+        // pre-reserve memory for all x and y values to fit without intermediate allocations
+        x.reserve(r.len());
+        y.reserve(r.len());
 
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    // reuse the vector to split the values between iterations
-                    val2.clear();
-                    val2.extend(v.trim_end().split('\n'));
+        for v in r.iter().skip(1) {
+            // reuse the vector to split the values between iterations
+            val2.clear();
+            val2.extend(v.trim_end().split('\n'));
 
-                    x.push(
-                        (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
+            x.push(
+                (val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
+                    / 254.0
+                    / scalefactor,
+            );
+            y.push(
+                (y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0
+                    / 254.0
+                    / scalefactor,
+            );
         }
         let mut color = Rgba([200, 0, 200, 255]); // purple
         if layer.contains("contour") {
