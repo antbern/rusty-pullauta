@@ -30,6 +30,7 @@ pub fn process_zip(
     thread: &String,
     tmpfolder: &Path,
     filenames: &[String],
+    batch: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut timing = Timing::start_now("process_zip");
     let &Config {
@@ -37,12 +38,15 @@ pub fn process_zip(
         pnorthlinesangle,
         ..
     } = config;
-
     #[cfg(feature = "shapefile")]
     {
-        info!("Rendering shape files");
-        timing.start_section("unzip and render shape files");
-        crate::shapefile::unzip_and_render(fs, config, tmpfolder, filenames).unwrap();
+        if !batch && !filenames.is_empty() {
+            info!("Rendering shape files");
+            timing.start_section("unzip and render shape files");
+            crate::shapefile::unzip_and_render(fs, config, tmpfolder, filenames).unwrap();
+        } else {
+            crate::shapefile::render(fs, config, tmpfolder, true).unwrap();
+        }
     }
 
     info!("Rendering png map with depressions");
@@ -348,7 +352,7 @@ pub fn process_tile(
     Ok(())
 }
 
-pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
+pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_zip: bool) {
     let &Config {
         vegeonly,
         cliffsonly,
@@ -374,13 +378,10 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
     fs.create_dir_all(batchoutfolder)
         .expect("Could not create output folder");
 
-    let mut zip_files: Vec<String> = Vec::new();
     let mut laz_files: Vec<PathBuf> = Vec::new();
     for path in fs.list(lazfolder).unwrap() {
         if let Some(extension) = path.extension() {
-            if extension == "zip" {
-                zip_files.push(String::from(path.to_str().unwrap()));
-            } else if extension == "laz" || extension == "las" {
+            if extension == "laz" || extension == "las" {
                 laz_files.push(path);
             }
         }
@@ -460,7 +461,8 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
         writer.finish().expect("Unable to finish writing");
 
         let tmpfolder = PathBuf::from(format!("temp{thread}"));
-        if zip_files.is_empty() {
+
+        if !has_zip {
             // Delete artifacts of a previous run where there would have been a zip
             let low_file = tmpfolder.join("low.png");
             if fs.exists(&low_file) {
@@ -470,13 +472,13 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
             if fs.exists(&high_file) {
                 fs.remove_file(high_file).unwrap();
             }
-            // Process the tile
-            process_tile(fs, conf, thread, &tmpfolder, &tmp_filename, false).unwrap();
-        } else {
-            process_tile(fs, conf, thread, &tmpfolder, &tmp_filename, true).unwrap();
-            if !vegeonly && !cliffsonly && !contoursonly {
-                process_zip(fs, conf, thread, &tmpfolder, &zip_files).unwrap();
-            }
+        }
+
+        // Process the tile
+        process_tile(fs, conf, thread, &tmpfolder, &tmp_filename, has_zip).unwrap();
+
+        if has_zip && !vegeonly && !cliffsonly && !contoursonly {
+            process_zip(fs, conf, thread, &tmpfolder, &[], true).unwrap();
         }
 
         // crop
@@ -870,7 +872,6 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String) {
             )
             .unwrap();
         }
-
         if savetempfolders {
             fs.create_dir_all(format!("temp_{laz}_dir"))
                 .expect("Could not create output folder");

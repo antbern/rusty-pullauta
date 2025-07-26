@@ -42,6 +42,10 @@ impl FileSystem for LocalFileSystem {
         std::fs::remove_file(path)
     }
 
+    fn remove_dir_all(&self, path: impl AsRef<Path>) -> Result<(), io::Error> {
+        std::fs::remove_dir_all(path)
+    }
+
     fn file_size(&self, path: impl AsRef<Path>) -> Result<u64, io::Error> {
         let metadata = std::fs::metadata(path)?;
         Ok(metadata.len())

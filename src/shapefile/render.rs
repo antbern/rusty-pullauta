@@ -16,13 +16,24 @@ use crate::{
     },
 };
 use shapefile::dbase::{FieldValue, Record};
-use shapefile::{Shape, ShapeType};
+use shapefile::{Polygon, Polyline, Shape, ShapeType};
 
 pub fn render(
     fs: &impl FileSystem,
     config: &Config,
     tmpfolder: &Path,
+    batch: bool,
 ) -> Result<(), Box<dyn Error>> {
+    let low_file = tmpfolder.join("low.png");
+    if fs.exists(&low_file) {
+        fs.remove_file(low_file).unwrap();
+    }
+
+    let high_file = tmpfolder.join("high.png");
+    if fs.exists(&high_file) {
+        fs.remove_file(high_file).unwrap();
+    }
+
     let scalefactor = config.scalefactor;
 
     let vectorconf = &config.vectorconf;
@@ -89,8 +100,15 @@ pub fn render(
     let marsh = (0, 10, 220);
     let olive = (194, 176, 33);
 
+    let shapetmpfolder = if batch {
+        PathBuf::from("temp_shapefiles".to_string())
+    } else {
+        tmpfolder.to_path_buf()
+    };
+
     let mut shp_files: Vec<PathBuf> = Vec::new();
-    for path in fs.list(tmpfolder).unwrap() {
+
+    for path in fs.list(&shapetmpfolder).unwrap() {
         if let Some(extension) = path.extension() {
             if extension == "shp" {
                 shp_files.push(path);
@@ -102,14 +120,37 @@ pub fn render(
 
     for shp_file in shp_files.iter() {
         let file = shp_file.as_path().file_name().unwrap().to_str().unwrap();
-        let mut file = tmpfolder.join(file);
+        let mut file = shapetmpfolder.join(file);
 
-        info!("Processing shapefile: {file:?}");
         // drawshape comes here
         let mut reader = shapefile::Reader::from_path(&file)?;
+        let bbox = reader.header().bbox;
+        let minx = (600.0 / 254.0 / scalefactor * (bbox.min.x - x0)).floor();
+        let maxy = (600.0 / 254.0 / scalefactor * (y0 - bbox.min.y)).floor();
+        let maxx = (600.0 / 254.0 / scalefactor * (bbox.max.x - x0)).floor();
+        let miny = (600.0 / 254.0 / scalefactor * (y0 - bbox.max.y)).floor();
+        if minx > outw || maxx < 0.0 || miny > outh || maxy < 0.0 {
+            continue;
+        }
+        info!("Processing shapefile: {file:?}");
+
         for shape_record in reader.iter_shapes_and_records() {
             let (shape, record) = shape_record
                 .unwrap_or_else(|_err: shapefile::Error| (Shape::NullShape, Record::default()));
+
+            let bbox = match shape {
+                Shape::Polygon(ref p) => p.bbox(),
+                Shape::Polyline(ref p) => p.bbox(),
+                _ => continue, // we don't care about other types
+            };
+
+            let minx = (600.0 / 254.0 / scalefactor * (bbox.min.x - x0)).floor();
+            let maxy = (600.0 / 254.0 / scalefactor * (y0 - bbox.min.y)).floor();
+            let maxx = (600.0 / 254.0 / scalefactor * (bbox.max.x - x0)).floor();
+            let miny = (600.0 / 254.0 / scalefactor * (y0 - bbox.max.y)).floor();
+            if minx > outw || maxx < 0.0 || miny > outh || maxy < 0.0 {
+                continue;
+            }
 
             let mut area = false;
             let mut roadedge = 0.0;
@@ -526,9 +567,10 @@ pub fn render(
 
             // if there was a match, do the drawing!
             if let Some(color) = color {
-                if !area && shape.shapetype() == ShapeType::Polyline {
+                let shapetype = shape.shapetype();
+                if !area && shapetype == ShapeType::Polyline {
+                    let polyline = Polyline::try_from(shape).unwrap();
                     let mut poly: Vec<(f32, f32)> = vec![];
-                    let polyline = shapefile::Polyline::try_from(shape).unwrap();
                     for points in polyline.parts().iter() {
                         for point in points.iter() {
                             let x = point.x;
@@ -622,9 +664,9 @@ pub fn render(
                             imgbrown.unset_stroke_cap();
                         }
                     }
-                } else if area && shape.shapetype() == ShapeType::Polygon {
+                } else if area && shapetype == ShapeType::Polygon {
+                    let polygon = Polygon::try_from(shape).unwrap();
                     let mut polys: Vec<Vec<(f32, f32)>> = vec![];
-                    let polygon = shapefile::Polygon::try_from(shape).unwrap();
                     for ring in polygon.rings().iter() {
                         let mut poly: Vec<(f32, f32)> = vec![];
                         let mut polyborder: Vec<(f32, f32)> = vec![];
@@ -673,12 +715,14 @@ pub fn render(
         }
 
         // remove the shapefile and all associated files
-        fs.remove_file(&file).unwrap();
-        for ext in ["dbf", "sbx", "prj", "shx", "sbn", "cpg", "qmd"].iter() {
-            file.set_extension(ext);
-            if fs.exists(&file) {
-                println!("Removing file: {file:?}");
-                fs.remove_file(&file).unwrap();
+        if !batch {
+            fs.remove_file(&file).unwrap();
+            for ext in ["dbf", "sbx", "prj", "shx", "sbn", "cpg", "qmd"].iter() {
+                file.set_extension(ext);
+                if fs.exists(&file) {
+                    println!("Removing file: {file:?}");
+                    fs.remove_file(&file).unwrap();
+                }
             }
         }
     }

@@ -3,13 +3,13 @@ use log::info;
 use pullauta::config::Config;
 use pullauta::io::fs::FileSystem;
 use pullauta::io::fs::memory::MemoryFileSystem;
+use pullauta::shapefile;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{thread, time};
-
 fn main() {
     // setup and configure logging, default to INFO when RUST_LOG is not set
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -254,7 +254,7 @@ fn main() {
 
     #[cfg(feature = "shapefile")]
     if command == "mtkshaperender" {
-        pullauta::shapefile::render(&fs, &config, &tmpfolder).unwrap();
+        pullauta::shapefile::render(&fs, &config, &tmpfolder, false).unwrap();
     }
 
     if command == "xyz2contours" {
@@ -302,15 +302,22 @@ fn main() {
             fs: F,
             proc: u64,
             config: &Arc<Config>,
+            zip_files: &[String],
         ) {
+            let shapefiletmpdir = PathBuf::from("temp_shapefiles".to_string());
+            fs.create_dir_all(&shapefiletmpdir).unwrap();
+            if !zip_files.is_empty() {
+                crate::shapefile::unzip_shapefiles(&fs, zip_files).unwrap();
+            }
             // do the processing
             let mut handles: Vec<thread::JoinHandle<()>> = Vec::with_capacity((proc + 1) as usize);
             for i in 0..proc {
                 let config = config.clone();
                 let fs = fs.clone();
+                let has_zip = !zip_files.is_empty();
                 let handle = thread::spawn(move || {
                     info!("Starting thread");
-                    pullauta::process::batch_process(&config, &fs, &format!("{}", i + 1));
+                    pullauta::process::batch_process(&config, &fs, &format!("{}", i + 1), has_zip);
                     info!("Thread complete");
                 });
                 thread::sleep(time::Duration::from_millis(100));
@@ -319,11 +326,24 @@ fn main() {
             for handle in handles {
                 handle.join().unwrap();
             }
+            fs.remove_dir_all(&shapefiletmpdir).unwrap();
+        }
+
+        let Config { lazfolder, .. } = &*config;
+
+        let mut zip_files: Vec<String> = Vec::new();
+        for path in fs.list(lazfolder).unwrap() {
+            if let Some(extension) = path.extension() {
+                if extension == "zip" {
+                    zip_files.push(String::from(path.to_str().unwrap()));
+                }
+            }
         }
 
         if config.experimental_use_in_memory_fs {
             // copy all the input files into the memory file system
             let fs = pullauta::io::fs::memory::MemoryFileSystem::new();
+
             fs.create_dir_all(&config.lazfolder).unwrap();
             for file in fs::read_dir(&config.lazfolder).unwrap() {
                 let file = file.unwrap();
@@ -332,7 +352,7 @@ fn main() {
                 fs.load_from_disk(&path, &path).unwrap();
             }
 
-            launch_threads(fs.clone(), proc, &config);
+            launch_threads(fs.clone(), proc, &config, &zip_files);
 
             // copy the output files back to disk
             std::fs::create_dir_all(&config.batchoutfolder).unwrap();
@@ -341,7 +361,7 @@ fn main() {
                 fs.save_to_disk(&path, &path).unwrap();
             }
         } else {
-            launch_threads(fs, proc, &config);
+            launch_threads(fs, proc, &config, &zip_files);
         }
         return;
     }
@@ -354,13 +374,33 @@ fn main() {
         if thread == "0" {
             thread = String::from("");
         }
-        pullauta::process::batch_process(&config, &fs, &thread)
+
+        let Config { lazfolder, .. } = &*config;
+
+        let shapefiletmpdir = PathBuf::from("temp_shapefiles".to_string());
+
+        let mut zip_files: Vec<String> = Vec::new();
+        for path in fs.list(lazfolder).unwrap() {
+            if let Some(extension) = path.extension() {
+                if extension == "zip" {
+                    zip_files.push(String::from(path.to_str().unwrap()));
+                }
+            }
+        }
+        fs.create_dir_all(&shapefiletmpdir)
+            .expect("Could not create output folder");
+        if !zip_files.is_empty() {
+            crate::shapefile::unzip_shapefiles(&fs, &zip_files).unwrap();
+        }
+        pullauta::process::batch_process(&config, &fs, &thread, !zip_files.is_empty());
+
+        fs.remove_dir_all(&shapefiletmpdir).unwrap();
     }
 
     if command_lowercase.ends_with(".zip") {
         let mut zips: Vec<String> = vec![command];
         zips.extend(args);
-        pullauta::process::process_zip(&fs, &config, &thread, &tmpfolder, &zips).unwrap();
+        pullauta::process::process_zip(&fs, &config, &thread, &tmpfolder, &zips, false).unwrap();
         return;
     }
 
