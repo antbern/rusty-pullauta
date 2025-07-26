@@ -2,11 +2,11 @@ use crate::config::Config;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
+use crate::vec2d::Vec2D;
 use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
 use log::info;
-use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::io::BufRead;
@@ -132,31 +132,26 @@ pub fn render(
     let data = fs.read_to_string(input).expect("Can not read input file");
     let data = data.split("POINT");
 
-    for (j, rec) in data.enumerate() {
+    for rec in data.skip(1) {
         let mut x: f64 = 0.0;
         let mut y: f64 = 0.0;
-        if j > 0 {
-            let val = rec.split('\n').collect::<Vec<&str>>();
-            let layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    x = (val[i + 1].trim().parse::<f64>().unwrap() - x0) * 600.0
-                        / 254.0
-                        / scalefactor;
-                }
-                if vt == " 20" {
-                    y = (y0 - val[i + 1].trim().parse::<f64>().unwrap()) * 600.0
-                        / 254.0
-                        / scalefactor;
-                }
-            }
-            if layer == "dotknoll" {
-                let color = Rgba([166, 85, 43, 255]);
+        let val = rec.split('\n').collect::<Vec<&str>>();
 
-                draw_filled_circle_mut(&mut img, (x as i32, y as i32), 7, color)
+        let layer = val[2].trim();
+        if layer != "dotknoll" {
+            continue;
+        }
+        for (i, v) in val.iter().enumerate() {
+            let vt = v.trim_end();
+            if vt == " 10" {
+                x = (val[i + 1].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor;
+            } else if vt == " 20" {
+                y = (y0 - val[i + 1].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor;
             }
         }
+
+        let color = Rgba([166, 85, 43, 255]);
+        draw_filled_circle_mut(&mut img, (x as i32, y as i32), 7, color)
     }
     // blocks -------------
     let blocks_file = tmpfolder.join("blocks.png");
@@ -219,185 +214,9 @@ pub fn render(
         image::imageops::overlay(&mut img, &imgbb_thumb, 0, 0);
     }
 
-    let black = Rgba([0, 0, 0, 255]);
+    draw_cliffs(fs, config, tmpfolder, "c2g.dxf", &mut img, x0, y0).expect("draw cliffs c2g.dxf");
+    draw_cliffs(fs, config, tmpfolder, "c3g.dxf", &mut img, x0, y0).expect("draw cliffs c3g.dxf");
 
-    let mut cliffcolor =
-        HashMap::from_iter([("cliff2", black), ("cliff3", black), ("cliff4", black)]);
-    if config.cliffdebug {
-        cliffcolor = HashMap::from_iter([
-            ("cliff2", Rgba([100, 0, 100, 255])),
-            ("cliff3", Rgba([0, 100, 100, 255])),
-            ("cliff4", Rgba([100, 100, 0, 255])),
-        ]);
-    }
-    let input = tmpfolder.join("c2g.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        let mut layer = "";
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
-        }
-        let last_idx = x.len() - 1;
-        if x.first() != x.last() || y.first() != y.last() {
-            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
-            if dist > 0.0 {
-                let dx = x[0] - x[last_idx];
-                let dy = y[0] - y[last_idx];
-                x[0] += dx / dist * 1.5;
-                y[0] += dy / dist * 1.5;
-                x[last_idx] -= dx / dist * 1.5;
-                y[last_idx] -= dy / dist * 1.5;
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[0] as i32, y[0] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[last_idx] as i32, y[last_idx] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-            }
-        }
-        for i in 1..x.len() {
-            for n in 0..6 {
-                for m in 0..6 {
-                    draw_line_segment_mut(
-                        &mut img,
-                        (
-                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
-                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        (
-                            (x[i] + (n as f64) - 3.0).floor() as f32,
-                            (y[i] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        *cliffcolor.get(&layer).unwrap_or(&black),
-                    )
-                }
-            }
-        }
-    }
-
-    let input = &tmpfolder.join("c3g.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        let mut layer = "";
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
-        }
-        let last_idx = x.len() - 1;
-        if x.first() != x.last() || y.first() != y.last() {
-            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
-            if dist > 0.0 {
-                let dx = x[0] - x[last_idx];
-                let dy = y[0] - y[last_idx];
-                x[0] += dx / dist * 1.5;
-                y[0] += dy / dist * 1.5;
-                x[last_idx] -= dx / dist * 1.5;
-                y[last_idx] -= dy / dist * 1.5;
-
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[0] as i32, y[0] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-                draw_filled_circle_mut(
-                    &mut img,
-                    (x[last_idx] as i32, y[last_idx] as i32),
-                    3,
-                    *cliffcolor.get(&layer).unwrap_or(&black),
-                );
-            }
-        }
-        for i in 1..x.len() {
-            for n in 0..6 {
-                for m in 0..6 {
-                    draw_line_segment_mut(
-                        &mut img,
-                        (
-                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
-                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        (
-                            (x[i] + (n as f64) - 3.0).floor() as f32,
-                            (y[i] + (m as f64) - 3.0).floor() as f32,
-                        ),
-                        *cliffcolor.get(&layer).unwrap_or(&black),
-                    )
-                }
-            }
-        }
-    }
     // high -------------
     let high_file = tmpfolder.join("high.png");
     if fs.exists(&high_file) {
@@ -453,6 +272,113 @@ pub fn render(
     Ok(())
 }
 
+fn draw_cliffs(
+    fs: &impl FileSystem,
+    config: &Config,
+    tmpfolder: &Path,
+    file: &str,
+    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    x0: f64,
+    y0: f64,
+) -> Result<(), Box<dyn Error>> {
+    let scalefactor = config.scalefactor;
+
+    let input = tmpfolder.join(file);
+    let data = fs.read_to_string(input).expect("Can not read input file");
+
+    // allocate the vectors here to reuse them across iterations
+    let mut x = Vec::<f64>::new();
+    let mut y = Vec::<f64>::new();
+    let mut r = Vec::<&str>::new();
+    let mut val = Vec::<&str>::new();
+    let mut val2 = Vec::<&str>::new();
+    for rec in data.split("POLYLINE").skip(1) {
+        x.clear();
+        y.clear();
+
+        r.clear();
+        r.extend(rec.split("VERTEX"));
+
+        val.clear();
+        val.extend(r[1].split('\n'));
+
+        let layer = val[2].trim();
+
+        let mut xline = 0;
+        let mut yline = 0;
+        for (i, v) in val.iter().enumerate() {
+            let vt = v.trim_end();
+            if vt == " 10" {
+                xline = i + 1;
+            } else if vt == " 20" {
+                yline = i + 1;
+            }
+        }
+
+        // pre-reserve memory for all x and y values to fit without intermediate allocations
+        x.reserve(r.len());
+        y.reserve(r.len());
+        for v in r.iter().skip(1) {
+            val2.clear();
+            val2.extend(v.trim_end().split('\n'));
+
+            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
+            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
+        }
+
+        // based on the layer we select the cliffcolor
+        let cliffcolor = if config.cliffdebug {
+            match layer {
+                "cliff2" => Rgba([100, 0, 100, 255]),
+                "cliff3" => Rgba([0, 100, 100, 255]),
+                "cliff4" => Rgba([100, 100, 0, 255]),
+                _ => Rgba([0, 0, 0, 255]), // black
+            }
+        } else {
+            Rgba([0, 0, 0, 255]) // black
+        };
+
+        if x.first() != x.last() || y.first() != y.last() {
+            let last_idx = x.len() - 1;
+            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
+            if dist > 0.0 {
+                let dx = x[0] - x[last_idx];
+                let dy = y[0] - y[last_idx];
+                x[0] += dx / dist * 1.5;
+                y[0] += dy / dist * 1.5;
+                x[last_idx] -= dx / dist * 1.5;
+                y[last_idx] -= dy / dist * 1.5;
+                draw_filled_circle_mut(img, (x[0] as i32, y[0] as i32), 3, cliffcolor);
+                draw_filled_circle_mut(
+                    img,
+                    (x[last_idx] as i32, y[last_idx] as i32),
+                    3,
+                    cliffcolor,
+                );
+            }
+        }
+        for i in 1..x.len() {
+            for n in 0..6 {
+                for m in 0..6 {
+                    draw_line_segment_mut(
+                        img,
+                        (
+                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
+                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
+                        ),
+                        (
+                            (x[i] + (n as f64) - 3.0).floor() as f32,
+                            (y[i] + (m as f64) - 3.0).floor() as f32,
+                        ),
+                        cliffcolor,
+                    )
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn draw_curves(
     fs: &impl FileSystem,
     config: &Config,
@@ -493,12 +419,13 @@ pub fn draw_curves(
         .expect("Could not read line 6")
         .parse::<f64>()
         .unwrap();
-    let mut steepness: HashMap<(usize, usize), f64> = HashMap::default();
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
     let mut reader = BufReader::new(fs.open(heightmap_in)?);
     let hmap = HeightMap::from_bytes(&mut reader)?;
     let xyz = &hmap.grid;
+
+    let mut steepness = Vec2D::new(xyz.width(), xyz.height(), 0f64);
 
     if formline > 0.0 {
         xstart = hmap.xoffset;
@@ -601,63 +528,73 @@ pub fn draw_curves(
                 if high > val {
                     val = high;
                 }
-                steepness.insert((i, j), val);
+                steepness[(i, j)] = val;
             }
         }
     }
 
     let input = &tmpfolder.join("out2.dxf");
     let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
+    let mut data = data.split("POLYLINE").peekable();
 
     // only create the file if condition is met
     let mut fp = if formline == 2.0 && !nodepressions {
         let output = tmpfolder.join("formlines.dxf");
         let fp = fs.create(output).expect("Unable to create file");
         let mut fp = BufWriter::new(fp);
-        fp.write_all(data[0].as_bytes())
-            .expect("Could not write file");
+        fp.write_all(
+            data.peek()
+                .expect("should have at least one element")
+                .as_bytes(),
+        )
+        .expect("Could not write file");
 
         Some(fp)
     } else {
         None
     };
 
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
+    // keep the x & y vectors outside the loop to reuse their memory
+    let mut x = Vec::<f64>::new();
+    let mut y = Vec::<f64>::new();
+    let mut r = Vec::<&str>::new();
+    let mut val = Vec::<&str>::new();
+    let mut val2 = Vec::<&str>::new();
+    for rec in data.skip(1) {
+        x.clear();
+        y.clear();
+
         let mut xline = 0;
         let mut yline = 0;
-        let mut layer = "";
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            layer = val[2].trim();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
+
+        // reuse r across iterations
+        r.clear();
+        r.extend(rec.split("VERTEX"));
+
+        // reuse val across iterations
+        val.clear();
+        val.extend(r[1].split('\n'));
+
+        let layer = val[2].trim();
+        for (i, v) in val.iter().enumerate() {
+            let vt = v.trim_end();
+            if vt == " 10" {
+                xline = i + 1;
+            } else if vt == " 20" {
+                yline = i + 1;
             }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(
-                        (val[xline].trim().parse::<f64>().unwrap() - x0) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                    y.push(
-                        (y0 - val[yline].trim().parse::<f64>().unwrap()) * 600.0
-                            / 254.0
-                            / scalefactor,
-                    );
-                }
-            }
+        }
+        // pre-reserve memory for all x and y values to fit without intermediate allocations
+        x.reserve(r.len());
+        y.reserve(r.len());
+
+        for v in r.iter().skip(1) {
+            // reuse the vector to split the values between iterations
+            val2.clear();
+            val2.extend(v.trim_end().split('\n'));
+
+            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
+            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
         }
         let mut color = Rgba([200, 0, 200, 255]); // purple
         if layer.contains("contour") {
@@ -696,10 +633,10 @@ pub fn draw_curves(
                         as usize;
                     if curvew != 1.5
                         || formline == 0.0
-                        || steepness.get(&(xx, yy)).unwrap_or(&0.0) < &formlinesteepness
-                        || steepness.get(&(xx, yy + 1)).unwrap_or(&0.0) < &formlinesteepness
-                        || steepness.get(&(xx + 1, yy)).unwrap_or(&0.0) < &formlinesteepness
-                        || steepness.get(&(xx + 1, yy + 1)).unwrap_or(&0.0) < &formlinesteepness
+                        || steepness[(xx, yy)] < formlinesteepness
+                        || steepness[(xx, yy + 1)] < formlinesteepness
+                        || steepness[(xx + 1, yy)] < formlinesteepness
+                        || steepness[(xx + 1, yy + 1)] < formlinesteepness
                     {
                         help[i] = true;
                     }
