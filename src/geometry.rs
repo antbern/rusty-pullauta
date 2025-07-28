@@ -135,10 +135,10 @@ pub struct BinaryDxf {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Bounds {
-    xmin: f64,
-    xmax: f64,
-    ymin: f64,
-    ymax: f64,
+    pub xmin: f64,
+    pub xmax: f64,
+    pub ymin: f64,
+    pub ymax: f64,
 }
 
 impl Bounds {

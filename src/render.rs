@@ -508,23 +508,20 @@ pub fn draw_curves(
         fs.open(tmpfolder.join("out2.dxf.bin"))?,
     ))
     .expect("Unable to read out2.dxf.bin");
+    let bounds = input_dxf.bounds().clone();
     let Geometry::Polylines3(input_lines) = input_dxf.take_geometry() else {
         return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
     };
-
-    let input = &tmpfolder.join("out2.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let mut data = data.split("POLYLINE").peekable();
 
     // only create the file if condition is met
     let mut fp = if formline == 2.0 && !nodepressions {
         let output = tmpfolder.join("formlines.dxf");
         let fp = fs.create(output).expect("Unable to create file");
         let mut fp = BufWriter::new(fp);
-        fp.write_all(
-            data.peek()
-                .expect("should have at least one element")
-                .as_bytes(),
+        write!(
+            &mut fp,
+            "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
+            bounds.xmin, bounds.ymin, bounds.xmax, bounds.ymax
         )
         .expect("Could not write file");
 
