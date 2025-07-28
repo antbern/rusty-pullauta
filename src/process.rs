@@ -216,8 +216,7 @@ pub fn process_tile(
     .expect("contour generation failed");
     xyz_03.to_file(fs, tmpfolder.join("xyz_03.hmap")).unwrap();
 
-    if vegeonly || cliffsonly {
-    } else {
+    if !(vegeonly || cliffsonly) {
         contours::heightmap2contours(
             fs,
             tmpfolder,
