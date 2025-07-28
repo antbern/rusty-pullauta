@@ -1,8 +1,11 @@
 use crate::config::Config;
+use crate::geometry::BinaryDxf;
+use crate::geometry::CliffClassification;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::vec2d::Vec2D;
+use anyhow::Context;
 use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
@@ -214,8 +217,10 @@ pub fn render(
         image::imageops::overlay(&mut img, &imgbb_thumb, 0, 0);
     }
 
-    draw_cliffs(fs, config, tmpfolder, "c2g.dxf", &mut img, x0, y0).expect("draw cliffs c2g.dxf");
-    draw_cliffs(fs, config, tmpfolder, "c3g.dxf", &mut img, x0, y0).expect("draw cliffs c3g.dxf");
+    draw_cliffs(fs, config, tmpfolder, "c2g.dxf.bin", &mut img, x0, y0)
+        .expect("draw cliffs c2g.dxf");
+    draw_cliffs(fs, config, tmpfolder, "c3g.dxf.bin", &mut img, x0, y0)
+        .expect("draw cliffs c3g.dxf");
 
     // high -------------
     let high_file = tmpfolder.join("high.png");
@@ -284,91 +289,61 @@ fn draw_cliffs(
     let scalefactor = config.scalefactor;
 
     let input = tmpfolder.join(file);
-    let data = fs.read_to_string(input).expect("Can not read input file");
+    let dxf = BinaryDxf::<CliffClassification>::from_reader(&mut BufReader::new(fs.open(input)?))?;
 
-    // allocate the vectors here to reuse them across iterations
-    let mut x = Vec::<f64>::new();
-    let mut y = Vec::<f64>::new();
-    let mut r = Vec::<&str>::new();
-    let mut val = Vec::<&str>::new();
-    let mut val2 = Vec::<&str>::new();
-    for rec in data.split("POLYLINE").skip(1) {
-        x.clear();
-        y.clear();
+    let lines = dxf
+        .take_polylines()
+        .context("cliff data should contain polylines")?;
 
-        r.clear();
-        r.extend(rec.split("VERTEX"));
-
-        val.clear();
-        val.extend(r[1].split('\n'));
-
-        let layer = val[2].trim();
-
-        let mut xline = 0;
-        let mut yline = 0;
-        for (i, v) in val.iter().enumerate() {
-            let vt = v.trim_end();
-            if vt == " 10" {
-                xline = i + 1;
-            } else if vt == " 20" {
-                yline = i + 1;
-            }
-        }
-
-        // pre-reserve memory for all x and y values to fit without intermediate allocations
-        x.reserve(r.len());
-        y.reserve(r.len());
-        for v in r.iter().skip(1) {
-            val2.clear();
-            val2.extend(v.trim_end().split('\n'));
-
-            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
-            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
-        }
-
+    for (mut line, class) in lines.into_iter() {
         // based on the layer we select the cliffcolor
         let cliffcolor = if config.cliffdebug {
-            match layer {
-                "cliff2" => Rgba([100, 0, 100, 255]),
-                "cliff3" => Rgba([0, 100, 100, 255]),
-                "cliff4" => Rgba([100, 100, 0, 255]),
-                _ => Rgba([0, 0, 0, 255]), // black
+            match class {
+                CliffClassification::Cliff2 => Rgba([100, 0, 100, 255]),
+                CliffClassification::Cliff3 => Rgba([0, 100, 100, 255]),
+                CliffClassification::Cliff4 => Rgba([100, 100, 0, 255]),
             }
         } else {
             Rgba([0, 0, 0, 255]) // black
         };
 
-        if x.first() != x.last() || y.first() != y.last() {
-            let last_idx = x.len() - 1;
-            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
+        // scale and flip all points into pixel-space
+        for p in line.iter_mut() {
+            p.0 = (p.0 - x0) * 600.0 / 254.0 / scalefactor;
+            p.1 = (y0 - p.1) * 600.0 / 254.0 / scalefactor;
+        }
+
+        if line.first() != line.last() {
+            // trick to borrow both first and last as mutable at the same time. If not possible (eg
+            // len == 0, then we should skip this line anyways)
+            let [first, .., last] = &mut line[..] else {
+                continue;
+            };
+
+            let dx = first.0 - last.0;
+            let dy = first.1 - last.1;
+            let dist = (dx.powi(2) + dy.powi(2)).sqrt();
             if dist > 0.0 {
-                let dx = x[0] - x[last_idx];
-                let dy = y[0] - y[last_idx];
-                x[0] += dx / dist * 1.5;
-                y[0] += dy / dist * 1.5;
-                x[last_idx] -= dx / dist * 1.5;
-                y[last_idx] -= dy / dist * 1.5;
-                draw_filled_circle_mut(img, (x[0] as i32, y[0] as i32), 3, cliffcolor);
-                draw_filled_circle_mut(
-                    img,
-                    (x[last_idx] as i32, y[last_idx] as i32),
-                    3,
-                    cliffcolor,
-                );
+                first.0 += dx / dist * 1.5;
+                first.1 += dy / dist * 1.5;
+                last.0 -= dx / dist * 1.5;
+                last.1 -= dy / dist * 1.5;
+                draw_filled_circle_mut(img, (first.0 as i32, first.1 as i32), 3, cliffcolor);
+                draw_filled_circle_mut(img, (last.0 as i32, last.1 as i32), 3, cliffcolor);
             }
         }
-        for i in 1..x.len() {
+        for i in 1..line.len() {
             for n in 0..6 {
                 for m in 0..6 {
                     draw_line_segment_mut(
                         img,
                         (
-                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
-                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
+                            (line[i - 1].0 + (n as f64) - 3.0).floor() as f32,
+                            (line[i - 1].1 + (m as f64) - 3.0).floor() as f32,
                         ),
                         (
-                            (x[i] + (n as f64) - 3.0).floor() as f32,
-                            (y[i] + (m as f64) - 3.0).floor() as f32,
+                            (line[i].0 + (n as f64) - 3.0).floor() as f32,
+                            (line[i].1 + (m as f64) - 3.0).floor() as f32,
                         ),
                         cliffcolor,
                     )

@@ -55,6 +55,14 @@ impl<C> Polylines<C> {
         self.polylines.push(polyline);
         self.classification.push(class);
     }
+
+    pub fn into_iter(self) -> impl Iterator<Item = (Vec<(f64, f64)>, C)> {
+        self.polylines.into_iter().zip(self.classification)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&Vec<(f64, f64)>, &C)> {
+        self.polylines.iter().zip(self.classification.iter())
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -95,6 +103,14 @@ impl<C> BinaryDxf<C> {
             ymin,
             ymax,
             data,
+        }
+    }
+
+    /// Get the points in this geometry, or [`None`] if does not contain [`Polylines`] data.
+    pub fn take_polylines(self) -> Option<Polylines<C>> {
+        match self.data {
+            Geometry::Polylines(polylines) => Some(polylines),
+            Geometry::Points(_) => None,
         }
     }
 }
