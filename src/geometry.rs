@@ -97,24 +97,40 @@ impl From<Polylines> for Geometry {
 pub struct BinaryDxf {
     /// the version of the program that created this file, used to detect stale temp files
     version: String,
+    bounds: Bounds,
+    data: Geometry,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct Bounds {
     xmin: f64,
     xmax: f64,
     ymin: f64,
     ymax: f64,
-
-    data: Geometry,
 }
 
-impl BinaryDxf {
-    pub fn new(xmin: f64, xmax: f64, ymin: f64, ymax: f64, data: Geometry) -> Self {
+impl Bounds {
+    pub fn new(xmin: f64, xmax: f64, ymin: f64, ymax: f64) -> Self {
         Self {
-            version: env!("CARGO_PKG_VERSION").to_string(),
             xmin,
             xmax,
             ymin,
             ymax,
+        }
+    }
+}
+
+impl BinaryDxf {
+    pub fn new(bounds: Bounds, data: Geometry) -> Self {
+        Self {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            bounds,
             data,
         }
+    }
+
+    pub fn bounds(&self) -> &Bounds {
+        &self.bounds
     }
 
     /// Get the points in this geometry, or [`None`] if does not contain [`Polylines`] data.
@@ -144,7 +160,7 @@ impl BinaryDxf {
         write!(
             writer,
             "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-            self.xmin, self.ymin, self.xmax, self.ymax
+            self.bounds.xmin, self.bounds.ymin, self.bounds.xmax, self.bounds.ymax
         )?;
 
         match &self.data {

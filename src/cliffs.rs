@@ -7,7 +7,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, Classification, Point2, Polylines};
+use crate::geometry::{BinaryDxf, Bounds, Classification, Point2, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -267,7 +267,7 @@ pub fn makecliffs(
         }
     }
 
-    let f2_dxf = BinaryDxf::new(xmin, xmax, ymin, ymax, f2_lines.into());
+    let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), f2_lines.into());
 
     // save binary file
     let f2 = fs
@@ -368,7 +368,7 @@ pub fn makecliffs(
         }
     }
 
-    let f3_dxf = BinaryDxf::new(xmin, xmax, ymin, ymax, f3_lines.into());
+    let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), f3_lines.into());
 
     // save binary file
     let f3 = fs
