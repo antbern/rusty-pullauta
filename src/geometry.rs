@@ -60,7 +60,7 @@ impl Points {
     }
 
     /// Iterate over the points in this collection.
-    pub fn points(&self) -> impl Iterator<Item = (&Point2, &Classification)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Point2, &Classification)> {
         self.points.iter().zip(self.classification.iter())
     }
 }
@@ -248,7 +248,7 @@ impl BinaryDxf {
 }
 
 /// Classification used for contour generation
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Classification {
     /// Used in first contour generation step
     ContourSimple,

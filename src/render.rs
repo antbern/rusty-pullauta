@@ -131,27 +131,20 @@ pub fn render(
     draw_curves(fs, config, &mut img, tmpfolder, nodepressions, true).unwrap();
 
     // dotknolls----------
-    let input = tmpfolder.join("dotknolls.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data = data.split("POINT");
+    let input = tmpfolder.join("dotknolls.dxf.bin");
+    let data = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let Geometry::Points(points) = data.take_geometry() else {
+        return Err(anyhow::anyhow!("dotknolls.dxf.bin should contain points").into());
+    };
 
-    for rec in data.skip(1) {
-        let mut x: f64 = 0.0;
-        let mut y: f64 = 0.0;
-        let val = rec.split('\n').collect::<Vec<&str>>();
-
-        let layer = val[2].trim();
-        if layer != "dotknoll" {
+    for (point, layer) in points.iter() {
+        if *layer != Classification::Dotknoll {
             continue;
         }
-        for (i, v) in val.iter().enumerate() {
-            let vt = v.trim_end();
-            if vt == " 10" {
-                x = (val[i + 1].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor;
-            } else if vt == " 20" {
-                y = (y0 - val[i + 1].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor;
-            }
-        }
+
+        // convert point to image coordinates
+        let x = (point.x - x0) * 600.0 / 254.0 / scalefactor;
+        let y = (y0 - point.y) * 600.0 / 254.0 / scalefactor;
 
         let color = Rgba([166, 85, 43, 255]);
         draw_filled_circle_mut(&mut img, (x as i32, y as i32), 7, color)
