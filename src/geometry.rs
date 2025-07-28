@@ -36,13 +36,6 @@ impl<C> Points<C> {
     }
 }
 
-impl<C: ClassificationToLayer> Points<C> {
-    /// Write this collection of points to a DXF file.
-    pub fn to_dxf<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        todo!()
-    }
-}
-
 /// A collection polylines with associated classification.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Polylines<C> {
@@ -166,8 +159,26 @@ pub enum ContourClassification {
 impl ClassificationToLayer for ContourClassification {
     fn to_layer(&self) -> &str {
         match self {
-            ContourClassification::Contour => "cont",
+            Self::Contour => "cont",
         }
     }
 }
 
+/// Classification used for cliffs
+
+/// Classification used for contour generation
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum CliffClassification {
+    Cliff2,
+    Cliff3,
+    Cliff4,
+}
+impl ClassificationToLayer for CliffClassification {
+    fn to_layer(&self) -> &str {
+        match self {
+            Self::Cliff2 => "cliff2",
+            Self::Cliff3 => "cliff3",
+            Self::Cliff4 => "cliff4",
+        }
+    }
+}
