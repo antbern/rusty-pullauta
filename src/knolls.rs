@@ -741,10 +741,7 @@ pub fn knolldetector(
 
     let canditates = new_candidates;
 
-    let file_pins = fs
-        .create(tmpfolder.join("pins.txt"))
-        .expect("Unable to create file");
-    let mut file_pins = BufWriter::new(file_pins);
+    let mut pins = Vec::new();
 
     for l in 0..data.len() {
         let mut skip = false;
@@ -816,26 +813,6 @@ pub fn knolldetector(
                 xa /= xlen;
                 ya /= xlen;
 
-                write!(
-                    &mut file_pins,
-                    "{},{},{},{},{},{},{},{}\r\n",
-                    x[0],
-                    y[0],
-                    *elevation.get(&ll).unwrap(),
-                    xa,
-                    ya,
-                    *elevation.get(&ltopid).unwrap(),
-                    x.iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                    y.iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
-                .expect("Could not write to file");
-
                 for k in 0..x.len() {
                     write!(
                         &mut f,
@@ -846,6 +823,17 @@ pub fn knolldetector(
                 }
                 f.write_all("SEQEND\r\n  0\r\n".as_bytes())
                     .expect("Can not write to file");
+
+                x.push(x[0]);
+                y.push(y[0]);
+                pins.push(Pin {
+                    xx: xa,
+                    yy: ya,
+                    ele: *elevation.get(&ll).unwrap(),
+                    ele2: *elevation.get(&ltopid).unwrap(),
+                    xlist: x,
+                    ylist: y,
+                });
             } else {
                 el_x[l].clear();
                 el_y[l].clear();
@@ -855,8 +843,25 @@ pub fn knolldetector(
     f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
         .expect("Can not write to file");
 
+    // write pins to file
+    let file_pins = fs
+        .create(tmpfolder.join("pins.bin"))
+        .expect("Unable to create file");
+    crate::util::write_object(BufWriter::new(file_pins), &pins).expect("Unable to write pins");
+
     info!("Done");
     Ok(())
+}
+
+/// Struct used to store temporary data about pins on disk
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Pin {
+    xx: f64,
+    yy: f64,
+    ele: f64,
+    ele2: f64,
+    xlist: Vec<f64>,
+    ylist: Vec<f64>,
 }
 
 pub fn xyzknolls(
@@ -912,48 +917,14 @@ pub fn xyzknolls(
         }
     }
 
-    struct Pin {
-        xx: f64,
-        yy: f64,
-        ele: f64,
-        ele2: f64,
-        xlist: Vec<f64>,
-        ylist: Vec<f64>,
-    }
-    let mut pins: Vec<Pin> = Vec::new();
-
-    let pins_file_in = tmpfolder.join("pins.txt");
-    if fs.exists(&pins_file_in) {
-        read_lines_no_alloc(fs, pins_file_in, |line| {
-            let mut r = line.trim().split(',');
-            let ele = r.nth(2).unwrap().parse::<f64>().unwrap();
-            let xx = r.next().unwrap().parse::<f64>().unwrap();
-            let yy = r.next().unwrap().parse::<f64>().unwrap();
-            let ele2 = r.next().unwrap().parse::<f64>().unwrap();
-            let xlist = r.next().unwrap();
-            let ylist = r.next().unwrap();
-            let mut x: Vec<f64> = xlist
-                .split(' ')
-                .map(|s| s.parse::<f64>().unwrap())
-                .collect();
-            let mut y: Vec<f64> = ylist
-                .split(' ')
-                .map(|s| s.parse::<f64>().unwrap())
-                .collect();
-            x.push(x[0]);
-            y.push(y[0]);
-
-            pins.push(Pin {
-                xx,
-                yy,
-                ele,
-                ele2,
-                xlist: x,
-                ylist: y,
-            });
-        })
-        .expect("could not read pins file");
-    }
+    // read pins from file if it exists
+    let pins_file_in = tmpfolder.join("pins.bin");
+    let pins: Vec<Pin> = if fs.exists(&pins_file_in) {
+        let pins_file_in = fs.open(pins_file_in).expect("Unable to open file");
+        crate::util::read_object(BufReader::new(pins_file_in)).expect("Unable to write pins")
+    } else {
+        Vec::new()
+    };
 
     // compute closest distance from each pin to another pin
     let mut dist: HashMap<usize, f64> = HashMap::default();
