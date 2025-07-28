@@ -515,7 +515,6 @@ pub fn draw_curves(
         fs.open(tmpfolder.join("out2.dxf.bin"))?,
     ))
     .expect("Unable to read out2.dxf.bin");
-    let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in formlines.dxf
     let Geometry::Polylines3(input_lines) = input_dxf.take_geometry() else {
         return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
     };

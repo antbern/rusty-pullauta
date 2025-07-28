@@ -625,10 +625,10 @@ pub fn smoothjoin(
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
     let mut heads2: HashMap<String, usize> = HashMap::default();
-    let mut heads = Vec::<String>::new();
-    let mut tails = Vec::<String>::new();
-    let mut el_x = Vec::<Vec<f64>>::new();
-    let mut el_y = Vec::<Vec<f64>>::new();
+    let mut heads = Vec::<String>::with_capacity(input_lines.len());
+    let mut tails = Vec::<String>::with_capacity(input_lines.len());
+    let mut el_x = Vec::<Vec<f64>>::with_capacity(input_lines.len());
+    let mut el_y = Vec::<Vec<f64>>::with_capacity(input_lines.len());
 
     for (j, (line, _c)) in input_lines.iter().enumerate() {
         let first = line.first().unwrap();

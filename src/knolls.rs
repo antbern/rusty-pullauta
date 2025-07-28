@@ -7,6 +7,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 
 use crate::config::Config;
+use crate::geometry::{BinaryDxf, Geometry};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -172,16 +173,19 @@ pub fn knolldetector(
     let xmax = (hmap.grid.width() - 1) as u64;
     let ymax = (hmap.grid.height() - 1) as u64;
 
-    // Temporary hashmap to store the xyz values
+    // Temporary hashmap to store the xyz values (TODO: replace with direct hmap lookup!)
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     for (x, y, h) in hmap.grid.iter() {
         xyz.insert((x as u64, y as u64), h);
     }
 
-    let data = fs
-        .read_to_string(tmpfolder.join("contours03.dxf"))
-        .expect("Should have been able to read the file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
+    let data = BinaryDxf::from_reader(&mut BufReader::new(
+        fs.open(tmpfolder.join("contours03.dxf.bin"))?,
+    ))?;
+    let Geometry::Polylines2(lines) = data.take_geometry() else {
+        return Err(anyhow::anyhow!("contours03.dxf.bin should contain polylines").into());
+    };
+
     let f = fs
         .create(tmpfolder.join("detected.dxf"))
         .expect("Unable to create file");
@@ -192,77 +196,51 @@ pub fn knolldetector(
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
     let mut heads2: HashMap<String, usize> = HashMap::default();
-    let mut heads = Vec::<String>::with_capacity(data.len());
-    let mut tails = Vec::<String>::with_capacity(data.len());
-    let mut el_x = Vec::<Vec<f64>>::with_capacity(data.len());
-    let mut el_y = Vec::<Vec<f64>>::with_capacity(data.len());
-    el_x.push(vec![]);
-    el_y.push(vec![]);
-    heads.push(String::from("-"));
-    tails.push(String::from("-"));
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            if r.len() < 201 {
-                for (i, v) in r.iter().enumerate() {
-                    if i > 0 {
-                        let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                        x.push(val[xline].trim().parse::<f64>().unwrap());
-                        y.push(val[yline].trim().parse::<f64>().unwrap());
-                    }
-                }
-                let x0 = x.first().unwrap();
-                let xl = x.last().unwrap();
+    let mut heads = Vec::<String>::with_capacity(lines.len());
+    let mut tails = Vec::<String>::with_capacity(lines.len());
+    let mut el_x = Vec::<Vec<f64>>::with_capacity(lines.len());
+    let mut el_y = Vec::<Vec<f64>>::with_capacity(lines.len());
 
-                let y0 = y.first().unwrap();
-                let yl = y.last().unwrap();
+    for (j, (line, _c)) in lines.iter().enumerate() {
+        // TODO; might need to lower to 200
+        if line.len() < 201 {
+            let first = line.first().unwrap();
+            let last = line.last().unwrap();
 
-                let head = format!("{x0}x{y0}");
-                let tail = format!("{xl}x{yl}");
+            let x0 = first.x;
+            let xl = last.x;
+            let y0 = first.y;
+            let yl = last.y;
 
-                heads.push(head);
-                tails.push(tail);
+            let head = format!("{x0}x{y0}");
+            let tail = format!("{xl}x{yl}");
 
-                let head = format!("{x0}x{y0}");
-                let tail = format!("{xl}x{yl}");
+            heads.push(head.clone());
+            tails.push(tail.clone());
 
-                el_x.push(x);
-                el_y.push(y);
-                if *heads1.get(&head).unwrap_or(&0) == 0 {
-                    heads1.insert(head, j);
-                } else {
-                    heads2.insert(head, j);
-                }
-                if *heads1.get(&tail).unwrap_or(&0) == 0 {
-                    heads1.insert(tail, j);
-                } else {
-                    heads2.insert(tail, j);
-                }
+            // TODO: this is not very efficient (collecting all x and y separately into Vecs), but it means the logic further down can stay the same
+            el_x.push(line.iter().map(|p| p.x).collect::<Vec<_>>());
+            el_y.push(line.iter().map(|p| p.y).collect::<Vec<_>>());
+
+            if *heads1.get(&head).unwrap_or(&0) == 0 {
+                heads1.insert(head, j);
             } else {
-                heads.push(String::from("-"));
-                tails.push(String::from("-"));
-                el_x.push(vec![]);
-                el_y.push(vec![]);
+                heads2.insert(head, j);
             }
+            if *heads1.get(&tail).unwrap_or(&0) == 0 {
+                heads1.insert(tail, j);
+            } else {
+                heads2.insert(tail, j);
+            }
+        } else {
+            heads.push(String::from("-"));
+            tails.push(String::from("-"));
+            el_x.push(vec![]);
+            el_y.push(vec![]);
         }
     }
 
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut to_join = 0;
         if !el_x[l].is_empty() {
             let mut end_loop = false;
@@ -352,7 +330,7 @@ pub fn knolldetector(
     }
 
     let mut elevation: HashMap<u64, f64> = HashMap::default();
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = false;
         let el_x_len = el_x[l].len();
         if el_x_len > 0 {
@@ -492,7 +470,7 @@ pub fn knolldetector(
         ytest: f64,
     }
     let mut heads = Vec::<Head>::new();
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         if !el_x[l].is_empty() {
             if el_x[l].first() == el_x[l].last() && el_y[l].first() == el_y[l].last() {
                 heads.push(Head {
@@ -519,7 +497,7 @@ pub fn knolldetector(
         maxy: f64,
     }
     let mut bb: HashMap<usize, BoundingBox> = HashMap::default();
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = false;
         if !el_x[l].is_empty() {
             let mut x = el_x[l].to_vec();
@@ -610,7 +588,7 @@ pub fn knolldetector(
     }
     let mut canditates = Vec::<Candidate>::new();
 
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = true;
         if !el_x[l].is_empty() {
             let mut x = el_x[l].to_vec();
@@ -743,7 +721,7 @@ pub fn knolldetector(
 
     let mut pins = Vec::new();
 
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = false;
         let ll = l as u64;
         let mut ltopid = 0;
