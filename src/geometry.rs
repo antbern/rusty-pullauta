@@ -3,11 +3,6 @@
 //!
 //! These types also have helpers for exporting them to DXF format.
 
-/// Needs to be implemented by any classification type that can be converted to a DXF layer name.
-pub trait ClassificationToLayer {
-    fn to_layer(&self) -> &str;
-}
-
 /// A 2D point
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Point2 {
@@ -27,12 +22,12 @@ impl Point2 {
 /// A collection of points with associated classification. This classification is also used to put
 /// the DXF objects into separate layers.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Points<C> {
+pub struct Points {
     points: Vec<Point2>,
-    classification: Vec<C>,
+    classification: Vec<Classification>,
 }
 
-impl<C> Points<C> {
+impl Points {
     pub fn new() -> Self {
         Self {
             points: Vec::new(),
@@ -41,25 +36,25 @@ impl<C> Points<C> {
     }
 
     /// Add a point to this collection.
-    pub fn push(&mut self, x: f64, y: f64, class: C) {
+    pub fn push(&mut self, x: f64, y: f64, class: Classification) {
         self.points.push(Point2::new(x, y));
         self.classification.push(class);
     }
 
     /// Iterate over the points in this collection.
-    pub fn points(&self) -> impl Iterator<Item = (&Point2, &C)> {
+    pub fn points(&self) -> impl Iterator<Item = (&Point2, &Classification)> {
         self.points.iter().zip(self.classification.iter())
     }
 }
 
 /// A collection polylines with associated classification.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Polylines<C> {
+pub struct Polylines {
     polylines: Vec<Vec<Point2>>, // TODO: flatten to single vector?
-    classification: Vec<C>,
+    classification: Vec<Classification>,
 }
 
-impl<C> Polylines<C> {
+impl Polylines {
     pub fn new() -> Self {
         Self {
             polylines: Vec::new(),
@@ -67,39 +62,39 @@ impl<C> Polylines<C> {
         }
     }
 
-    pub fn push(&mut self, polyline: Vec<Point2>, class: C) {
+    pub fn push(&mut self, polyline: Vec<Point2>, class: Classification) {
         self.polylines.push(polyline);
         self.classification.push(class);
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Vec<Point2>, C)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (Vec<Point2>, Classification)> {
         self.polylines.into_iter().zip(self.classification)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Vec<Point2>, &C)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Vec<Point2>, &Classification)> {
         self.polylines.iter().zip(self.classification.iter())
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum Geometry<C> {
-    Points(Points<C>),
-    Polylines(Polylines<C>),
+pub enum Geometry {
+    Points(Points),
+    Polylines(Polylines),
 }
 
-impl<C> From<Points<C>> for Geometry<C> {
-    fn from(points: Points<C>) -> Self {
+impl From<Points> for Geometry {
+    fn from(points: Points) -> Self {
         Geometry::Points(points)
     }
 }
-impl<C> From<Polylines<C>> for Geometry<C> {
-    fn from(polylines: Polylines<C>) -> Self {
+impl From<Polylines> for Geometry {
+    fn from(polylines: Polylines) -> Self {
         Geometry::Polylines(polylines)
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct BinaryDxf<C> {
+pub struct BinaryDxf {
     /// the version of the program that created this file, used to detect stale temp files
     version: String,
     xmin: f64,
@@ -107,11 +102,11 @@ pub struct BinaryDxf<C> {
     ymin: f64,
     ymax: f64,
 
-    data: Geometry<C>,
+    data: Geometry,
 }
 
-impl<C> BinaryDxf<C> {
-    pub fn new(xmin: f64, xmax: f64, ymin: f64, ymax: f64, data: Geometry<C>) -> Self {
+impl BinaryDxf {
+    pub fn new(xmin: f64, xmax: f64, ymin: f64, ymax: f64, data: Geometry) -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             xmin,
@@ -123,21 +118,17 @@ impl<C> BinaryDxf<C> {
     }
 
     /// Get the points in this geometry, or [`None`] if does not contain [`Polylines`] data.
-    pub fn take_polylines(self) -> Option<Polylines<C>> {
+    pub fn take_polylines(self) -> Option<Polylines> {
         match self.data {
             Geometry::Polylines(polylines) => Some(polylines),
             Geometry::Points(_) => None,
         }
     }
-}
 
-impl<C: serde::Serialize> BinaryDxf<C> {
     /// Serialize this object to a writer.
     pub fn to_writer<W: std::io::Write>(&self, writer: &mut W) -> anyhow::Result<()> {
         crate::util::write_object(writer, self)
     }
-}
-impl<C: serde::de::DeserializeOwned> BinaryDxf<C> {
     /// Read this object from a reader. Returns an error if the version does not match.
     pub fn from_reader<R: std::io::Read>(reader: &mut R) -> anyhow::Result<Self> {
         let object: Self = crate::util::read_object(reader)?;
@@ -147,9 +138,7 @@ impl<C: serde::de::DeserializeOwned> BinaryDxf<C> {
         );
         Ok(object)
     }
-}
 
-impl<C: ClassificationToLayer> BinaryDxf<C> {
     /// Write this geometry to a DXF file.
     pub fn to_dxf<W: std::io::Write>(&self, writer: &mut W) -> anyhow::Result<()> {
         write!(
@@ -186,29 +175,18 @@ impl<C: ClassificationToLayer> BinaryDxf<C> {
 
 /// Classification used for contour generation
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum ContourClassification {
+pub enum Classification {
     Contour,
-}
-impl ClassificationToLayer for ContourClassification {
-    fn to_layer(&self) -> &str {
-        match self {
-            Self::Contour => "cont",
-        }
-    }
-}
-
-/// Classification used for cliffs
-
-/// Classification used for contour generation
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum CliffClassification {
     Cliff2,
     Cliff3,
     Cliff4,
 }
-impl ClassificationToLayer for CliffClassification {
-    fn to_layer(&self) -> &str {
+
+impl Classification {
+    /// Get the layer name for this classification.
+    pub fn to_layer(&self) -> &str {
         match self {
+            Self::Contour => "cont",
             Self::Cliff2 => "cliff2",
             Self::Cliff3 => "cliff3",
             Self::Cliff4 => "cliff4",

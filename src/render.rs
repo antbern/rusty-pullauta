@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::geometry::BinaryDxf;
-use crate::geometry::CliffClassification;
+use crate::geometry::Classification;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -289,7 +289,7 @@ fn draw_cliffs(
     let scalefactor = config.scalefactor;
 
     let input = tmpfolder.join(file);
-    let dxf = BinaryDxf::<CliffClassification>::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let dxf = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
 
     let lines = dxf
         .take_polylines()
@@ -299,9 +299,10 @@ fn draw_cliffs(
         // based on the layer we select the cliffcolor
         let cliffcolor = if config.cliffdebug {
             match class {
-                CliffClassification::Cliff2 => Rgba([100, 0, 100, 255]),
-                CliffClassification::Cliff3 => Rgba([0, 100, 100, 255]),
-                CliffClassification::Cliff4 => Rgba([100, 100, 0, 255]),
+                Classification::Cliff2 => Rgba([100, 0, 100, 255]),
+                Classification::Cliff3 => Rgba([0, 100, 100, 255]),
+                Classification::Cliff4 => Rgba([100, 100, 0, 255]),
+                _ => Rgba([0, 0, 0, 255]), // black
             }
         } else {
             Rgba([0, 0, 0, 255]) // black

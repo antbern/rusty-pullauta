@@ -7,7 +7,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, CliffClassification, Point2, Polylines};
+use crate::geometry::{BinaryDxf, Classification, Point2, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -118,8 +118,8 @@ pub fn makecliffs(
     let w = ((xmax - xmin).floor() / 3.0) as usize;
     let h = ((ymax - ymin).floor() / 3.0) as usize;
 
-    let mut f2_lines = Polylines::<CliffClassification>::new();
-    let mut f3_lines = Polylines::<CliffClassification>::new();
+    let mut f2_lines = Polylines::new();
+    let mut f3_lines = Polylines::new();
 
     // temporary vector to reuse memory allocations
     let mut t = Vec::<(f64, f64, f64)>::new();
@@ -240,7 +240,7 @@ pub fn makecliffs(
                                                 (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
                                             ),
                                         ],
-                                        CliffClassification::Cliff2,
+                                        Classification::Cliff2,
                                     );
                                 }
                             }
@@ -257,7 +257,7 @@ pub fn makecliffs(
                                             (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
                                         ),
                                     ],
-                                    CliffClassification::Cliff3,
+                                    Classification::Cliff3,
                                 );
                             }
                         }
@@ -267,7 +267,7 @@ pub fn makecliffs(
         }
     }
 
-    let f2_dxf = BinaryDxf::<CliffClassification>::new(xmin, xmax, ymin, ymax, f2_lines.into());
+    let f2_dxf = BinaryDxf::new(xmin, xmax, ymin, ymax, f2_lines.into());
 
     // save binary file
     let f2 = fs
@@ -359,7 +359,7 @@ pub fn makecliffs(
                                         (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
                                     ),
                                 ],
-                                CliffClassification::Cliff4,
+                                Classification::Cliff4,
                             );
                         }
                     }
@@ -368,7 +368,7 @@ pub fn makecliffs(
         }
     }
 
-    let f3_dxf = BinaryDxf::<CliffClassification>::new(xmin, xmax, ymin, ymax, f3_lines.into());
+    let f3_dxf = BinaryDxf::new(xmin, xmax, ymin, ymax, f3_lines.into());
 
     // save binary file
     let f3 = fs

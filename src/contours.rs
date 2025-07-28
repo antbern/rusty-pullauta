@@ -5,7 +5,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, ContourClassification, Point2, Polylines};
+use crate::geometry::{BinaryDxf, Classification, Point2, Polylines};
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::io::xyz::XyzInternalReader;
@@ -495,7 +495,7 @@ pub fn heightmap2contours(
 
     // convert the polylines to our internal binary dxf format
 
-    let mut lines = Polylines::<ContourClassification>::new();
+    let mut lines = Polylines::new();
     for polyline in polylines.into_iter() {
         lines.push(
             polyline
@@ -516,7 +516,7 @@ pub fn heightmap2contours(
                     Some(Point2 { x, y })
                 })
                 .collect::<Vec<_>>(),
-            ContourClassification::Contour,
+            Classification::Contour,
         );
     }
     let dxf = BinaryDxf::new(xmin, xmax, ymin, ymax, lines.into());
