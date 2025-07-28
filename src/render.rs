@@ -1,11 +1,11 @@
 use crate::config::Config;
 use crate::geometry::BinaryDxf;
 use crate::geometry::Classification;
+use crate::geometry::Geometry;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::vec2d::Vec2D;
-use anyhow::Context;
 use image::ImageBuffer;
 use image::Rgba;
 use imageproc::drawing::{draw_filled_circle_mut, draw_line_segment_mut};
@@ -291,9 +291,9 @@ fn draw_cliffs(
     let input = tmpfolder.join(file);
     let dxf = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
 
-    let lines = dxf
-        .take_polylines()
-        .context("cliff data should contain polylines")?;
+    let Geometry::Polylines2(lines) = dxf.take_geometry() else {
+        return Err(anyhow::anyhow!("cliff data should contain polylines").into());
+    };
 
     for (mut line, class) in lines.into_iter() {
         // based on the layer we select the cliffcolor

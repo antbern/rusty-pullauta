@@ -6,6 +6,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
+use crate::geometry::{BinaryDxf, Classification, Geometry, Point3, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -597,24 +598,18 @@ pub fn smoothjoin(
             steepness[(i, j)] = high - low;
         }
     }
-    let input = tmpfolder.join("out.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-    let mut dxfheadtmp = data[0];
-    dxfheadtmp = dxfheadtmp.split("ENDSEC").collect::<Vec<&str>>()[0];
-    dxfheadtmp = dxfheadtmp.split("HEADER").collect::<Vec<&str>>()[1];
-    let dxfhead = &format!("HEADER{dxfheadtmp}ENDSEC");
 
-    let output = tmpfolder.join("out2.dxf");
-    let fp = fs.create(output).expect("Unable to create file");
-    let mut fp = BufWriter::new(fp);
+    // read the binary input
+    let input = tmpfolder.join("out.dxf.bin");
+    let input_dxf = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))
+        .expect("Unable to read out.dxf.bin");
 
-    fp.write_all(b"  0\r\nSECTION\r\n  2\r\n")
-        .expect("Could not write file");
-    fp.write_all(dxfhead.as_bytes())
-        .expect("Could not write file");
-    fp.write_all(b"\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n")
-        .expect("Could not write file");
+    let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in the output
+    let Geometry::Polylines2(input_lines) = input_dxf.take_geometry() else {
+        return Err(anyhow::anyhow!("out.dxf.bin does not contain polylines").into());
+    };
+
+    let mut out2_lines = Polylines::<Point3, (Classification, f64)>::new();
 
     let depr_output = tmpfolder.join("depressions.txt");
     let depr_fp = fs.create(depr_output).expect("Unable to create file");
@@ -634,63 +629,38 @@ pub fn smoothjoin(
     let mut tails = Vec::<String>::new();
     let mut el_x = Vec::<Vec<f64>>::new();
     let mut el_y = Vec::<Vec<f64>>::new();
-    el_x.push(vec![]);
-    el_y.push(vec![]);
-    heads.push(String::from("-"));
-    tails.push(String::from("-"));
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(val[xline].trim().parse::<f64>().unwrap());
-                    y.push(val[yline].trim().parse::<f64>().unwrap());
-                }
-            }
-            let x0 = x.first().unwrap();
-            let xl = x.last().unwrap();
-            let y0 = y.first().unwrap();
-            let yl = y.last().unwrap();
-            let head = format!("{x0}x{y0}");
-            let tail = format!("{xl}x{yl}");
 
-            heads.push(head);
-            tails.push(tail);
+    for (j, (line, _c)) in input_lines.iter().enumerate() {
+        let first = line.first().unwrap();
+        let last = line.last().unwrap();
 
-            let head = format!("{x0}x{y0}");
-            let tail = format!("{xl}x{yl}");
-            el_x.push(x);
-            el_y.push(y);
-            if *heads1.get(&head).unwrap_or(&0) == 0 {
-                heads1.insert(head, j);
-            } else {
-                heads2.insert(head, j);
-            }
-            if *heads1.get(&tail).unwrap_or(&0) == 0 {
-                heads1.insert(tail, j);
-            } else {
-                heads2.insert(tail, j);
-            }
+        let x0 = first.x;
+        let xl = last.x;
+        let y0 = first.y;
+        let yl = last.y;
+        let head = format!("{x0}x{y0}");
+        let tail = format!("{xl}x{yl}");
+
+        heads.push(head.clone());
+        tails.push(tail.clone());
+
+        // TODO: this is not very efficient (collecting all x and y separately into Vecs), but it means the logic further down can stay the same
+        el_x.push(line.iter().map(|p| p.x).collect::<Vec<_>>());
+        el_y.push(line.iter().map(|p| p.y).collect::<Vec<_>>());
+
+        if *heads1.get(&head).unwrap_or(&0) == 0 {
+            heads1.insert(head, j);
+        } else {
+            heads2.insert(head, j);
+        }
+        if *heads1.get(&tail).unwrap_or(&0) == 0 {
+            heads1.insert(tail, j);
+        } else {
+            heads2.insert(tail, j);
         }
     }
 
-    for l in 0..data.len() {
+    for l in 0..input_lines.len() {
         let mut to_join = 0;
         if !el_x[l].is_empty() {
             let mut end_loop = false;
@@ -774,7 +744,7 @@ pub fn smoothjoin(
             }
         }
     }
-    for l in 0..data.len() {
+    for l in 0..input_lines.len() {
         let mut el_x_len = el_x[l].len();
         if el_x_len > 0 {
             let mut skip = false;
@@ -1102,45 +1072,62 @@ pub fn smoothjoin(
                     el_y[l][k] = vy;
                 }
 
-                let mut layer = String::from("contour");
-                if depression == -1 {
-                    layer = String::from("depression");
-                }
+                let mut layer = if depression == -1 {
+                    Classification::Depression
+                } else {
+                    Classification::Contour
+                };
+
                 if indexcontours != 0.0
                     && (((h / interval + 0.5).floor() * interval) / indexcontours).floor()
                         - ((h / interval + 0.5).floor() * interval) / indexcontours
                         == 0.0
                 {
-                    layer.push_str("_index");
+                    // "Add" Index flag
+                    layer = match layer {
+                        Classification::Contour => Classification::ContourIndex,
+                        Classification::Depression => Classification::DepressionIndex,
+                        other => other,
+                    };
                 }
                 if formline > 0.0
                     && (((h / interval + 0.5).floor() * interval) / (2.0 * interval)).floor()
                         - ((h / interval + 0.5).floor() * interval) / (2.0 * interval)
                         != 0.0
                 {
-                    layer.push_str("_intermed");
+                    // "Add" Intermed flag
+                    layer = match layer {
+                        Classification::Contour => Classification::ContourIntermed,
+                        Classification::ContourIndex => Classification::ContourIndexIntermed,
+                        Classification::Depression => Classification::DepressionIntermed,
+                        Classification::DepressionIndex => Classification::DepressionIndexIntermed,
+                        other => other,
+                    };
                 }
-                write!(
-                    fp,
-                    "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n 38\r\n{h}\r\n  0\r\n"
-                )
-                .expect("Unable to write file");
 
-                for k in 0..el_x_len {
-                    write!(
-                        fp,
-                        "VERTEX\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 30\r\n{}\r\n  0\r\n",
-                        layer, el_x[l][k], el_y[l][k], h
-                    )
-                    .expect("Unable to write file");
-                }
-                fp.write_all(b"SEQEND\r\n  0\r\n")
-                    .expect("Unable to write file");
+                out2_lines.push(
+                    el_x[l]
+                        .iter()
+                        .zip(el_y[l].iter())
+                        .map(|(&x, &y)| Point3::new(x, y, h))
+                        .collect(),
+                    (layer, h),
+                );
             } // -- if not dotkoll
         }
     }
-    fp.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
-        .expect("Unable to write file");
+
+    let out2_dxf = BinaryDxf::new(input_bounds, out2_lines.into());
+
+    let output = tmpfolder.join("out2.dxf.bin");
+    let fp = fs.create(output).expect("Unable to create file");
+    out2_dxf.to_writer(&mut BufWriter::new(fp))?;
+
+    // TODO: behind config?
+    let output = tmpfolder.join("out2.dxf");
+    let fp = fs.create(output).expect("Unable to create file");
+    out2_dxf.to_dxf(&mut BufWriter::new(fp))?;
+
     info!("Done");
     Ok(())
 }

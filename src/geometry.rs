@@ -19,6 +19,24 @@ impl Point2 {
     }
 }
 
+/// A 3D point (eg. 2D + height)
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Point3 {
+    /// The x coordinate of this point.
+    pub x: f64,
+    /// The y coordinate of this point.
+    pub y: f64,
+    /// The z coordinate of this point (height).
+    pub z: f64,
+}
+
+impl Point3 {
+    /// Create a new point from the given coordinates.
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+}
+
 /// A collection of points with associated classification. This classification is also used to put
 /// the DXF objects into separate layers.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -49,12 +67,12 @@ impl Points {
 
 /// A collection polylines with associated classification.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Polylines {
-    polylines: Vec<Vec<Point2>>, // TODO: flatten to single vector?
-    classification: Vec<Classification>,
+pub struct Polylines<P, C> {
+    polylines: Vec<Vec<P>>, // TODO: flatten to single vector?
+    classification: Vec<C>,
 }
 
-impl Polylines {
+impl<P, C> Polylines<P, C> {
     pub fn new() -> Self {
         Self {
             polylines: Vec::new(),
@@ -62,24 +80,33 @@ impl Polylines {
         }
     }
 
-    pub fn push(&mut self, polyline: Vec<Point2>, class: Classification) {
+    pub fn push(&mut self, polyline: Vec<P>, class: C) {
         self.polylines.push(polyline);
         self.classification.push(class);
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Vec<Point2>, Classification)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (Vec<P>, C)> {
         self.polylines.into_iter().zip(self.classification)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Vec<Point2>, &Classification)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Vec<P>, &C)> {
         self.polylines.iter().zip(self.classification.iter())
+    }
+
+    pub fn len(&self) -> usize {
+        self.polylines.len()
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Geometry {
     Points(Points),
-    Polylines(Polylines),
+
+    /// Polylines2 is used for 2D polylines with a classification.
+    Polylines2(Polylines<Point2, Classification>),
+
+    /// Polylines3 is used for 2D polylines with a height (z coordinate).
+    Polylines3(Polylines<Point3, (Classification, f64)>), // Classification + height
 }
 
 impl From<Points> for Geometry {
@@ -87,9 +114,14 @@ impl From<Points> for Geometry {
         Geometry::Points(points)
     }
 }
-impl From<Polylines> for Geometry {
-    fn from(polylines: Polylines) -> Self {
-        Geometry::Polylines(polylines)
+impl From<Polylines<Point2, Classification>> for Geometry {
+    fn from(polylines: Polylines<Point2, Classification>) -> Self {
+        Geometry::Polylines2(polylines)
+    }
+}
+impl From<Polylines<Point3, (Classification, f64)>> for Geometry {
+    fn from(polylines: Polylines<Point3, (Classification, f64)>) -> Self {
+        Geometry::Polylines3(polylines)
     }
 }
 
@@ -101,7 +133,7 @@ pub struct BinaryDxf {
     data: Geometry,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Bounds {
     xmin: f64,
     xmax: f64,
@@ -134,11 +166,8 @@ impl BinaryDxf {
     }
 
     /// Get the points in this geometry, or [`None`] if does not contain [`Polylines`] data.
-    pub fn take_polylines(self) -> Option<Polylines> {
-        match self.data {
-            Geometry::Polylines(polylines) => Some(polylines),
-            Geometry::Points(_) => None,
-        }
+    pub fn take_geometry(self) -> Geometry {
+        self.data
     }
 
     /// Serialize this object to a writer.
@@ -167,7 +196,7 @@ impl BinaryDxf {
             Geometry::Points(_points) => {
                 todo!()
             }
-            Geometry::Polylines(polylines) => {
+            Geometry::Polylines2(polylines) => {
                 for (polyline, class) in polylines.polylines.iter().zip(&polylines.classification) {
                     let layer = class.to_layer();
                     write!(writer, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n  0\r\n")?;
@@ -177,6 +206,27 @@ impl BinaryDxf {
                             writer,
                             "VERTEX\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
                             p.x, p.y,
+                        )?;
+                    }
+                    write!(writer, "SEQEND\r\n  0\r\n")?;
+                }
+            }
+            Geometry::Polylines3(polylines) => {
+                for (polyline, (class, height)) in
+                    polylines.polylines.iter().zip(&polylines.classification)
+                {
+                    let layer = class.to_layer();
+
+                    write!(
+                        writer,
+                        "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n 38\r\n{height}\r\n  0\r\n"
+                    )?;
+
+                    for p in polyline {
+                        write!(
+                            writer,
+                            "VERTEX\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 30\r\n{}\r\n  0\r\n",
+                            layer, p.x, p.y, height
                         )?;
                     }
                     write!(writer, "SEQEND\r\n  0\r\n")?;
@@ -192,7 +242,21 @@ impl BinaryDxf {
 /// Classification used for contour generation
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Classification {
+    /// Used in first contour generation step
+    ContourSimple,
+
+    /// Used in second contour generation step (smoothjoin)
     Contour,
+    ContourIndex,
+    ContourIntermed,
+    ContourIndexIntermed,
+
+    Depression,
+    DepressionIndex,
+    DepressionIntermed,
+    DepressionIndexIntermed,
+
+    /// Used for cliff generations
     Cliff2,
     Cliff3,
     Cliff4,
@@ -202,7 +266,18 @@ impl Classification {
     /// Get the layer name for this classification.
     pub fn to_layer(&self) -> &str {
         match self {
-            Self::Contour => "cont",
+            Self::ContourSimple => "cont",
+
+            Self::Contour => "contour",
+            Self::ContourIndex => "contour_index",
+            Self::ContourIntermed => "contour_intermed",
+            Self::ContourIndexIntermed => "contour_index_intermed",
+
+            Self::Depression => "depression",
+            Self::DepressionIndex => "depression_index",
+            Self::DepressionIntermed => "depression_intermed",
+            Self::DepressionIndexIntermed => "depression_index_intermed",
+
             Self::Cliff2 => "cliff2",
             Self::Cliff3 => "cliff3",
             Self::Cliff4 => "cliff4",
