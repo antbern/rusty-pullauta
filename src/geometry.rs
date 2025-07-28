@@ -54,8 +54,8 @@ impl Points {
     }
 
     /// Add a point to this collection.
-    pub fn push(&mut self, x: f64, y: f64, class: Classification) {
-        self.points.push(Point2::new(x, y));
+    pub fn push(&mut self, point: Point2, class: Classification) {
+        self.points.push(point);
         self.classification.push(class);
     }
 
@@ -193,8 +193,16 @@ impl BinaryDxf {
         )?;
 
         match &self.data {
-            Geometry::Points(_points) => {
-                todo!()
+            Geometry::Points(points) => {
+                for (point, class) in points.points.iter().zip(&points.classification) {
+                    let layer = class.to_layer();
+
+                    write!(
+                        writer,
+                        "POINT\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 50\r\n0\r\n  0\r\n",
+                        point.x, point.y
+                    )?;
+                }
             }
             Geometry::Polylines2(polylines) => {
                 for (polyline, class) in polylines.polylines.iter().zip(&polylines.classification) {
@@ -256,6 +264,12 @@ pub enum Classification {
     DepressionIntermed,
     DepressionIndexIntermed,
 
+    /// Used in dotknoll detections
+    Dotknoll,
+    Udepression,
+    UglyDotknoll,
+    UglyUdepression,
+
     /// Used for cliff generations
     Cliff2,
     Cliff3,
@@ -277,6 +291,11 @@ impl Classification {
             Self::DepressionIndex => "depression_index",
             Self::DepressionIntermed => "depression_intermed",
             Self::DepressionIndexIntermed => "depression_index_intermed",
+
+            Self::Dotknoll => "dotknoll",
+            Self::Udepression => "udepression",
+            Self::UglyDotknoll => "uglydotknoll",
+            Self::UglyUdepression => "uglyudepression",
 
             Self::Cliff2 => "cliff2",
             Self::Cliff3 => "cliff3",

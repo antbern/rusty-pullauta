@@ -7,7 +7,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, Geometry};
+use crate::geometry::{BinaryDxf, Bounds, Classification, Geometry, Point2, Points};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -41,15 +41,6 @@ pub fn dotknolls(
         Luma([0xff]),
     );
 
-    let f = fs
-        .create(tmpfolder.join("dotknolls.dxf"))
-        .expect("Unable to create file");
-    let mut f = BufWriter::new(f);
-    write!(&mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-        xstart, ystart, xmax * size + xstart, ymax * size + ystart
-    ).expect("Cannot write dxf file");
-
     let data = BinaryDxf::from_reader(&mut BufReader::new(
         fs.open(tmpfolder.join("out2.dxf.bin"))?,
     ))?;
@@ -73,6 +64,8 @@ pub fn dotknolls(
             )
         }
     }
+
+    let mut dotknoll_points = Points::new();
 
     let input = tmpfolder.join("dotknolls.txt");
     read_lines_no_alloc(fs, input, |line| {
@@ -101,24 +94,37 @@ pub fn dotknolls(
                 i += 1.0;
             }
 
-            let layer = match (ok, depression) {
-                (true, true) => "dotknoll",
-                (true, false) => "udepression",
-                (false, true) => "uglydotknoll",
-                (false, false) => "uglyudepression",
+            let layer2 = match (ok, depression) {
+                (true, true) => Classification::Dotknoll,
+                (true, false) => Classification::Udepression,
+                (false, true) => Classification::UglyDotknoll,
+                (false, false) => Classification::UglyUdepression,
             };
 
-            write!(
-                &mut f,
-                "POINT\r\n  8\r\n{layer}\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n 50\r\n0\r\n  0\r\n"
-            )
-            .expect("Can not write to file");
+            dotknoll_points.push(Point2::new(x, y), layer2);
         }
     })
     .expect("Could not read file");
 
-    f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
-        .expect("Can not write to file");
+    let dxf = BinaryDxf::new(
+        Bounds::new(xstart, xmax * size + xstart, ystart, ymax * size + ystart),
+        dotknoll_points.into(),
+    );
+
+    // write binary
+    let f = fs
+        .create(tmpfolder.join("dotknolls.dxf.bin"))
+        .expect("Unable to create file");
+    dxf.to_writer(&mut BufWriter::new(f))
+        .expect("could not write dotknolls.dxf.bin");
+
+    // write DXF (TODO: config!)
+    let f = fs
+        .create(tmpfolder.join("dotknolls.dxf"))
+        .expect("Unable to create file");
+    dxf.to_dxf(&mut BufWriter::new(f))
+        .expect("could not write dotknolls.dxf");
+
     info!("Done");
     Ok(())
 }
