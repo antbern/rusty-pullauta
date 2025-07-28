@@ -309,8 +309,8 @@ fn draw_cliffs(
 
         // scale and flip all points into pixel-space
         for p in line.iter_mut() {
-            p.0 = (p.0 - x0) * 600.0 / 254.0 / scalefactor;
-            p.1 = (y0 - p.1) * 600.0 / 254.0 / scalefactor;
+            p.x = (p.x - x0) * 600.0 / 254.0 / scalefactor;
+            p.y = (y0 - p.y) * 600.0 / 254.0 / scalefactor;
         }
 
         if line.first() != line.last() {
@@ -320,16 +320,16 @@ fn draw_cliffs(
                 continue;
             };
 
-            let dx = first.0 - last.0;
-            let dy = first.1 - last.1;
+            let dx = first.x - last.x;
+            let dy = first.y - last.y;
             let dist = (dx.powi(2) + dy.powi(2)).sqrt();
             if dist > 0.0 {
-                first.0 += dx / dist * 1.5;
-                first.1 += dy / dist * 1.5;
-                last.0 -= dx / dist * 1.5;
-                last.1 -= dy / dist * 1.5;
-                draw_filled_circle_mut(img, (first.0 as i32, first.1 as i32), 3, cliffcolor);
-                draw_filled_circle_mut(img, (last.0 as i32, last.1 as i32), 3, cliffcolor);
+                first.x += dx / dist * 1.5;
+                first.y += dy / dist * 1.5;
+                last.x -= dx / dist * 1.5;
+                last.y -= dy / dist * 1.5;
+                draw_filled_circle_mut(img, (first.x as i32, first.y as i32), 3, cliffcolor);
+                draw_filled_circle_mut(img, (last.x as i32, last.y as i32), 3, cliffcolor);
             }
         }
         for i in 1..line.len() {
@@ -338,12 +338,12 @@ fn draw_cliffs(
                     draw_line_segment_mut(
                         img,
                         (
-                            (line[i - 1].0 + (n as f64) - 3.0).floor() as f32,
-                            (line[i - 1].1 + (m as f64) - 3.0).floor() as f32,
+                            (line[i - 1].x + (n as f64) - 3.0).floor() as f32,
+                            (line[i - 1].y + (m as f64) - 3.0).floor() as f32,
                         ),
                         (
-                            (line[i].0 + (n as f64) - 3.0).floor() as f32,
-                            (line[i].1 + (m as f64) - 3.0).floor() as f32,
+                            (line[i].x + (n as f64) - 3.0).floor() as f32,
+                            (line[i].y + (m as f64) - 3.0).floor() as f32,
                         ),
                         cliffcolor,
                     )

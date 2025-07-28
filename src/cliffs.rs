@@ -7,7 +7,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, CliffClassification, Polylines};
+use crate::geometry::{BinaryDxf, CliffClassification, Point2, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -231,11 +231,11 @@ pub fn makecliffs(
 
                                     f2_lines.push(
                                         vec![
-                                            (
+                                            Point2::new(
                                                 (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
                                                 (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
                                             ),
-                                            (
+                                            Point2::new(
                                                 (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
                                                 (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
                                             ),
@@ -248,11 +248,11 @@ pub fn makecliffs(
                             if temp > limit2 && temp > (limit2 + (dist - limit2) * 0.85) {
                                 f3_lines.push(
                                     vec![
-                                        (
+                                        Point2::new(
                                             (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
                                             (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
                                         ),
-                                        (
+                                        Point2::new(
                                             (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
                                             (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
                                         ),
@@ -350,11 +350,11 @@ pub fn makecliffs(
                         if dist > 0.0 && temp > limit && temp > (limit + (dist - limit) * 0.85) {
                             f3_lines.push(
                                 vec![
-                                    (
+                                    Point2::new(
                                         (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
                                         (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
                                     ),
-                                    (
+                                    Point2::new(
                                         (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
                                         (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
                                     ),

@@ -8,11 +8,27 @@ pub trait ClassificationToLayer {
     fn to_layer(&self) -> &str;
 }
 
+/// A 2D point
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Point2 {
+    /// The x coordinate of this point.
+    pub x: f64,
+    /// The y coordinate of this point.
+    pub y: f64,
+}
+
+impl Point2 {
+    /// Create a new point from the given coordinates.
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+}
+
 /// A collection of points with associated classification. This classification is also used to put
 /// the DXF objects into separate layers.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Points<C> {
-    points: Vec<(f64, f64)>,
+    points: Vec<Point2>,
     classification: Vec<C>,
 }
 
@@ -26,12 +42,12 @@ impl<C> Points<C> {
 
     /// Add a point to this collection.
     pub fn push(&mut self, x: f64, y: f64, class: C) {
-        self.points.push((x, y));
+        self.points.push(Point2::new(x, y));
         self.classification.push(class);
     }
 
     /// Iterate over the points in this collection.
-    pub fn points(&self) -> impl Iterator<Item = (&(f64, f64), &C)> {
+    pub fn points(&self) -> impl Iterator<Item = (&Point2, &C)> {
         self.points.iter().zip(self.classification.iter())
     }
 }
@@ -39,7 +55,7 @@ impl<C> Points<C> {
 /// A collection polylines with associated classification.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Polylines<C> {
-    polylines: Vec<Vec<(f64, f64)>>, // TODO: flatten to single vector?
+    polylines: Vec<Vec<Point2>>, // TODO: flatten to single vector?
     classification: Vec<C>,
 }
 
@@ -51,16 +67,16 @@ impl<C> Polylines<C> {
         }
     }
 
-    pub fn push(&mut self, polyline: Vec<(f64, f64)>, class: C) {
+    pub fn push(&mut self, polyline: Vec<Point2>, class: C) {
         self.polylines.push(polyline);
         self.classification.push(class);
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Vec<(f64, f64)>, C)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (Vec<Point2>, C)> {
         self.polylines.into_iter().zip(self.classification)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Vec<(f64, f64)>, &C)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Vec<Point2>, &C)> {
         self.polylines.iter().zip(self.classification.iter())
     }
 }
@@ -151,10 +167,11 @@ impl<C: ClassificationToLayer> BinaryDxf<C> {
                     let layer = class.to_layer();
                     write!(writer, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n  0\r\n")?;
 
-                    for &(x, y) in polyline {
+                    for p in polyline {
                         write!(
                             writer,
-                            "VERTEX\r\n  8\r\n{layer}\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n  0\r\n",
+                            "VERTEX\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
+                            p.x, p.y,
                         )?;
                     }
                     write!(writer, "SEQEND\r\n  0\r\n")?;
