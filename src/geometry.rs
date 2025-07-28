@@ -283,4 +283,54 @@ impl Classification {
             Self::Cliff4 => "cliff4",
         }
     }
+
+    pub fn is_contour(&self) -> bool {
+        matches!(
+            self,
+            Self::Contour | Self::ContourIndex | Self::ContourIntermed | Self::ContourIndexIntermed
+        )
+    }
+
+    pub fn is_depression(&self) -> bool {
+        matches!(
+            self,
+            Self::Depression
+                | Self::DepressionIndex
+                | Self::DepressionIntermed
+                | Self::DepressionIndexIntermed
+        )
+    }
+
+    pub fn is_index(&self) -> bool {
+        matches!(
+            self,
+            Self::ContourIndex
+                | Self::ContourIndexIntermed
+                | Self::DepressionIndex
+                | Self::DepressionIndexIntermed
+        )
+    }
+
+    pub fn is_intermed(&self) -> bool {
+        matches!(
+            self,
+            Self::ContourIntermed
+                | Self::ContourIndexIntermed
+                | Self::DepressionIntermed
+                | Self::DepressionIndexIntermed
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_classification_size_is_single_byte() {
+        assert_eq!(
+            std::mem::size_of::<super::Classification>(),
+            1,
+            "Classification should be a single byte"
+        );
+    }
 }

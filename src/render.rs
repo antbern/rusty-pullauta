@@ -509,6 +509,17 @@ pub fn draw_curves(
         }
     }
 
+    // read the binary file
+
+    let input_dxf = BinaryDxf::from_reader(&mut BufReader::new(
+        fs.open(tmpfolder.join("out2.dxf.bin"))?,
+    ))
+    .expect("Unable to read out2.dxf.bin");
+    let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in formlines.dxf
+    let Geometry::Polylines3(input_lines) = input_dxf.take_geometry() else {
+        return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
+    };
+
     let input = &tmpfolder.join("out2.dxf");
     let data = fs.read_to_string(input).expect("Can not read input file");
     let mut data = data.split("POLYLINE").peekable();
@@ -530,66 +541,36 @@ pub fn draw_curves(
         None
     };
 
-    // keep the x & y vectors outside the loop to reuse their memory
-    let mut x = Vec::<f64>::new();
-    let mut y = Vec::<f64>::new();
-    let mut r = Vec::<&str>::new();
-    let mut val = Vec::<&str>::new();
-    let mut val2 = Vec::<&str>::new();
-    for rec in data.skip(1) {
-        x.clear();
-        y.clear();
-
-        let mut xline = 0;
-        let mut yline = 0;
-
-        // reuse r across iterations
-        r.clear();
-        r.extend(rec.split("VERTEX"));
-
-        // reuse val across iterations
-        val.clear();
-        val.extend(r[1].split('\n'));
-
-        let layer = val[2].trim();
-        for (i, v) in val.iter().enumerate() {
-            let vt = v.trim_end();
-            if vt == " 10" {
-                xline = i + 1;
-            } else if vt == " 20" {
-                yline = i + 1;
-            }
-        }
-        // pre-reserve memory for all x and y values to fit without intermediate allocations
-        x.reserve(r.len());
-        y.reserve(r.len());
-
-        for v in r.iter().skip(1) {
-            // reuse the vector to split the values between iterations
-            val2.clear();
-            val2.extend(v.trim_end().split('\n'));
-
-            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
-            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
-        }
-        let mut color = Rgba([200, 0, 200, 255]); // purple
-        if layer.contains("contour") {
-            color = Rgba([166, 85, 43, 255]) // brown
+    for (mut line, (layer, _height)) in input_lines.into_iter() {
+        // flip and scale the line points
+        for p in line.iter_mut() {
+            p.x = (p.x - x0) * 600.0 / 254.0 / scalefactor;
+            p.y = (y0 - p.y) * 600.0 / 254.0 / scalefactor;
         }
 
-        if !nodepressions || layer.contains("contour") {
+        // TEMP: split x and y values
+        let x = line.iter().map(|p| p.x).collect::<Vec<_>>();
+        let y = line.iter().map(|p| p.y).collect::<Vec<_>>();
+
+        let color = if layer.is_contour() {
+            Rgba([166, 85, 43, 255]) // brown
+        } else {
+            Rgba([200, 0, 200, 255]) // purple
+        };
+
+        if !nodepressions || layer.is_contour() {
             let mut curvew = 2.0;
-            if layer.contains("index") {
+            if layer.is_index() {
                 curvew = 3.0;
             }
             if formline > 0.0 {
                 if formline == 1.0 {
                     curvew = 2.5
                 }
-                if layer.contains("intermed") {
+                if layer.is_intermed() {
                     curvew = 1.5
                 }
-                if layer.contains("index") {
+                if layer.is_index() {
                     curvew = 3.5
                 }
             }
@@ -777,7 +758,7 @@ pub fn draw_curves(
             let mut gap = 0.0;
             let mut formlinestart = false;
 
-            let f_label = if layer.contains("depression") && label_depressions {
+            let f_label = if layer.is_depression() && label_depressions {
                 "formline_depression"
             } else {
                 "formline"
