@@ -50,46 +50,24 @@ pub fn dotknolls(
         xstart, ystart, xmax * size + xstart, ymax * size + ystart
     ).expect("Cannot write dxf file");
 
-    let input = tmpfolder.join("out2.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
+    let data = BinaryDxf::from_reader(&mut BufReader::new(
+        fs.open(tmpfolder.join("out2.dxf.bin"))?,
+    ))?;
+    let Geometry::Polylines3(lines) = data.take_geometry() else {
+        return Err(anyhow::anyhow!("out2.dxf.bin should contain polylines").into());
+    };
 
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(val[xline].trim().parse::<f64>().unwrap());
-                    y.push(val[yline].trim().parse::<f64>().unwrap());
-                }
-            }
-        }
-        for i in 1..x.len() {
+    for (line, _) in lines.iter() {
+        for i in 1..line.len() {
             draw_line_segment_mut(
                 &mut im,
                 (
-                    ((x[i - 1] - xstart) / scalefactor).floor() as f32,
-                    ((y[i - 1] - ystart) / scalefactor).floor() as f32,
+                    ((line[i - 1].x - xstart) / scalefactor).floor() as f32,
+                    ((line[i - 1].y - ystart) / scalefactor).floor() as f32,
                 ),
                 (
-                    ((x[i] - xstart) / scalefactor).floor() as f32,
-                    ((y[i] - ystart) / scalefactor).floor() as f32,
+                    ((line[i].x - xstart) / scalefactor).floor() as f32,
+                    ((line[i].y - ystart) / scalefactor).floor() as f32,
                 ),
                 Luma([0x0]),
             )
