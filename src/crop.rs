@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 
-use crate::geometry::{BinaryDxf, Classification, Geometry, Point2, Points, Polylines};
+use crate::geometry::{BinaryDxf, Geometry, Points, Polylines};
 use crate::io::fs::FileSystem;
 
 /// Crop the lines that fall outside the bounds by cutting existing lines.
@@ -20,21 +20,48 @@ pub fn polylinebindxfcrop(
     // read input file
     let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
     let bounds = input.bounds().clone();
-    let Geometry::Polylines2(points) = input.take_geometry() else {
-        anyhow::bail!("input file should contain 2D lines");
+
+    let output_lines = match input.take_geometry() {
+        Geometry::Polylines2(polylines) => {
+            crop_lines(polylines, minx, miny, maxx, maxy, |p| (p.x, p.y)).into()
+        }
+        Geometry::Polylines3(polylines) => {
+            crop_lines(polylines, minx, miny, maxx, maxy, |p| (p.x, p.y)).into()
+        }
+        _ => anyhow::bail!("input file should contain 2D or 3D lines"),
     };
 
-    let mut output_lines = Polylines::<Point2, Classification>::new();
+    // write the output (TODO: should we populate the new bounds here or keep the old?)
+    let out = BinaryDxf::new(bounds, output_lines);
+    out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
 
-    for (p, c) in points.into_iter() {
+    out.to_dxf(&mut BufWriter::new(
+        fs.create(output.with_extension("dxf"))?,
+    ))?;
+
+    Ok(())
+}
+
+/// Generic inner logic to work with any point type and Classification. Only need to provide an
+/// extractor function that will get the x & y components (which is what we are cropping)
+fn crop_lines<P: Clone, C: Copy>(
+    input_lines: Polylines<P, C>,
+    minx: f64,
+    miny: f64,
+    maxx: f64,
+    maxy: f64,
+    xy_fn: impl Fn(&P) -> (f64, f64),
+) -> Polylines<P, C> {
+    let mut output_lines = Polylines::<_, _>::new();
+
+    for (p, c) in input_lines.into_iter() {
         let mut pre = None;
         let mut prex = 0.0;
         let mut prey = 0.0;
         let mut pointcount = 0;
-        let mut poly: Vec<Point2> = Vec::with_capacity(p.len());
+        let mut poly = Vec::with_capacity(p.len());
         for point in p {
-            let valx = point.x;
-            let valy = point.y;
+            let (valx, valy) = xy_fn(&point);
             if valx >= minx && valx <= maxx && valy >= miny && valy <= maxy {
                 if let Some(pre) = pre
                     && pointcount == 0
@@ -62,16 +89,7 @@ pub fn polylinebindxfcrop(
             output_lines.push(poly, c);
         }
     }
-
-    // write the output (TODO: should we populate the new bounds here or keep the old?)
-    let out = BinaryDxf::new(bounds, output_lines.into());
-    out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
-
-    out.to_dxf(&mut BufWriter::new(
-        fs.create(output.with_extension("dxf"))?,
-    ))?;
-
-    Ok(())
+    output_lines
 }
 
 /// Original version that operates directly on DXF formatted files. Kept so that the CLI part can
