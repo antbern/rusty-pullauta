@@ -156,9 +156,16 @@ fn main() {
             return;
         }
 
-        let input = &args[0];
-        let output = &args[1];
-        pullauta::io::internal2xyz(&fs, input, output).unwrap();
+        pullauta::io::internal2xyz(&fs, &args[0], &args[1]).unwrap();
+        return;
+    }
+
+    if command == "bin2dxf" {
+        if args.len() < 2 {
+            info!("USAGE: bin2dxf [input file] [output file]");
+            return;
+        }
+        pullauta::io::bin2dxf(&fs, &args[0], &args[1]).unwrap();
         return;
     }
 
@@ -172,15 +179,18 @@ fn main() {
         return;
     }
 
-    if command == "dxfmerge" || command == "merge" {
+    if command == "dxfmerge" {
         pullauta::merge::dxfmerge(&fs, &config).unwrap();
-        if command == "merge" {
-            let mut scale = 1.0;
-            if !args.is_empty() {
-                scale = args[0].parse::<f64>().unwrap();
-            }
-            pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
+        return;
+    }
+
+    if command == "merge" {
+        let mut scale = 1.0;
+        if !args.is_empty() {
+            scale = args[0].parse::<f64>().unwrap();
         }
+        pullauta::merge::dxfmerge(&fs, &config).unwrap();
+        pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
         return;
     }
 

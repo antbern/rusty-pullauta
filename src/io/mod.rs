@@ -6,6 +6,8 @@ use std::{
 use fs::FileSystem;
 use heightmap::HeightMap;
 
+use crate::geometry::BinaryDxf;
+
 pub mod bytes;
 pub mod fs;
 pub mod heightmap;
@@ -40,5 +42,12 @@ pub fn internal2xyz(fs: &impl FileSystem, input: &str, output: &str) -> std::io:
         panic!("Unknown internal file format: {input}");
     }
 
+    Ok(())
+}
+
+/// Helper for converting a binary DXF file to a regular DXF file.
+pub fn bin2dxf(fs: &impl FileSystem, input: &str, output: &str) -> anyhow::Result<()> {
+    let binary = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    binary.to_dxf(&mut BufWriter::new(fs.create(output)?))?;
     Ok(())
 }
