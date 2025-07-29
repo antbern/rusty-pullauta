@@ -1,9 +1,81 @@
 use std::error::Error;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 
+use crate::geometry::{BinaryDxf, Classification, Geometry, Point2, Points, Polylines};
 use crate::io::fs::FileSystem;
 
+/// Crop the lines that fall outside the bounds by cutting existing lines.
+pub fn polylinebindxfcrop(
+    fs: &impl FileSystem,
+    input: &Path,
+    output: &Path,
+    minx: f64,
+    miny: f64,
+    maxx: f64,
+    maxy: f64,
+) -> anyhow::Result<()> {
+    log::debug!("Cropping polylines in binary DXF file: {input:?} to {output:?}");
+
+    // read input file
+    let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let bounds = input.bounds().clone();
+    let Geometry::Polylines2(points) = input.take_geometry() else {
+        anyhow::bail!("input file should contain 2D lines");
+    };
+
+    let mut output_lines = Polylines::<Point2, Classification>::new();
+
+    for (p, c) in points.into_iter() {
+        let mut pre = None;
+        let mut prex = 0.0;
+        let mut prey = 0.0;
+        let mut pointcount = 0;
+        let mut poly: Vec<Point2> = Vec::with_capacity(p.len());
+        for point in p {
+            let valx = point.x;
+            let valy = point.y;
+            if valx >= minx && valx <= maxx && valy >= miny && valy <= maxy {
+                if let Some(pre) = pre
+                    && pointcount == 0
+                    && (prex < minx || prey < miny)
+                {
+                    poly.push(pre);
+                    pointcount += 1;
+                }
+                poly.push(point.clone());
+                pointcount += 1;
+            } else if pointcount > 1 {
+                if valx < minx || valy < miny {
+                    poly.push(point.clone());
+                }
+
+                output_lines.push(poly, c);
+                poly = Vec::new();
+                pointcount = 0;
+            }
+            pre = Some(point);
+            prex = valx;
+            prey = valy;
+        }
+        if pointcount > 1 {
+            output_lines.push(poly, c);
+        }
+    }
+
+    // write the output (TODO: should we populate the new bounds here or keep the old?)
+    let out = BinaryDxf::new(bounds, output_lines.into());
+    out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
+
+    out.to_dxf(&mut BufWriter::new(
+        fs.create(output.with_extension("dxf"))?,
+    ))?;
+
+    Ok(())
+}
+
+/// Original version that operates directly on DXF formatted files. Kept so that the CLI part can
+/// use it. Consider removing if not needed.
 pub fn polylinedxfcrop(
     fs: &impl FileSystem,
     input: &Path,
@@ -13,6 +85,7 @@ pub fn polylinedxfcrop(
     maxx: f64,
     maxy: f64,
 ) -> Result<(), Box<dyn Error>> {
+    log::debug!("Cropping polylines in DXF file: {input:?} to {output:?}");
     let data = fs
         .read_to_string(input)
         .expect("Should have been able to read the file");
@@ -87,6 +160,43 @@ pub fn polylinedxfcrop(
     Ok(())
 }
 
+/// Removes points that fall outside the provided bounds and writes the remaining points to the
+/// output file.
+pub fn pointbindxfcrop(
+    fs: &impl FileSystem,
+    input: &Path,
+    output: &Path,
+    minx: f64,
+    miny: f64,
+    maxx: f64,
+    maxy: f64,
+) -> anyhow::Result<()> {
+    log::debug!("Cropping points in binary DXF file: {input:?} to {output:?}");
+    // read input file
+    let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+
+    let bounds = input.bounds().clone();
+    let Geometry::Points(points) = input.take_geometry() else {
+        anyhow::bail!("input file should contain points");
+    };
+
+    // filter all the points
+    let mut output_points = Points::with_capacity(points.len());
+    for (p, c) in points.into_iter() {
+        if p.x >= minx && p.x <= maxx && p.y >= miny && p.y <= maxy {
+            output_points.push(p, c);
+        }
+    }
+
+    // write the output (TODO: should we populate the new bounds here or keep the old?)
+    let out = BinaryDxf::new(bounds, output_points.into());
+    out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
+
+    Ok(())
+}
+
+/// Original version that operates directly on DXF formatted files. Kept so that the CLI part can
+/// use it. Consider removing if not needed.
 pub fn pointdxfcrop(
     fs: &impl FileSystem,
     input: &Path,
@@ -96,6 +206,7 @@ pub fn pointdxfcrop(
     maxx: f64,
     maxy: f64,
 ) -> Result<(), Box<dyn Error>> {
+    log::debug!("Cropping points in DXF file: {input:?} to {output:?}");
     let data = fs
         .read_to_string(input)
         .expect("Should have been able to read the file");

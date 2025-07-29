@@ -814,12 +814,12 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 }
             }
 
-            let out2_path = PathBuf::from(format!("temp{thread}/out2.dxf"));
+            let out2_path = PathBuf::from(format!("temp{thread}/out2.dxf.bin"));
             if fs.exists(&out2_path) {
-                crop::polylinedxfcrop(
+                crop::polylinebindxfcrop(
                     fs,
                     &out2_path,
-                    Path::new(&format!("{batchoutfolder}/{laz}_contours.dxf")),
+                    Path::new(&format!("{batchoutfolder}/{laz}_contours.dxf.bin")),
                     minx,
                     miny,
                     maxx,
@@ -829,12 +829,12 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             }
             let dxf_files = ["c2g", "c3g", "contours03", "detected", "formlines"];
             for dxf_file in dxf_files.iter() {
-                let dxf_path = PathBuf::from(format!("temp{thread}/{dxf_file}.dxf"));
+                let dxf_path = PathBuf::from(format!("temp{thread}/{dxf_file}.dxf.bin"));
                 if fs.exists(&dxf_path) {
-                    crop::polylinedxfcrop(
+                    crop::polylinebindxfcrop(
                         fs,
                         &dxf_path,
-                        Path::new(&format!("{batchoutfolder}/{laz}_{dxf_file}.dxf")),
+                        Path::new(&format!("{batchoutfolder}/{laz}_{dxf_file}.dxf.bin")),
                         minx,
                         miny,
                         maxx,
@@ -843,12 +843,12 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                     .unwrap();
                 }
             }
-            let dotknolls_file = PathBuf::from(format!("temp{thread}/dotknolls.dxf"));
+            let dotknolls_file = PathBuf::from(format!("temp{thread}/dotknolls.dxf.bin"));
             if fs.exists(&dotknolls_file) {
-                crop::pointdxfcrop(
+                crop::pointbindxfcrop(
                     fs,
                     &dotknolls_file,
-                    Path::new(&format!("{batchoutfolder}/{laz}_dotknolls.dxf")),
+                    Path::new(&format!("{batchoutfolder}/{laz}_dotknolls.dxf.bin")),
                     minx,
                     miny,
                     maxx,
@@ -858,12 +858,12 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             }
         }
 
-        let basemap_file = PathBuf::from(format!("temp{thread}/basemap.dxf"));
+        let basemap_file = PathBuf::from(format!("temp{thread}/basemap.dxf.bin"));
         if fs.exists(&basemap_file) {
-            crop::polylinedxfcrop(
+            crop::polylinebindxfcrop(
                 fs,
                 &basemap_file,
-                Path::new(&format!("{batchoutfolder}/{laz}_basemap.dxf")),
+                Path::new(&format!("{batchoutfolder}/{laz}_basemap.dxf.bin")),
                 minx,
                 miny,
                 maxx,

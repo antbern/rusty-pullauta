@@ -4,7 +4,7 @@
 //! These types also have helpers for exporting them to DXF format.
 
 /// A 2D point
-#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Point2 {
     /// The x coordinate of this point.
     pub x: f64,
@@ -20,7 +20,7 @@ impl Point2 {
 }
 
 /// A 3D point (eg. 2D + height)
-#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Point3 {
     /// The x coordinate of this point.
     pub x: f64,
@@ -53,6 +53,17 @@ impl Points {
         }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            points: Vec::with_capacity(capacity),
+            classification: Vec::with_capacity(capacity),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.points.len()
+    }
+
     /// Add a point to this collection.
     pub fn push(&mut self, point: Point2, class: Classification) {
         self.points.push(point);
@@ -62,6 +73,10 @@ impl Points {
     /// Iterate over the points in this collection.
     pub fn iter(&self) -> impl Iterator<Item = (&Point2, &Classification)> {
         self.points.iter().zip(self.classification.iter())
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = (Point2, Classification)> {
+        self.points.into_iter().zip(self.classification)
     }
 }
 
@@ -248,7 +263,7 @@ impl BinaryDxf {
 }
 
 /// Classification used for contour generation
-#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Classification {
     /// Used in first contour generation step
     ContourSimple,
