@@ -39,7 +39,7 @@ impl Point3 {
 
 /// A collection of points with associated classification. This classification is also used to put
 /// the DXF objects into separate layers.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Points {
     points: Vec<Point2>,
     classification: Vec<Classification>,
@@ -60,6 +60,7 @@ impl Points {
         }
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.points.len()
     }
@@ -74,14 +75,20 @@ impl Points {
     pub fn iter(&self) -> impl Iterator<Item = (&Point2, &Classification)> {
         self.points.iter().zip(self.classification.iter())
     }
+}
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Point2, Classification)> {
+impl IntoIterator for Points {
+    type Item = (Point2, Classification);
+
+    type IntoIter = std::iter::Zip<std::vec::IntoIter<Point2>, std::vec::IntoIter<Classification>>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.points.into_iter().zip(self.classification)
     }
 }
 
 /// A collection polylines with associated classification.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Polylines<P, C> {
     polylines: Vec<Vec<P>>, // TODO: flatten to single vector?
     classification: Vec<C>,
@@ -100,16 +107,23 @@ impl<P, C> Polylines<P, C> {
         self.classification.push(class);
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Vec<P>, C)> {
-        self.polylines.into_iter().zip(self.classification)
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = (&Vec<P>, &C)> {
         self.polylines.iter().zip(self.classification.iter())
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.polylines.len()
+    }
+}
+
+impl<P, C> IntoIterator for Polylines<P, C> {
+    type Item = (Vec<P>, C);
+
+    type IntoIter = std::iter::Zip<std::vec::IntoIter<Vec<P>>, std::vec::IntoIter<C>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.polylines.into_iter().zip(self.classification)
     }
 }
 
