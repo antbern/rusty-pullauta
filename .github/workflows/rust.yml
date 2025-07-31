@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
         run: sudo apt install libfreetype-dev libfontconfig-dev
@@ -35,6 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
         run: sudo apt install libfreetype-dev libfontconfig-dev
@@ -50,6 +52,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
 
       # strict version that does not allow _any_ clippy warnings to pass
       # this prevents us from introducing potential issues.

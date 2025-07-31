@@ -25,6 +25,7 @@ jobs:
         fetch-depth: 2
 
     - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
       run: sudo apt install libfreetype-dev libfontconfig-dev
@@ -123,6 +124,7 @@ jobs:
         fetch-depth: 2
 
     - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
       run: sudo apt install libfreetype-dev libfontconfig-dev
