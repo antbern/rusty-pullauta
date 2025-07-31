@@ -233,7 +233,7 @@ fn main() {
         let miny = args[3].parse::<f64>().unwrap();
         let maxx = args[4].parse::<f64>().unwrap();
         let maxy = args[5].parse::<f64>().unwrap();
-        pullauta::crop::polylinedxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
+        pullauta::crop::polylinebindxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
             .unwrap();
         return;
     }
@@ -245,7 +245,8 @@ fn main() {
         let miny = args[3].parse::<f64>().unwrap();
         let maxx = args[4].parse::<f64>().unwrap();
         let maxy = args[5].parse::<f64>().unwrap();
-        pullauta::crop::pointdxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy).unwrap();
+        pullauta::crop::pointbindxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
+            .unwrap();
         return;
     }
 
