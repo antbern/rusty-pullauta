@@ -1,4 +1,3 @@
-use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::geometry::{BinaryDxf, Geometry, Points, Polylines};
@@ -19,7 +18,7 @@ pub fn polylinebindxfcrop(
     log::debug!("Cropping polylines in binary DXF file: {input:?} to {output:?}");
 
     // read input file
-    let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let input = BinaryDxf::from_reader(&mut fs.open(input)?)?;
     let bounds = input.bounds().clone();
 
     let output_lines = match input.take_geometry().swap_remove(0) {
@@ -34,11 +33,11 @@ pub fn polylinebindxfcrop(
 
     // write the output (TODO: should we populate the new bounds here or keep the old?)
     let out = BinaryDxf::new(bounds, vec![output_lines]);
-    out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
+    out.to_writer(&mut fs.create(output)?)?;
 
     if output_dxf {
         // remove the .bin extension for the DXF output
-        out.to_dxf(&mut BufWriter::new(fs.create(output.with_extension(""))?))?;
+        out.to_dxf(&mut fs.create(output.with_extension(""))?)?;
     }
 
     Ok(())
@@ -109,7 +108,7 @@ pub fn pointbindxfcrop(
 ) -> anyhow::Result<()> {
     log::debug!("Cropping points in binary DXF file: {input:?} to {output:?}");
     // read input file
-    let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let input = BinaryDxf::from_reader(&mut fs.open(input)?)?;
 
     let bounds = input.bounds().clone();
     let Geometry::Points(points) = input.take_geometry().swap_remove(0) else {
@@ -126,11 +125,11 @@ pub fn pointbindxfcrop(
 
     // write the output (TODO: should we populate the new bounds here or keep the old?)
     let out = BinaryDxf::new(bounds, vec![output_points.into()]);
-    out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
+    out.to_writer(&mut fs.create(output)?)?;
 
     if output_dxf {
         // remove the .bin extension for the DXF output
-        out.to_dxf(&mut BufWriter::new(fs.create(output.with_extension(""))?))?;
+        out.to_dxf(&mut fs.create(output.with_extension(""))?)?;
     }
 
     Ok(())

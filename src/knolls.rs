@@ -3,7 +3,6 @@ use imageproc::drawing::draw_line_segment_mut;
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
@@ -23,8 +22,7 @@ pub fn dotknolls(
     let scalefactor = config.scalefactor;
 
     let heightmap_in = tmpfolder.join("xyz_knolls.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(heightmap_in)?)?;
 
     // in world coordinates
     let xstart = hmap.xoffset;
@@ -41,9 +39,7 @@ pub fn dotknolls(
         Luma([0xff]),
     );
 
-    let data = BinaryDxf::from_reader(&mut BufReader::new(
-        fs.open(tmpfolder.join("out2.dxf.bin"))?,
-    ))?;
+    let data = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("out2.dxf.bin"))?)?;
     let Geometry::Polylines3(lines) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("out2.dxf.bin should contain polylines").into());
     };
@@ -112,16 +108,14 @@ pub fn dotknolls(
     );
 
     // write binary
-    let f = fs
+    let mut f = fs
         .create(tmpfolder.join("dotknolls.dxf.bin"))
         .expect("Unable to create file");
-    dxf.to_writer(&mut BufWriter::new(f))
+    dxf.to_writer(&mut f)
         .expect("could not write dotknolls.dxf.bin");
 
     if config.output_dxf {
-        dxf.to_dxf(&mut BufWriter::new(
-            fs.create(tmpfolder.join("dotknolls.dxf"))?,
-        ))?;
+        dxf.to_dxf(&mut fs.create(tmpfolder.join("dotknolls.dxf"))?)?;
     }
 
     info!("Done");
@@ -143,8 +137,7 @@ pub fn knolldetector(
     let interval = 0.3 * scalefactor;
 
     let heightmap_in = tmpfolder.join("xyz_03.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(heightmap_in)?)?;
 
     // in world coordinates
     let xstart = hmap.xoffset;
@@ -162,9 +155,7 @@ pub fn knolldetector(
         xyz.insert((x as u64, y as u64), h);
     }
 
-    let data = BinaryDxf::from_reader(&mut BufReader::new(
-        fs.open(tmpfolder.join("contours03.dxf.bin"))?,
-    ))?;
+    let data = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("contours03.dxf.bin"))?)?;
     let Geometry::Polylines2(lines) = data.take_geometry().swap_remove(0) else {
         anyhow::bail!("contours03.dxf.bin should contain polylines");
     };
@@ -792,21 +783,17 @@ pub fn knolldetector(
     }
 
     let detected_dxf = BinaryDxf::new(detected_bounds, vec![detected_lines.into()]);
-    detected_dxf.to_writer(&mut BufWriter::new(
-        fs.create(tmpfolder.join("detected.dxf.bin"))?,
-    ))?;
+    detected_dxf.to_writer(&mut fs.create(tmpfolder.join("detected.dxf.bin"))?)?;
 
     if config.output_dxf {
-        detected_dxf.to_dxf(&mut BufWriter::new(
-            fs.create(tmpfolder.join("detected.dxf"))?,
-        ))?;
+        detected_dxf.to_dxf(&mut fs.create(tmpfolder.join("detected.dxf"))?)?;
     }
 
     // write pins to file
     let file_pins = fs
         .create(tmpfolder.join("pins.bin"))
         .expect("Unable to create file");
-    crate::util::write_object(BufWriter::new(file_pins), &pins).expect("Unable to write pins");
+    crate::util::write_object(file_pins, &pins).expect("Unable to write pins");
 
     info!("Done");
     Ok(())
@@ -836,9 +823,7 @@ pub fn xyzknolls(
 
     // load the binary file
     let heightmap_in = tmpfolder.join("xyz_03.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
-
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(heightmap_in)?)?;
 
     let xmax = hmap.grid.width() - 1;
     let ymax = hmap.grid.height() - 1;
@@ -880,7 +865,7 @@ pub fn xyzknolls(
     let pins_file_in = tmpfolder.join("pins.bin");
     let pins: Vec<Pin> = if fs.exists(&pins_file_in) {
         let pins_file_in = fs.open(pins_file_in).expect("Unable to open file");
-        crate::util::read_object(BufReader::new(pins_file_in)).expect("Unable to write pins")
+        crate::util::read_object(pins_file_in).expect("Unable to write pins")
     } else {
         Vec::new()
     };
@@ -1033,7 +1018,7 @@ pub fn xyzknolls(
 
     // write the updated heightmap
     let heightmap_out = tmpfolder.join("xyz_knolls.hmap");
-    let mut writer = BufWriter::new(fs.create(heightmap_out)?);
+    let mut writer = fs.create(heightmap_out)?;
     xyz2.to_bytes(&mut writer)?;
 
     info!("Done");

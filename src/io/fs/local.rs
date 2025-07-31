@@ -1,4 +1,4 @@
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Seek, Write};
 use std::path::{Path, PathBuf};
 
 use super::FileSystem;
@@ -30,12 +30,18 @@ impl FileSystem for LocalFileSystem {
         std::fs::read_to_string(path)
     }
 
-    fn open(&self, path: impl AsRef<Path>) -> Result<impl Read + Seek + Send + 'static, io::Error> {
-        std::fs::File::open(path)
+    fn open(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<impl BufRead + Seek + Send + 'static, io::Error> {
+        Ok(BufReader::with_capacity(
+            crate::ONE_MEGABYTE,
+            std::fs::File::open(path)?,
+        ))
     }
 
     fn create(&self, path: impl AsRef<Path>) -> Result<impl Write + Seek, io::Error> {
-        std::fs::File::create(path)
+        Ok(BufWriter::new(std::fs::File::create(path)?))
     }
 
     fn remove_file(&self, path: impl AsRef<Path>) -> Result<(), io::Error> {

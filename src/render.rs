@@ -15,8 +15,7 @@ use log::info;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::io::BufRead;
-use std::io::BufReader;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 
 pub fn render(
@@ -36,7 +35,7 @@ pub fn render(
 
     // Draw vegetation ----------
     let tfw_in = tmpfolder.join("vegetation.pgw");
-    let mut lines = BufReader::new(fs.open(tfw_in).expect("PGW file does not exist")).lines();
+    let mut lines = fs.open(tfw_in).expect("PGW file does not exist").lines();
     let x0 = lines
         .nth(4)
         .expect("no 4 line")
@@ -50,18 +49,18 @@ pub fn render(
         .parse::<f64>()
         .unwrap();
 
-    let mut img_reader = image::ImageReader::new(BufReader::new(
+    let mut img_reader = image::ImageReader::new(
         fs.open(tmpfolder.join("vegetation.png"))
             .expect("Opening vegetation image failed"),
-    ));
+    );
     img_reader.set_format(image::ImageFormat::Png);
     img_reader.no_limits();
     let img = img_reader.decode().unwrap();
 
-    let mut imgug_reader = image::ImageReader::new(BufReader::new(
+    let mut imgug_reader = image::ImageReader::new(
         fs.open(tmpfolder.join("undergrowth.png"))
             .expect("Opening undergrowth image failed"),
-    ));
+    );
     imgug_reader.set_format(image::ImageFormat::Png);
     imgug_reader.no_limits();
     let imgug = imgug_reader.decode().unwrap();
@@ -94,9 +93,8 @@ pub fn render(
 
     let low_file = tmpfolder.join("low.png");
     if fs.exists(&low_file) {
-        let mut low_reader = image::ImageReader::new(BufReader::new(
-            fs.open(low_file).expect("Opening low image failed"),
-        ));
+        let mut low_reader =
+            image::ImageReader::new(fs.open(low_file).expect("Opening low image failed"));
         low_reader.set_format(image::ImageFormat::Png);
         low_reader.no_limits();
         let low = low_reader.decode().unwrap();
@@ -134,7 +132,7 @@ pub fn render(
 
     // dotknolls----------
     let input = tmpfolder.join("dotknolls.dxf.bin");
-    let data = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let data = BinaryDxf::from_reader(&mut fs.open(input)?)?;
     let Geometry::Points(points) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("dotknolls.dxf.bin should contain points").into());
     };
@@ -154,9 +152,8 @@ pub fn render(
     // blocks -------------
     let blocks_file = tmpfolder.join("blocks.png");
     if fs.exists(&blocks_file) {
-        let mut blockpurple_reader = image::ImageReader::new(BufReader::new(
-            fs.open(blocks_file).expect("Opening blocks image failed"),
-        ));
+        let mut blockpurple_reader =
+            image::ImageReader::new(fs.open(blocks_file).expect("Opening blocks image failed"));
         blockpurple_reader.set_format(image::ImageFormat::Png);
         blockpurple_reader.no_limits();
         let blockpurple = blockpurple_reader.decode().unwrap();
@@ -189,10 +186,10 @@ pub fn render(
     // blueblack -------------
     let blueblack_file = tmpfolder.join("blueblack.png");
     if fs.exists(&blueblack_file) {
-        let mut imgbb_reader = image::ImageReader::new(BufReader::new(
+        let mut imgbb_reader = image::ImageReader::new(
             fs.open(blueblack_file)
                 .expect("Opening blueblack image failed"),
-        ));
+        );
         imgbb_reader.set_format(image::ImageFormat::Png);
         imgbb_reader.no_limits();
         let imgbb = imgbb_reader.decode().unwrap();
@@ -220,9 +217,8 @@ pub fn render(
     // high -------------
     let high_file = tmpfolder.join("high.png");
     if fs.exists(&high_file) {
-        let mut high_reader = image::ImageReader::new(BufReader::new(
-            fs.open(high_file).expect("Opening high image failed"),
-        ));
+        let mut high_reader =
+            image::ImageReader::new(fs.open(high_file).expect("Opening high image failed"));
         high_reader.set_format(image::ImageFormat::Png);
         high_reader.no_limits();
         let high = high_reader.decode().unwrap();
@@ -242,22 +238,20 @@ pub fn render(
     };
 
     img.write_to(
-        &mut BufWriter::new(
-            fs.create(format!("{filename}.png"))
-                .expect("could not save output png"),
-        ),
+        &mut fs
+            .create(format!("{filename}.png"))
+            .expect("could not save output png"),
         image::ImageFormat::Png,
     )
     .expect("could not write image");
 
     let file_in = tmpfolder.join("vegetation.pgw");
-    let pgw_file_out = fs
+    let mut pgw_file_out = fs
         .create(format!("{filename}.pgw"))
         .expect("Unable to create file");
-    let mut pgw_file_out = BufWriter::new(pgw_file_out);
 
     if let Ok(lines) = fs.open(file_in) {
-        for (i, line) in BufReader::new(lines).lines().enumerate() {
+        for (i, line) in lines.lines().enumerate() {
             let ip = line.unwrap_or(String::new());
             let x: f64 = ip.parse::<f64>().unwrap();
             if i == 0 || i == 3 {
@@ -284,7 +278,7 @@ fn draw_cliffs(
     let scalefactor = config.scalefactor;
 
     let input = tmpfolder.join(file);
-    let dxf = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
+    let dxf = BinaryDxf::from_reader(&mut fs.open(input)?)?;
 
     let Geometry::Polylines2(lines) = dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("cliff data should contain polylines").into());
@@ -377,7 +371,7 @@ pub fn draw_curves(
     let mut xstart: f64 = 0.0;
     let mut ystart: f64 = 0.0;
     let tfw_in = tmpfolder.join("vegetation.pgw");
-    let mut lines = BufReader::new(fs.open(tfw_in).expect("PGW file does not exist")).lines();
+    let mut lines = fs.open(tfw_in).expect("PGW file does not exist").lines();
     let x0 = lines
         .nth(4)
         .expect("no 4 line")
@@ -392,7 +386,7 @@ pub fn draw_curves(
         .unwrap();
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
+    let mut reader = fs.open(heightmap_in)?;
     let hmap = HeightMap::from_bytes(&mut reader)?;
     let xyz = &hmap.grid;
 
@@ -506,10 +500,8 @@ pub fn draw_curves(
 
     // read the binary file
 
-    let input_dxf = BinaryDxf::from_reader(&mut BufReader::new(
-        fs.open(tmpfolder.join("out2.dxf.bin"))?,
-    ))
-    .expect("Unable to read out2.dxf.bin");
+    let input_dxf = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("out2.dxf.bin"))?)
+        .expect("Unable to read out2.dxf.bin");
     let bounds = input_dxf.bounds().clone();
     let Geometry::Polylines3(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
@@ -864,15 +856,11 @@ pub fn draw_curves(
     if should_generate_formlines {
         let out_formlines = BinaryDxf::new(bounds, vec![formlines.into()]);
         out_formlines
-            .to_writer(&mut BufWriter::new(
-                fs.create(tmpfolder.join("formlines.dxf.bin"))?,
-            ))
+            .to_writer(&mut fs.create(tmpfolder.join("formlines.dxf.bin"))?)
             .expect("Could not write formlines.dxf.bin");
 
         if config.output_dxf {
-            out_formlines.to_dxf(&mut BufWriter::new(
-                fs.create(tmpfolder.join("formlines.dxf"))?,
-            ))?;
+            out_formlines.to_dxf(&mut fs.create(tmpfolder.join("formlines.dxf"))?)?;
         }
     }
 
