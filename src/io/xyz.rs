@@ -10,7 +10,7 @@ use log::debug;
 const XYZ_MAGIC: &[u8] = b"XYZB";
 
 /// A single record of an observed laser data point needed by the algorithms.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct XyzRecord {
     pub x: f64,
     pub y: f64,
@@ -20,34 +20,28 @@ pub struct XyzRecord {
     pub return_number: u8,
 }
 
-impl FromToBytes for XyzRecord {
-    fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let x = f64::from_bytes(reader)?;
-        let y = f64::from_bytes(reader)?;
-        let z = f64::from_bytes(reader)?;
+impl XyzRecord {
+    /// Populate this [`XyzRecord`] with values from a reader.
+    fn read_from<R: std::io::Read>(&mut self, reader: &mut R) -> std::io::Result<()> {
+        self.x = f64::from_bytes(reader)?;
+        self.y = f64::from_bytes(reader)?;
+        self.z = f64::from_bytes(reader)?;
 
         let mut buff = [0; 3];
         reader.read_exact(&mut buff)?;
-        let classification = buff[0];
-        let number_of_returns = buff[1];
-        let return_number = buff[2];
-        Ok(Self {
-            x,
-            y,
-            z,
-            classification,
-            number_of_returns,
-            return_number,
-        })
+        self.classification = buff[0];
+        self.number_of_returns = buff[1];
+        self.return_number = buff[2];
+        Ok(())
     }
 
-    fn to_bytes<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+    fn write_to<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         // write the x, y, z coordinates
         self.x.to_bytes(writer)?;
         self.y.to_bytes(writer)?;
         self.z.to_bytes(writer)?;
 
-        // write the classification, number of returns, return number, and intensity
+        // write the classification, number of returns, return number
         writer.write_all(&[
             self.classification,
             self.number_of_returns,
@@ -87,7 +81,7 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
             u64::MAX.to_bytes(inner)?;
         }
 
-        record.to_bytes(inner)?;
+        record.write_to(inner)?;
         self.records_written += 1;
         Ok(())
     }
@@ -126,6 +120,10 @@ impl<W: Write + Seek> Drop for XyzInternalWriter<W> {
 
 pub struct XyzInternalReader<R: Read> {
     inner: R,
+    /// This is used to return a reference instead of a copy of the record.
+    /// We read into this and return a reference.
+    inner_record: XyzRecord,
+
     n_records: u64,
     records_read: u64,
     // for stats
@@ -148,14 +146,17 @@ impl<R: Read> XyzInternalReader<R> {
         let n_records = u64::from_bytes(&mut inner)?;
         Ok(Self {
             inner,
+            inner_record: XyzRecord::default(),
             n_records,
             records_read: 0,
             start: None,
         })
     }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> std::io::Result<Option<XyzRecord>> {
+    #[allow(
+        clippy::should_implement_trait,
+        reason = "returning a reference to the record"
+    )]
+    pub fn next(&mut self) -> std::io::Result<Option<&XyzRecord>> {
         if self.records_read >= self.n_records {
             // TODO: log statistics about the read records
             if let Some(start) = self.start {
@@ -175,9 +176,11 @@ impl<R: Read> XyzInternalReader<R> {
             self.start = Some(Instant::now());
         }
 
-        let record = XyzRecord::from_bytes(&mut self.inner)?;
+        // read the next record into our local record
+        self.inner_record.read_from(&mut self.inner)?;
+
         self.records_read += 1;
-        Ok(Some(record))
+        Ok(Some(&self.inner_record))
     }
 }
 
@@ -201,8 +204,9 @@ mod test {
         };
 
         let mut buff = Vec::new();
-        record.to_bytes(&mut buff).unwrap();
-        let read_record = XyzRecord::from_bytes(&mut buff.as_slice()).unwrap();
+        record.write_to(&mut buff).unwrap();
+        let mut read_record = XyzRecord::default();
+        read_record.read_from(&mut buff.as_slice()).unwrap();
 
         assert_eq!(record, read_record);
     }
@@ -229,9 +233,9 @@ mod test {
         let data = writer.finish().unwrap().into_inner();
         let cursor = Cursor::new(data);
         let mut reader = super::XyzInternalReader::new(cursor).unwrap();
-        assert_eq!(reader.next().unwrap().unwrap(), record);
-        assert_eq!(reader.next().unwrap().unwrap(), record);
-        assert_eq!(reader.next().unwrap().unwrap(), record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
         assert_eq!(reader.next().unwrap(), None);
     }
 }
