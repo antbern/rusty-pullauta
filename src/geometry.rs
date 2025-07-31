@@ -314,6 +314,9 @@ pub enum Classification {
     UglyDotknoll,
     UglyUdepression,
 
+    /// Comes from knolldetector
+    Knoll1010,
+
     /// Used for cliff generations
     Cliff2,
     Cliff3,
@@ -343,6 +346,8 @@ impl Classification {
             Self::Udepression => "udepression",
             Self::UglyDotknoll => "uglydotknoll",
             Self::UglyUdepression => "uglyudepression",
+
+            Self::Knoll1010 => "1010",
 
             Self::Cliff2 => "cliff2",
             Self::Cliff3 => "cliff3",

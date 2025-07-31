@@ -3,11 +3,11 @@ use imageproc::drawing::draw_line_segment_mut;
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, Bounds, Classification, Geometry, Point2, Points};
+use crate::geometry::{BinaryDxf, Bounds, Classification, Geometry, Point2, Points, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -125,7 +125,7 @@ pub fn knolldetector(
     fs: &impl FileSystem,
     config: &Config,
     tmpfolder: &Path,
-) -> Result<(), Box<dyn Error>> {
+) -> anyhow::Result<()> {
     info!("Detecting knolls...");
     let scalefactor = config.scalefactor;
     let contour_interval = config.contour_interval;
@@ -160,16 +160,11 @@ pub fn knolldetector(
         fs.open(tmpfolder.join("contours03.dxf.bin"))?,
     ))?;
     let Geometry::Polylines2(lines) = data.take_geometry().swap_remove(0) else {
-        return Err(anyhow::anyhow!("contours03.dxf.bin should contain polylines").into());
+        anyhow::bail!("contours03.dxf.bin should contain polylines");
     };
 
-    let f = fs
-        .create(tmpfolder.join("detected.dxf"))
-        .expect("Unable to create file");
-    let mut f = BufWriter::new(f);
-    write!(&mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n"
-    ).expect("Cannot write dxf file");
+    let detected_bounds = Bounds::new(xmin as f64, xmax as f64, ymin as f64, ymax as f64);
+    let mut detected_lines = Polylines::<Point2, Classification>::new();
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
     let mut heads2: HashMap<String, usize> = HashMap::default();
@@ -756,8 +751,13 @@ pub fn knolldetector(
             }
 
             if !skip {
-                f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\n1010\r\n  0\r\n".as_bytes())
-                    .expect("Can not write to file");
+                let line = x
+                    .iter()
+                    .zip(y.iter())
+                    .map(|(x, y)| Point2::new(*x, *y))
+                    .collect::<Vec<_>>();
+                detected_lines.push(line, Classification::Knoll1010);
+
                 let mut xa = 0.0;
                 let mut ya = 0.0;
                 for k in 0..x.len() {
@@ -767,17 +767,6 @@ pub fn knolldetector(
                 let xlen = x.len() as f64;
                 xa /= xlen;
                 ya /= xlen;
-
-                for k in 0..x.len() {
-                    write!(
-                        &mut f,
-                        "VERTEX\r\n  8\r\n1010\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                        x[k], y[k]
-                    )
-                    .expect("Can not write to file");
-                }
-                f.write_all("SEQEND\r\n  0\r\n".as_bytes())
-                    .expect("Can not write to file");
 
                 x.push(x[0]);
                 y.push(y[0]);
@@ -795,8 +784,11 @@ pub fn knolldetector(
             }
         }
     }
-    f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
-        .expect("Can not write to file");
+
+    let detected_dxf = BinaryDxf::new(detected_bounds, vec![detected_lines.into()]);
+    detected_dxf.to_writer(&mut BufWriter::new(
+        fs.create(tmpfolder.join("detected.dxf.bin"))?,
+    ))?;
 
     // write pins to file
     let file_pins = fs
