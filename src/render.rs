@@ -133,7 +133,7 @@ pub fn render(
     // dotknolls----------
     let input = tmpfolder.join("dotknolls.dxf.bin");
     let data = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
-    let Geometry::Points(points) = data.take_geometry() else {
+    let Geometry::Points(points) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("dotknolls.dxf.bin should contain points").into());
     };
 
@@ -284,7 +284,7 @@ fn draw_cliffs(
     let input = tmpfolder.join(file);
     let dxf = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
 
-    let Geometry::Polylines2(lines) = dxf.take_geometry() else {
+    let Geometry::Polylines2(lines) = dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("cliff data should contain polylines").into());
     };
 
@@ -509,7 +509,7 @@ pub fn draw_curves(
     ))
     .expect("Unable to read out2.dxf.bin");
     let bounds = input_dxf.bounds().clone();
-    let Geometry::Polylines3(input_lines) = input_dxf.take_geometry() else {
+    let Geometry::Polylines3(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
     };
 

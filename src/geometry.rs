@@ -39,7 +39,7 @@ impl Point3 {
 
 /// A collection of points with associated classification. This classification is also used to put
 /// the DXF objects into separate layers.
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Points {
     points: Vec<Point2>,
     classification: Vec<Classification>,
@@ -88,7 +88,7 @@ impl IntoIterator for Points {
 }
 
 /// A collection polylines with associated classification.
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Polylines<P, C> {
     polylines: Vec<Vec<P>>, // TODO: flatten to single vector?
     classification: Vec<C>,
@@ -99,6 +99,13 @@ impl<P, C> Polylines<P, C> {
         Self {
             polylines: Vec::new(),
             classification: Vec::new(),
+        }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            polylines: Vec::with_capacity(capacity),
+            classification: Vec::with_capacity(capacity),
         }
     }
 
@@ -127,7 +134,7 @@ impl<P, C> IntoIterator for Polylines<P, C> {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Geometry {
     Points(Points),
 
@@ -159,7 +166,7 @@ pub struct BinaryDxf {
     /// the version of the program that created this file, used to detect stale temp files
     version: String,
     bounds: Bounds,
-    data: Geometry,
+    data: Vec<Geometry>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -182,7 +189,7 @@ impl Bounds {
 }
 
 impl BinaryDxf {
-    pub fn new(bounds: Bounds, data: Geometry) -> Self {
+    pub fn new(bounds: Bounds, data: Vec<Geometry>) -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             bounds,
@@ -195,7 +202,7 @@ impl BinaryDxf {
     }
 
     /// Get the points in this geometry, or [`None`] if does not contain [`Polylines`] data.
-    pub fn take_geometry(self) -> Geometry {
+    pub fn take_geometry(self) -> Vec<Geometry> {
         self.data
     }
 
@@ -221,52 +228,56 @@ impl BinaryDxf {
             self.bounds.xmin, self.bounds.ymin, self.bounds.xmax, self.bounds.ymax
         )?;
 
-        match &self.data {
-            Geometry::Points(points) => {
-                for (point, class) in points.points.iter().zip(&points.classification) {
-                    let layer = class.to_layer();
+        for geom in &self.data {
+            match geom {
+                Geometry::Points(points) => {
+                    for (point, class) in points.points.iter().zip(&points.classification) {
+                        let layer = class.to_layer();
 
-                    write!(
-                        writer,
-                        "POINT\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 50\r\n0\r\n  0\r\n",
-                        point.x, point.y
-                    )?;
-                }
-            }
-            Geometry::Polylines2(polylines) => {
-                for (polyline, class) in polylines.polylines.iter().zip(&polylines.classification) {
-                    let layer = class.to_layer();
-                    write!(writer, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n  0\r\n")?;
-
-                    for p in polyline {
                         write!(
                             writer,
-                            "VERTEX\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                            p.x, p.y,
+                            "POINT\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 50\r\n0\r\n  0\r\n",
+                            point.x, point.y
                         )?;
                     }
-                    write!(writer, "SEQEND\r\n  0\r\n")?;
                 }
-            }
-            Geometry::Polylines3(polylines) => {
-                for (polyline, (class, height)) in
-                    polylines.polylines.iter().zip(&polylines.classification)
-                {
-                    let layer = class.to_layer();
+                Geometry::Polylines2(polylines) => {
+                    for (polyline, class) in
+                        polylines.polylines.iter().zip(&polylines.classification)
+                    {
+                        let layer = class.to_layer();
+                        write!(writer, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n  0\r\n")?;
 
-                    write!(
-                        writer,
-                        "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n 38\r\n{height}\r\n  0\r\n"
-                    )?;
+                        for p in polyline {
+                            write!(
+                                writer,
+                                "VERTEX\r\n  8\r\n{layer}\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
+                                p.x, p.y,
+                            )?;
+                        }
+                        write!(writer, "SEQEND\r\n  0\r\n")?;
+                    }
+                }
+                Geometry::Polylines3(polylines) => {
+                    for (polyline, (class, height)) in
+                        polylines.polylines.iter().zip(&polylines.classification)
+                    {
+                        let layer = class.to_layer();
 
-                    for p in polyline {
                         write!(
                             writer,
-                            "VERTEX\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 30\r\n{}\r\n  0\r\n",
-                            layer, p.x, p.y, height
+                            "POLYLINE\r\n 66\r\n1\r\n  8\r\n{layer}\r\n 38\r\n{height}\r\n  0\r\n"
                         )?;
+
+                        for p in polyline {
+                            write!(
+                                writer,
+                                "VERTEX\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n 30\r\n{}\r\n  0\r\n",
+                                layer, p.x, p.y, height
+                            )?;
+                        }
+                        write!(writer, "SEQEND\r\n  0\r\n")?;
                     }
-                    write!(writer, "SEQEND\r\n  0\r\n")?;
                 }
             }
         }

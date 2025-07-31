@@ -519,7 +519,7 @@ pub fn heightmap2contours(
             Classification::ContourSimple,
         );
     }
-    let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), lines.into());
+    let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![lines.into()]);
 
     // write to disk
     let f = fs

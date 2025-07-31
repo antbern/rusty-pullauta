@@ -20,7 +20,7 @@ pub fn polylinebindxfcrop(
     let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
     let bounds = input.bounds().clone();
 
-    let output_lines = match input.take_geometry() {
+    let output_lines = match input.take_geometry().swap_remove(0) {
         Geometry::Polylines2(polylines) => {
             crop_lines(polylines, minx, miny, maxx, maxy, |p| (p.x, p.y)).into()
         }
@@ -31,7 +31,7 @@ pub fn polylinebindxfcrop(
     };
 
     // write the output (TODO: should we populate the new bounds here or keep the old?)
-    let out = BinaryDxf::new(bounds, output_lines);
+    let out = BinaryDxf::new(bounds, vec![output_lines]);
     out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
 
     Ok(())
@@ -103,7 +103,7 @@ pub fn pointbindxfcrop(
     let input = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))?;
 
     let bounds = input.bounds().clone();
-    let Geometry::Points(points) = input.take_geometry() else {
+    let Geometry::Points(points) = input.take_geometry().swap_remove(0) else {
         anyhow::bail!("input file should contain points");
     };
 
@@ -116,7 +116,7 @@ pub fn pointbindxfcrop(
     }
 
     // write the output (TODO: should we populate the new bounds here or keep the old?)
-    let out = BinaryDxf::new(bounds, output_points.into());
+    let out = BinaryDxf::new(bounds, vec![output_points.into()]);
     out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
 
     Ok(())

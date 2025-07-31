@@ -44,7 +44,7 @@ pub fn dotknolls(
     let data = BinaryDxf::from_reader(&mut BufReader::new(
         fs.open(tmpfolder.join("out2.dxf.bin"))?,
     ))?;
-    let Geometry::Polylines3(lines) = data.take_geometry() else {
+    let Geometry::Polylines3(lines) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("out2.dxf.bin should contain polylines").into());
     };
 
@@ -108,7 +108,7 @@ pub fn dotknolls(
 
     let dxf = BinaryDxf::new(
         Bounds::new(xstart, xmax * size + xstart, ystart, ymax * size + ystart),
-        dotknoll_points.into(),
+        vec![dotknoll_points.into()],
     );
 
     // write binary
@@ -159,7 +159,7 @@ pub fn knolldetector(
     let data = BinaryDxf::from_reader(&mut BufReader::new(
         fs.open(tmpfolder.join("contours03.dxf.bin"))?,
     ))?;
-    let Geometry::Polylines2(lines) = data.take_geometry() else {
+    let Geometry::Polylines2(lines) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("contours03.dxf.bin should contain polylines").into());
     };
 

@@ -267,7 +267,7 @@ pub fn makecliffs(
         }
     }
 
-    let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), f2_lines.into());
+    let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f2_lines.into()]);
 
     // save binary file
     let f2 = fs
@@ -360,7 +360,7 @@ pub fn makecliffs(
         }
     }
 
-    let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), f3_lines.into());
+    let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f3_lines.into()]);
 
     // save binary file
     let f3 = fs
