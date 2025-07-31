@@ -1,8 +1,6 @@
 use crate::io::bytes::FromToBytes;
 use std::{
     io::{Read, Seek, Write},
-    mem::offset_of,
-    ptr::addr_of,
     time::Instant,
 };
 
@@ -25,67 +23,77 @@ pub struct XyzRecord {
     pub return_number: u8,
 }
 
+impl XyzRecord {
+    // Cannot use std::mem::size_of::<Self>() here because that includes the padding
+    // bytes at the end, instead we can use the offset of the last field plus its size.
+    // The unit test test_xyz_record_no_inner_padding ensures that there is only padding at the end
+    // of the struct and that this size is the total sum of the sizes of all fields.
+    const CONTIGOUS_BYTE_SIZE: usize =
+        std::mem::offset_of!(XyzRecord, return_number) + size_of::<u8>();
+
+    fn as_slice(&self) -> &[u8] {
+        // SAFETY: this is safe since alignment is guaranteed by the `repr(C)` attribute, and
+        // there is no padding between the fields. The number of bytes is checked to be the exact
+        // length before the padding bytes start.
+        unsafe {
+            std::slice::from_raw_parts(self as *const Self as *const u8, Self::CONTIGOUS_BYTE_SIZE)
+        }
+    }
+    fn as_slice_mut(&mut self) -> &mut [u8] {
+        // SAFETY: this is safe since alignment is guaranteed by the `repr(C)` attribute, and
+        // there is no padding between the fields. The number of bytes is checked to be the exact
+        // length before the padding bytes start.
+        unsafe {
+            std::slice::from_raw_parts_mut(self as *mut Self as *mut u8, Self::CONTIGOUS_BYTE_SIZE)
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use crate::io::xyz::XyzRecord;
+
+    #[test]
+    fn test_xyz_record_no_inner_padding() {
+        let record = XyzRecord::default();
+
+        let mut size = 0;
+        assert_eq!(size, std::mem::offset_of!(XyzRecord, x));
+        size += size_of_val(&record.x);
+
+        assert_eq!(size, std::mem::offset_of!(XyzRecord, y));
+        size += size_of_val(&record.y);
+
+        assert_eq!(size, std::mem::offset_of!(XyzRecord, z));
+        size += size_of_val(&record.z);
+
+        assert_eq!(size, std::mem::offset_of!(XyzRecord, classification));
+        size += size_of_val(&record.classification);
+
+        assert_eq!(size, std::mem::offset_of!(XyzRecord, number_of_returns));
+        size += size_of_val(&record.number_of_returns);
+
+        assert_eq!(size, std::mem::offset_of!(XyzRecord, return_number));
+        size += size_of_val(&record.return_number);
+
+        assert_eq!(size, XyzRecord::CONTIGOUS_BYTE_SIZE);
+
+        assert!(align_of::<XyzRecord>() > align_of::<u8>());
+        assert_eq!(align_of::<&XyzRecord>(), align_of::<&[u8]>());
+    }
+}
+
 impl FromToBytes for XyzRecord {
     fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut record = Self::default();
-        let buffer = unsafe {
-            std::slice::from_raw_parts_mut(
-                &mut record as *mut Self as *mut u8,
-                // cannot use std::mem::size_of::<Self>() here because that includes the padding
-                // bytes at the end, instead we can use the offset of the last field,
-                offset_of!(XyzRecord, return_number) + size_of::<u8>(),
-            )
-        };
-
-        // println!("buffer: {} {:?}", buffer.len(), buffer);
-
+        let buffer = record.as_slice_mut();
         reader.read_exact(buffer)?;
 
-        return Ok(record);
-
-        let x = f64::from_bytes(reader)?;
-        let y = f64::from_bytes(reader)?;
-        let z = f64::from_bytes(reader)?;
-
-        let mut buff = [0; 3];
-        reader.read_exact(&mut buff)?;
-        let classification = buff[0];
-        let number_of_returns = buff[1];
-        let return_number = buff[2];
-        Ok(Self {
-            x,
-            y,
-            z,
-            classification,
-            number_of_returns,
-            return_number,
-        })
+        Ok(record)
     }
 
     fn to_bytes<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        let buffer = unsafe {
-            std::slice::from_raw_parts(
-                self as *const Self as *const u8,
-                // cannot use std::mem::size_of::<Self>() here because that includes the padding
-                // bytes at the end, instead we can use the offset of the last field,
-                offset_of!(XyzRecord, return_number) + size_of::<u8>(),
-            )
-        };
-
-        writer.write_all(buffer)?;
-        return Ok(());
-
-        // write the x, y, z coordinates
-        self.x.to_bytes(writer)?;
-        self.y.to_bytes(writer)?;
-        self.z.to_bytes(writer)?;
-
-        // write the classification, number of returns, return number, and intensity
-        writer.write_all(&[
-            self.classification,
-            self.number_of_returns,
-            self.return_number,
-        ])
+        writer.write_all(self.as_slice())?;
+        Ok(())
     }
 }
 
@@ -120,7 +128,11 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
             u64::MAX.to_bytes(inner)?;
         }
 
-        record.to_bytes(inner)?;
+        // do the magic
+
+        let buffer = record.as_slice();
+
+        inner.write_all(buffer)?;
         self.records_written += 1;
         Ok(())
     }
@@ -163,6 +175,7 @@ pub struct XyzInternalReader<R: Read> {
     records_read: u64,
     // for stats
     start: Option<Instant>,
+    record: XyzRecord,
 }
 
 impl<R: Read> XyzInternalReader<R> {
@@ -184,11 +197,12 @@ impl<R: Read> XyzInternalReader<R> {
             n_records,
             records_read: 0,
             start: None,
+            record: Default::default(),
         })
     }
 
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> std::io::Result<Option<XyzRecord>> {
+    pub fn next(&mut self) -> std::io::Result<Option<&XyzRecord>> {
         if self.records_read >= self.n_records {
             // TODO: log statistics about the read records
             if let Some(start) = self.start {
@@ -208,9 +222,13 @@ impl<R: Read> XyzInternalReader<R> {
             self.start = Some(Instant::now());
         }
 
-        let record = XyzRecord::from_bytes(&mut self.inner)?;
+        // now do the magic
+        let buffer = self.record.as_slice_mut();
+        self.inner.read_exact(buffer)?;
+
+        // let record = XyzRecord::from_bytes(&mut self.inner)?;
         self.records_read += 1;
-        Ok(Some(record))
+        Ok(Some(&self.record))
     }
 }
 
@@ -262,9 +280,9 @@ mod test {
         let data = writer.finish().unwrap().into_inner();
         let cursor = Cursor::new(data);
         let mut reader = super::XyzInternalReader::new(cursor).unwrap();
-        assert_eq!(reader.next().unwrap().unwrap(), record);
-        assert_eq!(reader.next().unwrap().unwrap(), record);
-        assert_eq!(reader.next().unwrap().unwrap(), record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
         assert_eq!(reader.next().unwrap(), None);
     }
 }
