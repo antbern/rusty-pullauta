@@ -54,16 +54,23 @@ pub struct XyzInternalWriter<W: Write + Seek> {
     inner: Option<W>,
     records_written: u64,
     // for stats
-    start: Option<Instant>,
+    start: Instant,
 }
 
 impl<W: Write + Seek> XyzInternalWriter<W> {
-    pub fn new(inner: W) -> Self {
-        Self {
+    pub fn new(mut inner: W) -> std::io::Result<Self> {
+        // write the header (format + length) on the first write
+        let start = Instant::now();
+
+        inner.write_all(XYZ_MAGIC)?;
+        // Write the temporary number of records as all FF
+        u64::MAX.to_bytes(&mut inner)?;
+
+        Ok(Self {
             inner: Some(inner),
             records_written: 0,
-            start: None,
-        }
+            start,
+        })
     }
 
     pub fn write_record(&mut self, record: &XyzRecord) -> std::io::Result<()> {
@@ -71,15 +78,6 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
             .inner
             .as_mut()
             .ok_or_else(|| std::io::Error::other("writer has already been finished"))?;
-
-        // write the header (format + length) on the first write
-        if self.records_written == 0 {
-            self.start = Some(Instant::now());
-
-            inner.write_all(XYZ_MAGIC)?;
-            // Write the temporary number of records as all FF
-            u64::MAX.to_bytes(inner)?;
-        }
 
         record.write_to(inner)?;
         self.records_written += 1;
@@ -97,15 +95,14 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
         self.records_written.to_bytes(&mut inner)?;
 
         // log statistics about the written records
-        if let Some(start) = self.start {
-            let elapsed = start.elapsed();
-            debug!(
-                "Wrote {} records in {:.2?} ({:.2?}/record)",
-                self.records_written,
-                elapsed,
-                elapsed / self.records_written as u32,
-            );
-        }
+        let elapsed = self.start.elapsed();
+        debug!(
+            "Wrote {} records in {:.2?} ({:.2?}/record)",
+            self.records_written,
+            elapsed,
+            elapsed / self.records_written as u32,
+        );
+
         Ok(inner)
     }
 }
@@ -127,7 +124,7 @@ pub struct XyzInternalReader<R: Read> {
     n_records: u64,
     records_read: u64,
     // for stats
-    start: Option<Instant>,
+    start: Instant,
 }
 
 impl<R: Read> XyzInternalReader<R> {
@@ -142,6 +139,8 @@ impl<R: Read> XyzInternalReader<R> {
             ));
         }
 
+        let start = Instant::now();
+
         // read the number of records, defined by the first u64
         let n_records = u64::from_bytes(&mut inner)?;
         Ok(Self {
@@ -149,7 +148,7 @@ impl<R: Read> XyzInternalReader<R> {
             inner_record: XyzRecord::default(),
             n_records,
             records_read: 0,
-            start: None,
+            start,
         })
     }
     #[allow(
@@ -158,28 +157,22 @@ impl<R: Read> XyzInternalReader<R> {
     )]
     pub fn next(&mut self) -> std::io::Result<Option<&XyzRecord>> {
         if self.records_read >= self.n_records {
-            // TODO: log statistics about the read records
-            if let Some(start) = self.start {
-                let elapsed = start.elapsed();
-                debug!(
-                    "Read {} records in {:.2?} ({:.2?}/record)",
-                    self.records_read,
-                    elapsed,
-                    elapsed / self.records_read as u32,
-                );
-            }
+            // log statistics about the read records
+            let elapsed = self.start.elapsed();
+            debug!(
+                "Read {} records in {:.2?} ({:.2?}/record)",
+                self.records_read,
+                elapsed,
+                elapsed / self.records_read as u32,
+            );
 
             return Ok(None);
         }
 
-        if self.records_read == 0 {
-            self.start = Some(Instant::now());
-        }
-
         // read the next record into our local record
         self.inner_record.read_from(&mut self.inner)?;
-
         self.records_read += 1;
+
         Ok(Some(&self.inner_record))
     }
 }
@@ -214,7 +207,7 @@ mod test {
     #[test]
     fn test_writer_reader_many() {
         let cursor = Cursor::new(Vec::new());
-        let mut writer = XyzInternalWriter::new(cursor);
+        let mut writer = XyzInternalWriter::new(cursor).unwrap();
 
         let record = XyzRecord {
             x: 1.0,
