@@ -50,9 +50,8 @@ impl HeightMap {
         fs: &impl FileSystem,
         path: P,
     ) -> std::io::Result<Self> {
-        let file = fs.open(path)?;
-        let mut reader = std::io::BufReader::new(file);
-        HeightMap::from_bytes(&mut reader)
+        let mut reader = fs.open(path)?;
+        Self::from_bytes(&mut reader)
     }
 
     /// Helper for easily writing a HeightMap to a file
@@ -61,9 +60,8 @@ impl HeightMap {
         fs: &impl FileSystem,
         path: P,
     ) -> std::io::Result<()> {
-        let file = fs.create(path)?;
-        let mut writer = std::io::BufWriter::new(file);
-        self.to_bytes(&mut writer)
+        let mut file = fs.create(path)?;
+        self.to_bytes(&mut file)
     }
 }
 

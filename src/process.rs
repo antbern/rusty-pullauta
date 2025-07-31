@@ -5,8 +5,7 @@ use log::info;
 use rand::prelude::*;
 use std::error::Error;
 use std::io::BufRead;
-use std::io::BufReader;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::blocks;
@@ -115,10 +114,8 @@ pub fn process_tile(
         info!("Converting points from .xyz to internal binary format");
 
         debug!("Writing records to {:?}", &target_file);
-        let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
-            crate::ONE_MEGABYTE,
-            fs.create(&target_file).expect("Could not create writer"),
-        ));
+        let mut writer =
+            XyzInternalWriter::new(fs.create(&target_file).expect("Could not create writer"));
         read_lines_no_alloc(fs, input_file, |line| {
             let mut parts = line.split(' ');
             let x = parts.next().unwrap().parse::<f64>().unwrap();
@@ -160,17 +157,12 @@ pub fn process_tile(
         let mut rng = rand::rng();
         let randdist = rand::distr::Bernoulli::new(thinfactor).unwrap();
 
-        let mut reader = Reader::new(BufReader::with_capacity(
-            crate::ONE_MEGABYTE,
-            fs.open(input_file).expect("Could not open file"),
-        ))
-        .expect("Could not create reader");
+        let mut reader = Reader::new(fs.open(input_file).expect("Could not open file"))
+            .expect("Could not create reader");
 
         debug!("Writing records to {:?}", &target_file);
-        let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
-            crate::ONE_MEGABYTE,
-            fs.create(&target_file).expect("Could not create writer"),
-        ));
+        let mut writer =
+            XyzInternalWriter::new(fs.create(&target_file).expect("Could not create writer"));
 
         for ptu in reader.points() {
             let pt = ptu.unwrap();
@@ -420,10 +412,8 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
 
         let tmp_filename = PathBuf::from(format!("temp{thread}.xyz.bin"));
         debug!("Writing records to {:?}", &tmp_filename);
-        let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
-            crate::ONE_MEGABYTE,
-            fs.create(&tmp_filename).expect("Could not create writer"),
-        ));
+        let mut writer =
+            XyzInternalWriter::new(fs.create(&tmp_filename).expect("Could not create writer"));
 
         for laz_p in &laz_files {
             let laz = laz_p.as_path().file_name().unwrap().to_str().unwrap();
@@ -434,11 +424,8 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 && header.max_y > miny2
                 && header.min_y < maxy2
             {
-                let mut reader = Reader::new(BufReader::with_capacity(
-                    crate::ONE_MEGABYTE,
-                    fs.open(laz_p).expect("Could not open file"),
-                ))
-                .expect("Could not create reader");
+                let mut reader = Reader::new(fs.open(laz_p).expect("Could not open file"))
+                    .expect("Could not create reader");
                 for ptu in reader.points() {
                     let pt = ptu.unwrap();
                     if pt.x > minx2
@@ -487,8 +474,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
         // crop
         let tfw_in = PathBuf::from(format!("pullautus{thread}.pgw"));
         if fs.exists(&tfw_in) {
-            let mut lines =
-                BufReader::new(fs.open(&tfw_in).expect("PGW file does not exist")).lines();
+            let mut lines = fs.open(&tfw_in).expect("PGW file does not exist").lines();
             let tfw0 = lines
                 .next()
                 .expect("no 1 line")
@@ -531,8 +517,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             let dx = minx - tfw4;
             let dy = -maxy + tfw5;
 
-            let pgw_file_out = fs.create(&tfw_in).expect("Unable to create file");
-            let mut pgw_file_out = BufWriter::new(pgw_file_out);
+            let mut pgw_file_out = fs.create(&tfw_in).expect("Unable to create file");
             write!(
                 &mut pgw_file_out,
                 "{}\r\n{}\r\n{}\r\n{}\r\n{}\r\n{}\r\n",
@@ -568,10 +553,9 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             );
 
             img.write_to(
-                &mut BufWriter::new(
-                    fs.create(format!("pullautus{thread}.png"))
-                        .expect("could not save output png"),
-                ),
+                &mut fs
+                    .create(format!("pullautus{thread}.png"))
+                    .expect("could not save output png"),
                 image::ImageFormat::Png,
             )
             .expect("could not save output png");
@@ -592,10 +576,9 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             );
 
             img.write_to(
-                &mut BufWriter::new(
-                    fs.create(format!("pullautus_depr{thread}.png"))
-                        .expect("could not save output png"),
-                ),
+                &mut fs
+                    .create(format!("pullautus_depr{thread}.png"))
+                    .expect("could not save output png"),
                 image::ImageFormat::Png,
             )
             .expect("could not save output png");
@@ -623,8 +606,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             if !contoursonly && !cliffsonly {
                 let path = format!("temp{thread}/undergrowth.pgw");
                 let tfw_in = Path::new(&path);
-                let mut lines =
-                    BufReader::new(fs.open(tfw_in).expect("PGW file does not exist")).lines();
+                let mut lines = fs.open(tfw_in).expect("PGW file does not exist").lines();
                 let tfw0 = lines
                     .next()
                     .expect("no 1 line")
@@ -665,12 +647,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 let dx = minx - tfw4;
                 let dy = -maxy + tfw5;
 
-                let pgw_file_out = fs
+                let mut pgw_file_out = fs
                     .create(PathBuf::from(&format!(
                         "{batchoutfolder}/{laz}_undergrowth.pgw"
                     )))
                     .expect("Unable to create file");
-                let mut pgw_file_out = BufWriter::new(pgw_file_out);
                 write!(
                     &mut pgw_file_out,
                     "{}\r\n{}\r\n{}\r\n{}\r\n{}\r\n{}\r\n",
@@ -684,10 +665,10 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 .expect("Unable to write to file");
                 pgw_file_out.flush().unwrap();
 
-                let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                let mut orig_img_reader = image::ImageReader::new(
                     fs.open(format!("temp{thread}/undergrowth.png"))
                         .expect("Opening undergrowth image failed"),
-                ));
+                );
                 orig_img_reader.set_format(image::ImageFormat::Png);
                 orig_img_reader.no_limits();
                 let orig_img = orig_img_reader.decode().unwrap();
@@ -704,18 +685,17 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 );
 
                 img.write_to(
-                    &mut BufWriter::new(
-                        fs.create(format!("{batchoutfolder}/{laz}_undergrowth.png"))
-                            .expect("could not save output png"),
-                    ),
+                    &mut fs
+                        .create(format!("{batchoutfolder}/{laz}_undergrowth.png"))
+                        .expect("could not save output png"),
                     image::ImageFormat::Png,
                 )
                 .expect("could not save output png");
 
-                let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                let mut orig_img_reader = image::ImageReader::new(
                     fs.open(format!("temp{thread}/vegetation.png"))
                         .expect("Opening vegetation image failed"),
-                ));
+                );
                 orig_img_reader.set_format(image::ImageFormat::Png);
                 orig_img_reader.no_limits();
                 let orig_img = orig_img_reader.decode().unwrap();
@@ -727,18 +707,16 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 image::imageops::overlay(&mut img, &orig_img.to_rgb8(), -dx as i64, -dy as i64);
 
                 img.write_to(
-                    &mut BufWriter::new(
-                        fs.create(format!("{batchoutfolder}/{laz}_vege.png"))
-                            .expect("could not save output png"),
-                    ),
+                    &mut fs
+                        .create(format!("{batchoutfolder}/{laz}_vege.png"))
+                        .expect("could not save output png"),
                     image::ImageFormat::Png,
                 )
                 .expect("could not save output png");
 
-                let pgw_file_out = fs
+                let mut pgw_file_out = fs
                     .create(format!("{batchoutfolder}/{laz}_vege.pgw"))
                     .expect("Unable to create file");
-                let mut pgw_file_out = BufWriter::new(pgw_file_out);
                 write!(
                     &mut pgw_file_out,
                     "1.0\r\n0.0\r\n0.0\r\n-1.0\r\n{}\r\n{}\r\n",
@@ -750,10 +728,10 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 pgw_file_out.flush().unwrap();
 
                 if vege_bitmode {
-                    let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                    let mut orig_img_reader = image::ImageReader::new(
                         fs.open(format!("temp{thread}/vegetation_bit.png"))
                             .expect("Opening vegetation bit bit image failed"),
-                    ));
+                    );
                     orig_img_reader.set_format(image::ImageFormat::Png);
                     orig_img_reader.no_limits();
                     let orig_img = orig_img_reader.decode().unwrap();
@@ -769,18 +747,17 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                         -dy as i64,
                     );
                     img.write_to(
-                        &mut BufWriter::new(
-                            fs.create(format!("{batchoutfolder}/{laz}_vege_bit.png"))
-                                .expect("could not save output png"),
-                        ),
+                        &mut fs
+                            .create(format!("{batchoutfolder}/{laz}_vege_bit.png"))
+                            .expect("could not save output png"),
                         image::ImageFormat::Png,
                     )
                     .expect("could not save output png");
 
-                    let mut orig_img_reader = image::ImageReader::new(BufReader::new(
+                    let mut orig_img_reader = image::ImageReader::new(
                         fs.open(format!("temp{thread}/undergrowth_bit.png"))
                             .expect("Opening undergrowth bit image failed"),
-                    ));
+                    );
                     orig_img_reader.set_format(image::ImageFormat::Png);
                     orig_img_reader.no_limits();
                     let orig_img = orig_img_reader.decode().unwrap();
@@ -796,10 +773,9 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                         -dy as i64,
                     );
                     img.write_to(
-                        &mut BufWriter::new(
-                            fs.create(format!("{batchoutfolder}/{laz}_undergrowth_bit.png"))
-                                .expect("could not save output png"),
-                        ),
+                        &mut fs
+                            .create(format!("{batchoutfolder}/{laz}_undergrowth_bit.png"))
+                            .expect("could not save output png"),
                         image::ImageFormat::Png,
                     )
                     .expect("could not save output png");

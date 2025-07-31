@@ -1,5 +1,5 @@
 use std::{
-    io::{self, Read, Seek, Write},
+    io::{self, BufRead, Seek, Write},
     path::{Path, PathBuf},
 };
 
@@ -17,10 +17,13 @@ pub trait FileSystem: std::fmt::Debug {
     /// Check if a file exists.
     fn exists(&self, path: impl AsRef<Path>) -> bool;
 
-    /// Open a file for reading.
-    fn open(&self, path: impl AsRef<Path>) -> Result<impl Read + Seek + Send + 'static, io::Error>;
+    /// Open a file for reading. This is always Buffered.
+    fn open(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<impl BufRead + Seek + Send + 'static, io::Error>;
 
-    /// Open a file for writing.
+    /// Open a file for writing. This is always Buffered.
     fn create(&self, path: impl AsRef<Path>) -> Result<impl Write + Seek, io::Error>;
 
     /// Read a file into a String.
@@ -43,9 +46,7 @@ pub trait FileSystem: std::fmt::Debug {
         &self,
         path: impl AsRef<Path>,
     ) -> Result<image::DynamicImage, image::error::ImageError> {
-        let mut reader = image::ImageReader::new(std::io::BufReader::new(
-            self.open(path).expect("Could not open file"),
-        ));
+        let mut reader = image::ImageReader::new(self.open(path).expect("Could not open file"));
         reader.set_format(image::ImageFormat::Png);
         reader.decode()
     }

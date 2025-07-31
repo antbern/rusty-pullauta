@@ -5,7 +5,7 @@ use imageproc::rect::Rect;
 use log::info;
 use std::error::Error;
 use std::f32::consts::SQRT_2;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 
 use crate::config::{Config, Zone};
@@ -23,7 +23,7 @@ pub fn makevege(
     info!("Generating vegetation...");
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
+    let mut reader = fs.open(heightmap_in)?;
     let hmap = HeightMap::from_bytes(&mut reader)?;
 
     // in world coordinates
@@ -76,10 +76,7 @@ pub fn makevege(
     let mut noyhit = Vec2D::new(w_3, h_3, 0_u32); // 3.0
 
     let mut i = 0;
-    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-        crate::ONE_MEGABYTE,
-        fs.open(&xyz_file_in)?,
-    ))?;
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let x: f64 = r.x;
@@ -141,10 +138,7 @@ pub fn makevege(
     let mut ug = Vec2D::new(w_block_step, h_block_step, UggItem::default()); // block / step
 
     let mut i = 0;
-    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-        crate::ONE_MEGABYTE,
-        fs.open(&xyz_file_in)?,
-    ))?;
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let x: f64 = r.x;
@@ -376,20 +370,18 @@ pub fn makevege(
     }
     imgye2
         .write_to(
-            &mut BufWriter::new(
-                fs.create(tmpfolder.join("yellow.png"))
-                    .expect("error saving png"),
-            ),
+            &mut fs
+                .create(tmpfolder.join("yellow.png"))
+                .expect("error saving png"),
             image::ImageFormat::Png,
         )
         .expect("could not save output png");
 
     imggr1
         .write_to(
-            &mut BufWriter::new(
-                fs.create(tmpfolder.join("greens.png"))
-                    .expect("error saving png"),
-            ),
+            &mut fs
+                .create(tmpfolder.join("greens.png"))
+                .expect("error saving png"),
             image::ImageFormat::Png,
         )
         .expect("could not save output png");
@@ -398,10 +390,9 @@ pub fn makevege(
     image::imageops::overlay(&mut img, &DynamicImage::ImageRgba8(imgye2), 0, 0);
 
     img.write_to(
-        &mut BufWriter::new(
-            fs.create(tmpfolder.join("vegetation.png"))
-                .expect("error saving png"),
-        ),
+        &mut fs
+            .create(tmpfolder.join("vegetation.png"))
+            .expect("error saving png"),
         image::ImageFormat::Png,
     )
     .expect("could not save output png");
@@ -431,10 +422,9 @@ pub fn makevege(
 
         g_img
             .write_to(
-                &mut BufWriter::new(
-                    fs.create(tmpfolder.join("greens_bit.png"))
-                        .expect("error saving png"),
-                ),
+                &mut fs
+                    .create(tmpfolder.join("greens_bit.png"))
+                    .expect("error saving png"),
                 image::ImageFormat::Png,
             )
             .expect("could not save output png");
@@ -455,10 +445,9 @@ pub fn makevege(
 
         y_img
             .write_to(
-                &mut BufWriter::new(
-                    fs.create(tmpfolder.join("yellow_bit.png"))
-                        .expect("error saving png"),
-                ),
+                &mut fs
+                    .create(tmpfolder.join("yellow_bit.png"))
+                    .expect("error saving png"),
                 image::ImageFormat::Png,
             )
             .expect("could not save output png");
@@ -469,10 +458,9 @@ pub fn makevege(
 
         img_bit
             .write_to(
-                &mut BufWriter::new(
-                    fs.create(tmpfolder.join("vegetation_bit.png"))
-                        .expect("error saving png"),
-                ),
+                &mut fs
+                    .create(tmpfolder.join("vegetation_bit.png"))
+                    .expect("error saving png"),
                 image::ImageFormat::Png,
             )
             .expect("could not save output png");
@@ -484,10 +472,7 @@ pub fn makevege(
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-            crate::ONE_MEGABYTE,
-            fs.open(&xyz_file_in)?,
-        ))?;
+        let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
         while let Some(r) = reader.next()? {
             let (x, y) = (r.x, r.y);
             let c: u8 = r.classification;
@@ -521,10 +506,9 @@ pub fn makevege(
 
     imgwater
         .write_to(
-            &mut BufWriter::new(
-                fs.create(tmpfolder.join("blueblack.png"))
-                    .expect("error saving png"),
-            ),
+            &mut fs
+                .create(tmpfolder.join("blueblack.png"))
+                .expect("error saving png"),
             image::ImageFormat::Png,
         )
         .expect("could not save output png");
@@ -665,10 +649,9 @@ pub fn makevege(
     }
     imgug
         .write_to(
-            &mut BufWriter::new(
-                fs.create(tmpfolder.join("undergrowth.png"))
-                    .expect("error saving png"),
-            ),
+            &mut fs
+                .create(tmpfolder.join("undergrowth.png"))
+                .expect("error saving png"),
             image::ImageFormat::Png,
         )
         .expect("could not save output png");
@@ -677,18 +660,16 @@ pub fn makevege(
 
     img_ug_bit_b
         .write_to(
-            &mut BufWriter::new(
-                fs.create(tmpfolder.join("undergrowth_bit.png"))
-                    .expect("error saving png"),
-            ),
+            &mut fs
+                .create(tmpfolder.join("undergrowth_bit.png"))
+                .expect("error saving png"),
             image::ImageFormat::Png,
         )
         .expect("could not save output png");
 
-    let mut writer = BufWriter::new(
-        fs.create(tmpfolder.join("undergrowth.pgw"))
-            .expect("cannot create pgw file"),
-    );
+    let mut writer = fs
+        .create(tmpfolder.join("undergrowth.pgw"))
+        .expect("cannot create pgw file");
     write!(
         &mut writer,
         "{}\r\n0.0\r\n0.0\r\n{}\r\n{}\r\n{}\r\n",
@@ -699,10 +680,9 @@ pub fn makevege(
     )
     .expect("Cannot write pgw file");
 
-    let mut writer = BufWriter::new(
-        fs.create(tmpfolder.join("vegetation.pgw"))
-            .expect("cannot create pgw file"),
-    );
+    let mut writer = fs
+        .create(tmpfolder.join("vegetation.pgw"))
+        .expect("cannot create pgw file");
     write!(
         &mut writer,
         "1.0\r\n0.0\r\n0.0\r\n-1.0\r\n{xmin}\r\n{ymax}\r\n"

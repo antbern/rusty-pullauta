@@ -2,7 +2,7 @@ use image::{Rgb, RgbImage};
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
@@ -98,29 +98,26 @@ fn merge_png(
     }
 
     im.write_to(
-        &mut BufWriter::new(
-            fs.create(format!("{outfilename}.jpg"))
-                .expect("could not save output jpg"),
-        ),
+        &mut fs
+            .create(format!("{outfilename}.jpg"))
+            .expect("could not save output jpg"),
         image::ImageFormat::Jpeg,
     )
     .expect("could not save output jpg");
 
     im.write_to(
-        &mut BufWriter::new(
-            fs.create(format!("{outfilename}.png"))
-                .expect("could not save output png"),
-        ),
+        &mut fs
+            .create(format!("{outfilename}.png"))
+            .expect("could not save output png"),
         image::ImageFormat::Png,
     )
     .expect("could not save output Png");
 
-    let tfw_file = fs
+    let mut tfw_file = fs
         .create(format!("{outfilename}.pgw"))
         .expect("Unable to create file");
-    let mut tfw_out = BufWriter::new(tfw_file);
     write!(
-        &mut tfw_out,
+        &mut tfw_file,
         "{}\r\n0\r\n0\r\n{}\r\n{}\r\n{}\r\n",
         res * scale,
         -res * scale,
@@ -128,7 +125,7 @@ fn merge_png(
         ymax
     )
     .expect("Could not write to file");
-    tfw_out.flush().expect("Cannot flush");
+    tfw_file.flush().expect("Cannot flush");
     fs.copy(
         Path::new(&format!("{outfilename}.pgw")),
         Path::new(&format!("{outfilename}.jgw")),
@@ -249,7 +246,7 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
         let mut geometries: Vec<Geometry> = Vec::with_capacity(files.len());
 
         for file in files {
-            let loaded = BinaryDxf::from_reader(&mut BufReader::new(fs.open(&file)?))?;
+            let loaded = BinaryDxf::from_reader(&mut fs.open(&file)?)?;
 
             // we always use the bounds of the first loaded file
             if first_file_bounds.is_none() {
@@ -309,21 +306,21 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
                 .expect("this should be set since we load at least one file"),
             geometries,
         );
-        output.to_writer(&mut BufWriter::new(fs.create(&output_file)?))?;
+        output.to_writer(&mut fs.create(&output_file)?)?;
 
         if config.output_dxf {
             let output_file = PathBuf::from(format!("merged_{suffix}.dxf"));
-            output.to_dxf(&mut BufWriter::new(fs.create(&output_file)?))?;
+            output.to_dxf(&mut fs.create(&output_file)?)?;
         }
     }
 
     // output all geometries to a single file
     if let Some(all_bounds) = first_file_bounds {
         let out_merged = BinaryDxf::new(all_bounds, all_geometries);
-        out_merged.to_writer(&mut BufWriter::new(fs.create("merged.dxf.bin")?))?;
+        out_merged.to_writer(&mut fs.create("merged.dxf.bin")?)?;
 
         if config.output_dxf {
-            out_merged.to_dxf(&mut BufWriter::new(fs.create("merged.dxf")?))?;
+            out_merged.to_dxf(&mut fs.create("merged.dxf")?)?;
         }
     }
 
@@ -357,8 +354,7 @@ pub fn smoothjoin(
     let interval = halfinterval;
 
     let heightmap_in = tmpfolder.join("xyz_knolls.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(heightmap_in)?)?;
 
     // in world coordinates
     let xstart = hmap.xoffset;
@@ -391,8 +387,8 @@ pub fn smoothjoin(
 
     // read the binary input
     let input = tmpfolder.join("out.dxf.bin");
-    let input_dxf = BinaryDxf::from_reader(&mut BufReader::new(fs.open(input)?))
-        .expect("Unable to read out.dxf.bin");
+    let input_dxf =
+        BinaryDxf::from_reader(&mut fs.open(input)?).expect("Unable to read out.dxf.bin");
 
     let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in the output
     let Geometry::Polylines2(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
@@ -402,16 +398,13 @@ pub fn smoothjoin(
     let mut out2_lines = Polylines::<Point3, (Classification, f64)>::new();
 
     let depr_output = tmpfolder.join("depressions.txt");
-    let depr_fp = fs.create(depr_output).expect("Unable to create file");
-    let mut depr_fp = BufWriter::new(depr_fp);
+    let mut depr_fp = fs.create(depr_output).expect("Unable to create file");
 
     let dotknoll_output = tmpfolder.join("dotknolls.txt");
-    let dotknoll_fp = fs.create(dotknoll_output).expect("Unable to create file");
-    let mut dotknoll_fp = BufWriter::new(dotknoll_fp);
+    let mut dotknoll_fp = fs.create(dotknoll_output).expect("Unable to create file");
 
     let knollhead_output = tmpfolder.join("knollheads.txt");
-    let knollhead_fp = fs.create(knollhead_output).expect("Unable to create file");
-    let mut knollhead_fp = BufWriter::new(knollhead_fp);
+    let mut knollhead_fp = fs.create(knollhead_output).expect("Unable to create file");
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
     let mut heads2: HashMap<String, usize> = HashMap::default();
@@ -909,13 +902,12 @@ pub fn smoothjoin(
 
     let out2_dxf = BinaryDxf::new(input_bounds, vec![out2_lines.into()]);
 
-    let fp = fs
-        .create(tmpfolder.join("out2.dxf.bin"))
-        .expect("Unable to create file");
-    out2_dxf.to_writer(&mut BufWriter::new(fp))?;
+    let output = tmpfolder.join("out2.dxf.bin");
+    let mut fp = fs.create(output).expect("Unable to create file");
+    out2_dxf.to_writer(&mut fp)?;
 
     if config.output_dxf {
-        out2_dxf.to_dxf(&mut BufWriter::new(fs.create(tmpfolder.join("out2.dxf"))?))?;
+        out2_dxf.to_dxf(&mut fs.create(tmpfolder.join("out2.dxf"))?)?;
     }
 
     info!("Done");

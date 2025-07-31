@@ -3,7 +3,6 @@ use log::info;
 use rand::prelude::*;
 use std::borrow::Cow;
 use std::error::Error;
-use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
@@ -38,8 +37,7 @@ pub fn makecliffs(
     }
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
-    let mut reader = BufReader::new(fs.open(&heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(&heightmap_in)?)?;
 
     // in world coordinates
     let xmax = hmap.maxx();
@@ -96,10 +94,7 @@ pub fn makecliffs(
     let mut rng = rand::rng();
     let randdist = rand::distr::Bernoulli::new(cliff_thin).unwrap();
 
-    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-        crate::ONE_MEGABYTE,
-        fs.open(&xyz_file_in)?,
-    ))?;
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             let (x, y, h) = (r.x, r.y, r.z);
@@ -270,15 +265,13 @@ pub fn makecliffs(
     let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f2_lines.into()]);
 
     // save binary file
-    let f2 = fs
+    let mut f2 = fs
         .create(tmpfolder.join("c2g.dxf.bin"))
         .expect("Unable to create file");
-    f2_dxf
-        .to_writer(&mut BufWriter::new(f2))
-        .expect("Cannot write c2g.dxf.bin");
+    f2_dxf.to_writer(&mut f2).expect("Cannot write c2g.dxf.bin");
 
     if config.output_dxf {
-        f2_dxf.to_dxf(&mut BufWriter::new(fs.create(tmpfolder.join("c2g.dxf"))?))?;
+        f2_dxf.to_dxf(&mut fs.create(tmpfolder.join("c2g.dxf"))?)?;
     }
 
     drop(f2_dxf);
@@ -367,22 +360,19 @@ pub fn makecliffs(
     let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f3_lines.into()]);
 
     // save binary file
-    let f3 = fs
+    let mut f3 = fs
         .create(tmpfolder.join("c3g.dxf.bin"))
         .expect("Unable to create file");
-    f3_dxf
-        .to_writer(&mut BufWriter::new(f3))
-        .expect("Cannot write c3g.dxf.bin");
+    f3_dxf.to_writer(&mut f3).expect("Cannot write c3g.dxf.bin");
 
     if config.output_dxf {
-        f3_dxf.to_dxf(&mut BufWriter::new(fs.create(tmpfolder.join("c3g.dxf"))?))?;
+        f3_dxf.to_dxf(&mut fs.create(tmpfolder.join("c3g.dxf"))?)?;
     }
 
     img.write_to(
-        &mut BufWriter::new(
-            fs.create(tmpfolder.join("c2.png"))
-                .expect("could not save output png"),
-        ),
+        &mut fs
+            .create(tmpfolder.join("c2.png"))
+            .expect("could not save output png"),
         image::ImageFormat::Png,
     )
     .expect("could not save output png");

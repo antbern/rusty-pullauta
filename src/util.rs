@@ -1,6 +1,6 @@
 use std::{
     fmt::Debug,
-    io::{self, BufRead, BufReader},
+    io::{self, BufRead},
     path::Path,
     time::Instant,
 };
@@ -24,8 +24,7 @@ where
     debug!("Reading lines from {filename:?}");
     let start = Instant::now();
 
-    let file = fs.open(filename)?;
-    let mut reader = BufReader::new(file);
+    let mut reader = fs.open(filename)?;
 
     let mut line_buffer = String::new();
     let mut line_count: u32 = 0;
