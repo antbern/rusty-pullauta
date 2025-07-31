@@ -41,7 +41,10 @@ impl FileSystem for LocalFileSystem {
     }
 
     fn create(&self, path: impl AsRef<Path>) -> Result<impl Write + Seek, io::Error> {
-        Ok(BufWriter::new(std::fs::File::create(path)?))
+        Ok(BufWriter::with_capacity(
+            crate::ONE_MEGABYTE,
+            std::fs::File::create(path)?,
+        ))
     }
 
     fn remove_file(&self, path: impl AsRef<Path>) -> Result<(), io::Error> {
