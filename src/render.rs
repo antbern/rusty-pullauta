@@ -213,9 +213,9 @@ pub fn render(
     }
 
     draw_cliffs(fs, config, tmpfolder, "c2g.dxf.bin", &mut img, x0, y0)
-        .expect("draw cliffs c2g.dxf");
+        .expect("draw cliffs c2g.dxf.bin");
     draw_cliffs(fs, config, tmpfolder, "c3g.dxf.bin", &mut img, x0, y0)
-        .expect("draw cliffs c3g.dxf");
+        .expect("draw cliffs c3g.dxf.bin");
 
     // high -------------
     let high_file = tmpfolder.join("high.png");
@@ -868,12 +868,6 @@ pub fn draw_curves(
                 fs.create(tmpfolder.join("formlines.dxf.bin"))?,
             ))
             .expect("Could not write formlines.dxf.bin");
-
-        out_formlines
-            .to_dxf(&mut BufWriter::new(
-                fs.create(tmpfolder.join("formlines.dxf.bin.dxf"))?,
-            ))
-            .expect("Could not write formlines.dxf");
     }
 
     Ok(())

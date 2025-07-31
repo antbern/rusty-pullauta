@@ -523,7 +523,7 @@ pub fn heightmap2contours(
 
     // write to disk
     let f = fs
-        .create(tmpfolder.join(format!("{dxffile}.bin")))
+        .create(tmpfolder.join(dxffile))
         .expect("Unable to create file");
     dxf.to_writer(&mut BufWriter::new(f))
         .expect("Cannot write binary dxf file");

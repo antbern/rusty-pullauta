@@ -222,7 +222,7 @@ pub fn process_tile(
             tmpfolder,
             scalefactor * 0.3,
             &xyz_03,
-            "contours03.dxf", // dxf curves generated from the heightmap
+            "contours03.dxf.bin", // dxf curves generated from the heightmap
         )
         .expect("contour generation failed");
     }
@@ -249,7 +249,7 @@ pub fn process_tile(
                 tmpfolder,
                 basemapcontours,
                 &xyz2,
-                "basemap.dxf", // generate dxf contours
+                "basemap.dxf.bin", // generate dxf contours
             )
             .expect("contour generation failed");
         }
@@ -273,7 +273,7 @@ pub fn process_tile(
                 tmpfolder,
                 halfinterval,
                 &xyz_knolls,
-                "out.dxf", // generates dxf curves
+                "out.dxf.bin", // generates dxf curves
             )
             .unwrap();
         } else {
@@ -284,7 +284,7 @@ pub fn process_tile(
                 tmpfolder,
                 halfinterval,
                 &hmap,
-                "out.dxf", // generate dxf curves
+                "out.dxf.bin", // generate dxf curves
             )
             .unwrap();
         }
