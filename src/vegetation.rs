@@ -301,9 +301,11 @@ pub fn makevege(
             let mut firsthit2 = firsthit[(x, y)];
             for i in (x - 2)..x + 3_usize {
                 for j in (y - 2)..y + 3_usize {
-                    let value = firsthit[(i, j)];
-                    if value < firsthit2 {
-                        firsthit2 = value;
+                    if i < w_block && j < h_block {
+                        let value = firsthit[(i, j)];
+                        if value < firsthit2 {
+                            firsthit2 = value;
+                        }
                     }
                 }
             }
