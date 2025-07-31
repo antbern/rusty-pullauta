@@ -162,7 +162,7 @@ fn main() {
 
     if command == "bin2dxf" {
         if args.len() < 2 {
-            info!("USAGE: bin2dxf [input file] [output file]");
+            info!("USAGE: bin2dxf [.dxf.bin input file] [.dxf output file]");
             return;
         }
         pullauta::io::bin2dxf(&fs, &args[0], &args[1]).unwrap();
