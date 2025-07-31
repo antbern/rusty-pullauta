@@ -304,6 +304,10 @@ pub enum Classification {
     DepressionIntermed,
     DepressionIndexIntermed,
 
+    /// Use for formlines (generated in render)
+    Formline,
+    FormlineDepression,
+
     /// Used in dotknoll detections
     Dotknoll,
     Udepression,
@@ -331,6 +335,9 @@ impl Classification {
             Self::DepressionIndex => "depression_index",
             Self::DepressionIntermed => "depression_intermed",
             Self::DepressionIndexIntermed => "depression_index_intermed",
+
+            Self::Formline => "formline",
+            Self::FormlineDepression => "formline_depression",
 
             Self::Dotknoll => "dotknoll",
             Self::Udepression => "udepression",

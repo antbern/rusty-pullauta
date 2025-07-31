@@ -2,6 +2,8 @@ use crate::config::Config;
 use crate::geometry::BinaryDxf;
 use crate::geometry::Classification;
 use crate::geometry::Geometry;
+use crate::geometry::Point2;
+use crate::geometry::Polylines;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -513,22 +515,8 @@ pub fn draw_curves(
         return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
     };
 
-    // only create the file if condition is met
-    let mut fp = if formline == 2.0 && !nodepressions {
-        let output = tmpfolder.join("formlines.dxf");
-        let fp = fs.create(output).expect("Unable to create file");
-        let mut fp = BufWriter::new(fp);
-        write!(
-            &mut fp,
-            "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-            bounds.xmin, bounds.ymin, bounds.xmax, bounds.ymax
-        )
-        .expect("Could not write file");
-
-        Some(fp)
-    } else {
-        None
-    };
+    let should_generate_formlines = formline == 2.0 && !nodepressions;
+    let mut formlines = Polylines::<Point2, Classification>::new();
 
     for (mut line, (layer, _height)) in input_lines.into_iter() {
         // flip and scale the line points
@@ -745,30 +733,22 @@ pub fn draw_curves(
             let mut linedist = 0.0;
             let mut onegapdone = false;
             let mut gap = 0.0;
-            let mut formlinestart = false;
 
             let f_label = if layer.is_depression() && label_depressions {
-                "formline_depression"
+                Classification::FormlineDepression
             } else {
-                "formline"
+                Classification::Formline
             };
+
+            let mut formiline_points = Vec::new();
 
             for i in 1..x.len() {
                 if curvew != 1.5 || formline == 0.0 || help2[i] || smallringtest {
-                    if let (Some(fp), true) = (fp.as_mut(), curvew == 1.5) {
-                        if !formlinestart {
-                            write!(fp, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{f_label}\r\n  0\r\n")
-                                .expect("Could not write file");
-                            formlinestart = true;
-                        }
-                        write!(
-                            fp,
-                            "VERTEX\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                            f_label,
+                    if should_generate_formlines && curvew == 1.5 {
+                        formiline_points.push(Point2::new(
                             x[i] / 600.0 * 254.0 * scalefactor + x0,
-                            -y[i] / 600.0 * 254.0 * scalefactor + y0
-                        )
-                        .expect("Could not write file");
+                            -y[i] / 600.0 * scalefactor * 254.0 + y0,
+                        ));
                     }
 
                     if draw_image {
@@ -868,21 +848,33 @@ pub fn draw_curves(
                             }
                         }
                     }
-                } else if let (Some(fp), true) = (fp.as_mut(), formlinestart) {
-                    fp.write_all(b"SEQEND\r\n  0\r\n")
-                        .expect("Could not write file");
-                    formlinestart = false;
+                } else if !formiline_points.is_empty() {
+                    // line ended, append and start new one
+                    formlines.push(formiline_points, f_label);
+                    formiline_points = Vec::new();
                 }
             }
-            if let (Some(fp), true) = (fp.as_mut(), formlinestart) {
-                fp.write_all(b"SEQEND\r\n  0\r\n")
-                    .expect("Could not write file");
+
+            if !formiline_points.is_empty() {
+                formlines.push(formiline_points, f_label);
             }
         }
     }
-    if let Some(fp) = fp.as_mut() {
-        fp.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
-            .expect("Could not write file");
+
+    if should_generate_formlines {
+        let out_formlines = BinaryDxf::new(bounds, vec![formlines.into()]);
+        out_formlines
+            .to_writer(&mut BufWriter::new(
+                fs.create(tmpfolder.join("formlines.dxf.bin"))?,
+            ))
+            .expect("Could not write formlines.dxf.bin");
+
+        out_formlines
+            .to_dxf(&mut BufWriter::new(
+                fs.create(tmpfolder.join("formlines.dxf.bin.dxf"))?,
+            ))
+            .expect("Could not write formlines.dxf");
     }
+
     Ok(())
 }
