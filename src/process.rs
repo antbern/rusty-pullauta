@@ -118,7 +118,9 @@ pub fn process_tile(
         let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
             crate::ONE_MEGABYTE,
             fs.create(&target_file).expect("Could not create writer"),
-        ));
+        ))
+        .expect("Could not create writer");
+
         read_lines_no_alloc(fs, input_file, |line| {
             let mut parts = line.split(' ');
             let x = parts.next().unwrap().parse::<f64>().unwrap();
@@ -170,7 +172,8 @@ pub fn process_tile(
         let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
             crate::ONE_MEGABYTE,
             fs.create(&target_file).expect("Could not create writer"),
-        ));
+        ))
+        .expect("Could not create writer");
 
         for ptu in reader.points() {
             let pt = ptu.unwrap();
@@ -420,7 +423,8 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
         let mut writer = XyzInternalWriter::new(BufWriter::with_capacity(
             crate::ONE_MEGABYTE,
             fs.create(&tmp_filename).expect("Could not create writer"),
-        ));
+        ))
+        .expect("Could not create writer");
 
         for laz_p in &laz_files {
             let laz = laz_p.as_path().file_name().unwrap().to_str().unwrap();
