@@ -180,7 +180,7 @@ fn main() {
     }
 
     if command == "dxfmerge" {
-        pullauta::merge::dxfmerge(&fs, &config).unwrap();
+        pullauta::merge::bindxfmerge(&fs, &config).unwrap();
         return;
     }
 
@@ -189,7 +189,7 @@ fn main() {
         if !args.is_empty() {
             scale = args[0].parse::<f64>().unwrap();
         }
-        pullauta::merge::dxfmerge(&fs, &config).unwrap();
+        pullauta::merge::bindxfmerge(&fs, &config).unwrap();
         pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
         return;
     }

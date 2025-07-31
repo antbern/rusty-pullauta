@@ -6,7 +6,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
-use crate::geometry::{BinaryDxf, Classification, Geometry, Point3, Polylines};
+use crate::geometry::{BinaryDxf, Classification, Geometry, Point3, Points, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -194,348 +194,129 @@ pub fn pngmerge(
     Ok(())
 }
 
-pub fn dxfmerge(fs: &impl FileSystem, config: &Config) -> Result<(), Box<dyn Error>> {
+pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> {
     let batchoutfolder = &config.batchoutfolder;
 
-    let mut dxf_files: Vec<PathBuf> = Vec::new();
+    // These are the different file suffixes we expect:
+    let suffixes_to_merge = [
+        "contours",
+        // "c2f", // No such files exist anymore
+        // "c2",  // No such files exist anymore
+        "c2g",
+        "basemap",
+        "c3g",
+        "formlines",
+        "dotknolls",
+        "detected",
+    ];
+
+    // a list of files for each suffix
+    let mut dxf_files: Vec<Vec<PathBuf>> = vec![Vec::new(); suffixes_to_merge.len()];
+
     for path in fs.list(batchoutfolder).unwrap() {
-        if let Some(extension) = path.extension() {
-            if extension == "dxf" {
-                dxf_files.push(path);
+        if let Some(filename) = path.file_name() {
+            let filename = filename.to_str().unwrap();
+
+            // check if this file matches any of the suffiexes we expect
+            for (i, suffix) in suffixes_to_merge.iter().enumerate() {
+                if filename.ends_with(&format!("_{suffix}.dxf.bin")) {
+                    dxf_files[i].push(path.clone());
+                }
             }
         }
     }
 
-    if dxf_files.is_empty() {
+    if dxf_files.iter().all(|f| f.is_empty()) {
         info!("No dxf files found in output directory");
         return Ok(());
     }
 
-    let out2_file = fs.create("merged.dxf").expect("Unable to create file");
-    let mut out2 = BufWriter::new(out2_file);
-    let out_file = fs
-        .create("merged_contours.dxf")
-        .expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
+    // For now (originally) we always use the bounds of the first file loaded for all the generated
+    // files. TODO: use the actual new bounds from the loaded files instead.
+    let mut first_file_bounds = None;
 
-    let mut headprinted = false;
-    let mut footer = String::new();
-    let mut headout = String::new();
+    let mut all_geometries = Vec::<Geometry>::new();
+    for (suffix, files) in suffixes_to_merge.iter().zip(dxf_files) {
+        if files.is_empty() {
+            info!("No files found for suffix: {suffix}, skipping...");
+            continue;
+        }
 
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("contours.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POLYLINE") {
-                let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                let head = d[0];
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
+        info!("Merging {} files for suffix: {suffix}", files.len());
 
-                if !headprinted {
-                    headout = String::from(head);
-                    out.write_all(head.as_bytes())
-                        .expect("Could not write to file");
-                    out2.write_all(head.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
+        let output_file = PathBuf::from(format!("merged_{suffix}.dxf.bin"));
+
+        let mut geometries: Vec<Geometry> = Vec::with_capacity(files.len());
+
+        for file in files {
+            let loaded = BinaryDxf::from_reader(&mut BufReader::new(fs.open(&file)?))?;
+
+            // we always use the bounds of the first loaded file
+            if first_file_bounds.is_none() {
+                first_file_bounds = Some(loaded.bounds().clone());
+            }
+
+            let geometry = loaded.take_geometry();
+
+            geometries.extend(geometry.iter().cloned());
+
+            // for the contours, we filter out the intermediate contours for the all_geometries
+            if *suffix == "contours" {
+                for geo in geometry {
+                    let filtered_geo: Geometry = match geo {
+                        Geometry::Points(points) => {
+                            let mut filtered_points = Points::with_capacity(points.len());
+
+                            for (p, c) in points.into_iter() {
+                                if !c.is_intermed() {
+                                    filtered_points.push(p, c);
+                                }
+                            }
+
+                            filtered_points.into()
+                        }
+                        Geometry::Polylines2(polylines) => {
+                            let mut filtered_lines = Polylines::with_capacity(polylines.len());
+                            for (l, c) in polylines.into_iter() {
+                                if !c.is_intermed() {
+                                    filtered_lines.push(l, c);
+                                }
+                            }
+                            filtered_lines.into()
+                        }
+                        Geometry::Polylines3(polylines) => {
+                            let mut filtered_lines = Polylines::with_capacity(polylines.len());
+                            for (l, c) in polylines.into_iter() {
+                                if !c.0.is_intermed() {
+                                    filtered_lines.push(l, c);
+                                }
+                            }
+                            filtered_lines.into()
+                        }
+                    };
+
+                    all_geometries.push(filtered_geo);
                 }
-
-                out.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-
-                let plines: Vec<&str> = body.split("POLYLINE").collect();
-                for pl in plines.iter() {
-                    if !pl.contains("_intermed") {
-                        out2.write_all("POLYLINE".as_bytes())
-                            .expect("Could not write to file");
-                        out2.write_all(pl.as_bytes())
-                            .expect("Could not write to file");
-                    }
-                }
+            } else {
+                all_geometries.extend(geometry);
             }
         }
-    }
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
 
-    headprinted = false;
-
-    let out_file = fs.create("merged_c2f.dxf").expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
-
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("_c2f.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POLYLINE") {
-                let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
-
-                if !headprinted {
-                    out.write_all(headout.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
-                }
-
-                out.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-
-                out2.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out2.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-            }
-        }
-    }
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-
-    headprinted = false;
-
-    let out_file = fs.create("merged_c2.dxf").expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
-
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("_c2g.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POLYLINE") {
-                let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
-
-                if !headprinted {
-                    out.write_all(headout.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
-                }
-
-                out.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-
-                out2.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out2.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-            }
-        }
+        // write output file
+        let output = BinaryDxf::new(
+            first_file_bounds
+                .clone()
+                .expect("this should be set since we load at least one file"),
+            geometries,
+        );
+        output.to_writer(&mut BufWriter::new(fs.create(&output_file)?))?;
     }
 
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-
-    headprinted = false;
-
-    let basemapcontours: f64 = config.basemapcontours;
-
-    if basemapcontours > 0.0 {
-        let out_file = fs
-            .create("merged_basemap.dxf")
-            .expect("Unable to create file");
-        let mut out = BufWriter::new(out_file);
-
-        for dx in dxf_files.iter() {
-            let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-            let dxf_filename = format!("{batchoutfolder}/{dxf}");
-            let input = Path::new(&dxf_filename);
-            if fs.exists(input) && dxf_filename.ends_with("_basemap.dxf") {
-                let data = fs.read_to_string(input).expect("Can not read input file");
-                if data.contains("POLYLINE") {
-                    let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                    let body = d[1];
-                    let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                    let body = d[0];
-                    footer = String::from(d[1]);
-
-                    if !headprinted {
-                        out.write_all(headout.as_bytes())
-                            .expect("Could not write to file");
-                        headprinted = true;
-                    }
-
-                    out.write_all("POLYLINE".as_bytes())
-                        .expect("Could not write to file");
-                    out.write_all(body.as_bytes())
-                        .expect("Could not write to file");
-
-                    out2.write_all("POLYLINE".as_bytes())
-                        .expect("Could not write to file");
-                    out2.write_all(body.as_bytes())
-                        .expect("Could not write to file");
-                }
-            }
-        }
-        write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-
-        headprinted = false;
+    // output all geometries to a single file
+    if let Some(all_bounds) = first_file_bounds {
+        let out_merged = BinaryDxf::new(all_bounds, all_geometries);
+        out_merged.to_writer(&mut BufWriter::new(fs.create("merged.dxf.bin")?))?;
     }
-
-    let out_file = fs.create("merged_c3.dxf").expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
-
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("_c3g.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POLYLINE") {
-                let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
-
-                if !headprinted {
-                    out.write_all(headout.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
-                }
-
-                out.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-
-                out2.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out2.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-            }
-        }
-    }
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-
-    headprinted = false;
-
-    let out_file = fs.create("formlines.dxf").expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
-
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("_formlines.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POLYLINE") {
-                let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
-
-                if !headprinted {
-                    out.write_all(headout.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
-                }
-
-                out.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-
-                out2.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out2.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-            }
-        }
-    }
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-
-    headprinted = false;
-
-    let out_file = fs
-        .create("merged_dotknolls.dxf")
-        .expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
-
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("_dotknolls.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POINT") {
-                let d: Vec<&str> = data.splitn(2, "POINT").collect();
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
-
-                if !headprinted {
-                    out.write_all(headout.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
-                }
-
-                out.write_all("POINT".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-
-                out2.write_all("POINT".as_bytes())
-                    .expect("Could not write to file");
-                out2.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-            }
-        }
-    }
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-
-    headprinted = false;
-
-    let out_file = fs
-        .create("merged_detected.dxf")
-        .expect("Unable to create file");
-    let mut out = BufWriter::new(out_file);
-
-    for dx in dxf_files.iter() {
-        let dxf = dx.as_path().file_name().unwrap().to_str().unwrap();
-        let dxf_filename = format!("{batchoutfolder}/{dxf}");
-        let input = Path::new(&dxf_filename);
-        if fs.exists(input) && dxf_filename.ends_with("_detected.dxf") {
-            let data = fs.read_to_string(input).expect("Can not read input file");
-            if data.contains("POLYLINE") {
-                let d: Vec<&str> = data.splitn(2, "POLYLINE").collect();
-                let body = d[1];
-                let d: Vec<&str> = body.splitn(2, "ENDSEC").collect();
-                let body = d[0];
-                footer = String::from(d[1]);
-
-                if !headprinted {
-                    out.write_all(headout.as_bytes())
-                        .expect("Could not write to file");
-                    headprinted = true;
-                }
-
-                out.write_all("POLYLINE".as_bytes())
-                    .expect("Could not write to file");
-                out.write_all(body.as_bytes())
-                    .expect("Could not write to file");
-            }
-        }
-    }
-    write!(&mut out, "ENDSEC{}", &footer).expect("Could not write to file");
-    write!(&mut out2, "ENDSEC{}", &footer).expect("Could not write to file");
 
     Ok(())
 }
@@ -605,7 +386,7 @@ pub fn smoothjoin(
         .expect("Unable to read out.dxf.bin");
 
     let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in the output
-    let Geometry::Polylines2(input_lines) = input_dxf.take_geometry() else {
+    let Geometry::Polylines2(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("out.dxf.bin does not contain polylines").into());
     };
 
@@ -1117,7 +898,7 @@ pub fn smoothjoin(
         }
     }
 
-    let out2_dxf = BinaryDxf::new(input_bounds, out2_lines.into());
+    let out2_dxf = BinaryDxf::new(input_bounds, vec![out2_lines.into()]);
 
     let output = tmpfolder.join("out2.dxf.bin");
     let fp = fs.create(output).expect("Unable to create file");
