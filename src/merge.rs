@@ -1123,11 +1123,6 @@ pub fn smoothjoin(
     let fp = fs.create(output).expect("Unable to create file");
     out2_dxf.to_writer(&mut BufWriter::new(fp))?;
 
-    // TODO: behind config?
-    let output = tmpfolder.join("out2.dxf");
-    let fp = fs.create(output).expect("Unable to create file");
-    out2_dxf.to_dxf(&mut BufWriter::new(fp))?;
-
     info!("Done");
     Ok(())
 }

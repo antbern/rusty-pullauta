@@ -34,10 +34,6 @@ pub fn polylinebindxfcrop(
     let out = BinaryDxf::new(bounds, output_lines);
     out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
 
-    out.to_dxf(&mut BufWriter::new(
-        fs.create(output.with_extension("dxf"))?,
-    ))?;
-
     Ok(())
 }
 

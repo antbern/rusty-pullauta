@@ -528,13 +528,6 @@ pub fn heightmap2contours(
     dxf.to_writer(&mut BufWriter::new(f))
         .expect("Cannot write binary dxf file");
 
-    // also write the DXF file (TODO: behind config flag)
-    let f = fs
-        .create(tmpfolder.join(dxffile))
-        .expect("Unable to create file");
-    dxf.to_dxf(&mut BufWriter::new(f))
-        .expect("Cannot write binary dxf file");
-
     info!("Done");
 
     Ok(())

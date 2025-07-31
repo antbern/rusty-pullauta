@@ -118,13 +118,6 @@ pub fn dotknolls(
     dxf.to_writer(&mut BufWriter::new(f))
         .expect("could not write dotknolls.dxf.bin");
 
-    // write DXF (TODO: config!)
-    let f = fs
-        .create(tmpfolder.join("dotknolls.dxf"))
-        .expect("Unable to create file");
-    dxf.to_dxf(&mut BufWriter::new(f))
-        .expect("could not write dotknolls.dxf");
-
     info!("Done");
     Ok(())
 }
