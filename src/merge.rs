@@ -405,11 +405,11 @@ pub fn smoothjoin(
     let knollhead_output = tmpfolder.join("knollheads.txt");
     let mut knollhead_fp = fs.create(knollhead_output).expect("Unable to create file");
 
-    // internal type used to index into the hashmaps and vectors. Singe
+    // Internal type used to index into the hashmaps and vectors.
     // Since using f64 coordinates directly has problems with rounding (and do not impl Eq and
     // Hash), we can use an integer representation of the coordinates to index into the HashMaps.
     // By multiplying by 1000, we can keep a precision of 3 decimal places, which is sufficient for
-    // what we need)
+    // what we need.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     struct Key {
         x: i64,
