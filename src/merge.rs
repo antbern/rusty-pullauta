@@ -400,8 +400,7 @@ pub fn smoothjoin(
     let depr_output = tmpfolder.join("depressions.txt");
     let mut depr_fp = fs.create(depr_output).expect("Unable to create file");
 
-    let dotknoll_output = tmpfolder.join("dotknolls.txt");
-    let mut dotknoll_fp = fs.create(dotknoll_output).expect("Unable to create file");
+    let mut dotknolls = Vec::new();
 
     let knollhead_output = tmpfolder.join("knollheads.txt");
     let mut knollhead_fp = fs.create(knollhead_output).expect("Unable to create file");
@@ -686,8 +685,13 @@ pub fn smoothjoin(
                 }
                 x_avg /= (el_x_len - 1) as f64;
                 y_avg /= (el_x_len - 1) as f64;
-                write!(&mut dotknoll_fp, "{depression} {x_avg} {y_avg}\r\n")
-                    .expect("Unable to write to file");
+
+                dotknolls.push(super::knolls::Dotknoll {
+                    x: x_avg,
+                    y: y_avg,
+                    is_knoll: depression == 1,
+                });
+
                 skip = true;
             }
 
@@ -899,6 +903,11 @@ pub fn smoothjoin(
             } // -- if not dotkoll
         }
     }
+
+    crate::util::write_object(
+        &mut fs.create(tmpfolder.join("dotknolls.bin"))?,
+        &super::knolls::Dotknolls { dotknolls },
+    )?;
 
     let out2_dxf = BinaryDxf::new(input_bounds, vec![out2_lines.into()]);
 
