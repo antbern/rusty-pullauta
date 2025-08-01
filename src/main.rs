@@ -156,9 +156,16 @@ fn main() {
             return;
         }
 
-        let input = &args[0];
-        let output = &args[1];
-        pullauta::io::internal2xyz(&fs, input, output).unwrap();
+        pullauta::io::internal2xyz(&fs, &args[0], &args[1]).unwrap();
+        return;
+    }
+
+    if command == "bin2dxf" {
+        if args.len() < 2 {
+            info!("USAGE: bin2dxf [.dxf.bin input file] [.dxf output file]");
+            return;
+        }
+        pullauta::io::bin2dxf(&fs, &args[0], &args[1]).unwrap();
         return;
     }
 
@@ -172,15 +179,18 @@ fn main() {
         return;
     }
 
-    if command == "dxfmerge" || command == "merge" {
-        pullauta::merge::dxfmerge(&fs, &config).unwrap();
-        if command == "merge" {
-            let mut scale = 1.0;
-            if !args.is_empty() {
-                scale = args[0].parse::<f64>().unwrap();
-            }
-            pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
+    if command == "dxfmerge" {
+        pullauta::merge::bindxfmerge(&fs, &config).unwrap();
+        return;
+    }
+
+    if command == "merge" {
+        let mut scale = 1.0;
+        if !args.is_empty() {
+            scale = args[0].parse::<f64>().unwrap();
         }
+        pullauta::merge::bindxfmerge(&fs, &config).unwrap();
+        pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
         return;
     }
 
@@ -223,8 +233,28 @@ fn main() {
         let miny = args[3].parse::<f64>().unwrap();
         let maxx = args[4].parse::<f64>().unwrap();
         let maxy = args[5].parse::<f64>().unwrap();
-        pullauta::crop::polylinedxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
-            .unwrap();
+
+        // helpful message if normal dxf file is specified
+        if dxffilein.extension().is_some_and(|e| e == "dxf")
+            || dxffileout.extension().is_some_and(|e| e == "dxf")
+        {
+            info!(
+                "The polylinedxfcrop command no longer takes raw DXF files as input and output. Please provide paths to `.bin.dxf` files instead."
+            );
+            return;
+        }
+
+        pullauta::crop::polylinebindxfcrop(
+            &fs,
+            dxffilein,
+            dxffileout,
+            config.output_dxf,
+            minx,
+            miny,
+            maxx,
+            maxy,
+        )
+        .unwrap();
         return;
     }
 
@@ -235,7 +265,25 @@ fn main() {
         let miny = args[3].parse::<f64>().unwrap();
         let maxx = args[4].parse::<f64>().unwrap();
         let maxy = args[5].parse::<f64>().unwrap();
-        pullauta::crop::pointdxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy).unwrap();
+        if dxffilein.extension().is_some_and(|e| e == ".dxf")
+            || dxffileout.extension().is_some_and(|e| e == ".dxf")
+        {
+            info!(
+                "The pointdxfcrop command no longer takes raw DXF files as input and output. Please provide paths to `.bin.dxf` files instead."
+            );
+            return;
+        }
+        pullauta::crop::pointbindxfcrop(
+            &fs,
+            dxffilein,
+            dxffileout,
+            config.output_dxf,
+            minx,
+            miny,
+            maxx,
+            maxy,
+        )
+        .unwrap();
         return;
     }
 
@@ -268,8 +316,15 @@ fn main() {
             hmap.to_file(&fs, xyzfileout).unwrap();
         }
 
-        pullauta::contours::heightmap2contours(&fs, &tmpfolder, cinterval, &hmap, &dxffile)
-            .unwrap();
+        pullauta::contours::heightmap2contours(
+            &fs,
+            &tmpfolder,
+            cinterval,
+            &hmap,
+            &dxffile,
+            config.output_dxf,
+        )
+        .unwrap();
         return;
     }
 
