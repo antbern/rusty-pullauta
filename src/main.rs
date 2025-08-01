@@ -233,6 +233,17 @@ fn main() {
         let miny = args[3].parse::<f64>().unwrap();
         let maxx = args[4].parse::<f64>().unwrap();
         let maxy = args[5].parse::<f64>().unwrap();
+
+        // helpful message if normal dxf file is specified
+        if dxffilein.extension().is_some_and(|e| e == "dxf")
+            || dxffileout.extension().is_some_and(|e| e == "dxf")
+        {
+            info!(
+                "The polylinedxfcrop command no longer takes raw DXF files as input and output. Please provide paths to `.bin.dxf` files instead."
+            );
+            return;
+        }
+
         pullauta::crop::polylinebindxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
             .unwrap();
         return;
@@ -245,6 +256,14 @@ fn main() {
         let miny = args[3].parse::<f64>().unwrap();
         let maxx = args[4].parse::<f64>().unwrap();
         let maxy = args[5].parse::<f64>().unwrap();
+        if dxffilein.extension().is_some_and(|e| e == ".dxf")
+            || dxffileout.extension().is_some_and(|e| e == ".dxf")
+        {
+            info!(
+                "The pointdxfcrop command no longer takes raw DXF files as input and output. Please provide paths to `.bin.dxf` files instead."
+            );
+            return;
+        }
         pullauta::crop::pointbindxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
             .unwrap();
         return;
