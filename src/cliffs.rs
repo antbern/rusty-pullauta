@@ -3,10 +3,10 @@ use log::info;
 use rand::prelude::*;
 use std::borrow::Cow;
 use std::error::Error;
-use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 
 use crate::config::Config;
+use crate::geometry::{BinaryDxf, Bounds, Classification, Point2, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -37,8 +37,7 @@ pub fn makecliffs(
     }
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
-    let mut reader = BufReader::new(fs.open(&heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(&heightmap_in)?)?;
 
     // in world coordinates
     let xmax = hmap.maxx();
@@ -95,10 +94,7 @@ pub fn makecliffs(
     let mut rng = rand::rng();
     let randdist = rand::distr::Bernoulli::new(cliff_thin).unwrap();
 
-    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-        crate::ONE_MEGABYTE,
-        fs.open(&xyz_file_in)?,
-    ))?;
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         if cliff_thin == 1.0 || rng.sample(randdist) {
             let (x, y, h) = (r.x, r.y, r.z);
@@ -117,20 +113,8 @@ pub fn makecliffs(
     let w = ((xmax - xmin).floor() / 3.0) as usize;
     let h = ((ymax - ymin).floor() / 3.0) as usize;
 
-    let f2 = fs
-        .create(tmpfolder.join("c2g.dxf"))
-        .expect("Unable to create file");
-    let mut f2 = BufWriter::new(f2);
-
-    write!(&mut f2,"  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n").expect("Cannot write dxf file");
-
-    let f3 = fs
-        .create(tmpfolder.join("c3g.dxf"))
-        .expect("Unable to create file");
-    let mut f3 = BufWriter::new(f3);
-
-    write!(&mut f3, "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n"
-    ).expect("Cannot write dxf file");
+    let mut f2_lines = Polylines::new();
+    let mut f3_lines = Polylines::new();
 
     // temporary vector to reuse memory allocations
     let mut t = Vec::<(f64, f64, f64)>::new();
@@ -239,32 +223,37 @@ pub fn makecliffs(
                                 let p = img.get_pixel(imgx, imgy);
                                 if p[0] == 255 {
                                     img.put_pixel(imgx, imgy, Rgb([0, 0, 0]));
-                                    f2.write_all(
-                                        b"POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff2\r\n  0\r\n",
-                                    )
-                                    .expect("Cannot write dxf file");
-                                    write!(
-                                        &mut f2,
-                                        "VERTEX\r\n  8\r\ncliff2\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nVERTEX\r\n  8\r\ncliff2\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nSEQEND\r\n  0\r\n",
-                                        (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
-                                        (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
-                                        (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
-                                        (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
-                                    ).expect("Cannot write dxf file");
+
+                                    f2_lines.push(
+                                        vec![
+                                            Point2::new(
+                                                (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
+                                                (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
+                                            ),
+                                            Point2::new(
+                                                (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
+                                                (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
+                                            ),
+                                        ],
+                                        Classification::Cliff2,
+                                    );
                                 }
                             }
 
                             if temp > limit2 && temp > (limit2 + (dist - limit2) * 0.85) {
-                                f3.write_all(b"POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff3\r\n  0\r\n")
-                                    .expect("Cannot write dxf file");
-                                write!(
-                                    &mut f3,
-                                    "VERTEX\r\n  8\r\ncliff3\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nVERTEX\r\n  8\r\ncliff3\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nSEQEND\r\n  0\r\n",
-                                    (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
-                                    (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
-                                    (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
-                                    (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
-                                ).expect("Cannot write dxf file");
+                                f3_lines.push(
+                                    vec![
+                                        Point2::new(
+                                            (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
+                                            (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
+                                        ),
+                                        Point2::new(
+                                            (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
+                                            (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
+                                        ),
+                                    ],
+                                    Classification::Cliff3,
+                                );
                             }
                         }
                     }
@@ -273,9 +262,19 @@ pub fn makecliffs(
         }
     }
 
-    f2.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
-        .expect("Cannot write dxf file");
-    drop(f2); // close the file
+    let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f2_lines.into()]);
+
+    // save binary file
+    let mut f2 = fs
+        .create(tmpfolder.join("c2g.dxf.bin"))
+        .expect("Unable to create file");
+    f2_dxf.to_writer(&mut f2).expect("Cannot write c2g.dxf.bin");
+
+    if config.output_dxf {
+        f2_dxf.to_dxf(&mut fs.create(tmpfolder.join("c2g.dxf"))?)?;
+    }
+
+    drop(f2_dxf);
 
     let c2_limit = 2.6 * 2.75;
 
@@ -338,16 +337,19 @@ pub fn makecliffs(
                         let temp = h0 - ht;
                         let dist = ((x0 - xt).powi(2) + (y0 - yt).powi(2)).sqrt();
                         if dist > 0.0 && temp > limit && temp > (limit + (dist - limit) * 0.85) {
-                            f3.write_all(b"POLYLINE\r\n 66\r\n1\r\n  8\r\ncliff4\r\n  0\r\n")
-                                .expect("Cannot write dxf file");
-                            write!(
-                                &mut f3,
-                                "VERTEX\r\n  8\r\ncliff4\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nVERTEX\r\n  8\r\ncliff4\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nSEQEND\r\n  0\r\n",
-                                (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
-                                (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
-                                (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
-                                (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
-                            ).expect("Cannot write dxf file");
+                            f3_lines.push(
+                                vec![
+                                    Point2::new(
+                                        (x0 + xt) / 2.0 + cliff_length * (y0 - yt) / dist,
+                                        (y0 + yt) / 2.0 - cliff_length * (x0 - xt) / dist,
+                                    ),
+                                    Point2::new(
+                                        (x0 + xt) / 2.0 - cliff_length * (y0 - yt) / dist,
+                                        (y0 + yt) / 2.0 + cliff_length * (x0 - xt) / dist,
+                                    ),
+                                ],
+                                Classification::Cliff4,
+                            );
                         }
                     }
                 }
@@ -355,14 +357,22 @@ pub fn makecliffs(
         }
     }
 
-    f3.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
-        .expect("Cannot write dxf file");
+    let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f3_lines.into()]);
+
+    // save binary file
+    let mut f3 = fs
+        .create(tmpfolder.join("c3g.dxf.bin"))
+        .expect("Unable to create file");
+    f3_dxf.to_writer(&mut f3).expect("Cannot write c3g.dxf.bin");
+
+    if config.output_dxf {
+        f3_dxf.to_dxf(&mut fs.create(tmpfolder.join("c3g.dxf"))?)?;
+    }
 
     img.write_to(
-        &mut BufWriter::new(
-            fs.create(tmpfolder.join("c2.png"))
-                .expect("could not save output png"),
-        ),
+        &mut fs
+            .create(tmpfolder.join("c2.png"))
+            .expect("could not save output png"),
         image::ImageFormat::Png,
     )
     .expect("could not save output png");

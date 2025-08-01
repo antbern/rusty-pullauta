@@ -1,6 +1,5 @@
 use std::{
     error::Error,
-    io::BufReader,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -65,10 +64,10 @@ pub fn render(
     let y0 = d[5].trim().parse::<f64>().unwrap();
     // let resvege = d[0].trim().parse::<f64>().unwrap();
 
-    let mut img_reader = image::ImageReader::new(BufReader::new(
+    let mut img_reader = image::ImageReader::new(
         fs.open(tmpfolder.join("vegetation.png"))
             .expect("Opening vegetation image failed"),
-    ));
+    );
     img_reader.set_format(image::ImageFormat::Png);
     img_reader.no_limits();
     let img = img_reader.decode().unwrap();

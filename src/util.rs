@@ -1,10 +1,11 @@
 use std::{
     fmt::Debug,
-    io::{self, BufRead, BufReader},
+    io::{self, BufRead},
     path::Path,
     time::Instant,
 };
 
+use anyhow::Context;
 use log::debug;
 
 use crate::io::fs::FileSystem;
@@ -23,8 +24,7 @@ where
     debug!("Reading lines from {filename:?}");
     let start = Instant::now();
 
-    let file = fs.open(filename)?;
-    let mut reader = BufReader::new(file);
+    let mut reader = fs.open(filename)?;
 
     let mut line_buffer = String::new();
     let mut line_count: u32 = 0;
@@ -127,4 +127,28 @@ impl Drop for Timing {
             self.start.elapsed()
         );
     }
+}
+
+/// Helper to read an object serialized to disk
+pub fn read_object<R: std::io::Read, O: serde::de::DeserializeOwned>(
+    mut reader: R,
+) -> anyhow::Result<O> {
+    let value: bincode::serde::Compat<O> =
+        bincode::decode_from_std_read(&mut reader, bincode::config::standard())
+            .context("deserializing from file")?;
+    Ok(value.0)
+}
+
+/// Helper to write an object to disk
+pub fn write_object<W: std::io::Write, O: serde::Serialize>(
+    mut writer: W,
+    value: &O,
+) -> anyhow::Result<()> {
+    bincode::encode_into_std_write(
+        bincode::serde::Compat(value),
+        &mut writer,
+        bincode::config::standard(),
+    )
+    .context("serializing to file")?;
+    Ok(())
 }

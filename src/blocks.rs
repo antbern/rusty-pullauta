@@ -4,11 +4,7 @@ use imageproc::filter::median_filter;
 use imageproc::rect::Rect;
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
-use std::{
-    error::Error,
-    io::{BufReader, BufWriter},
-    path::Path,
-};
+use std::{error::Error, path::Path};
 
 use crate::io::{bytes::FromToBytes, fs::FileSystem, heightmap::HeightMap, xyz::XyzInternalReader};
 
@@ -16,8 +12,7 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     info!("Identifying blocks...");
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
-    let hmap = HeightMap::from_bytes(&mut reader)?;
+    let hmap = HeightMap::from_bytes(&mut fs.open(heightmap_in)?)?;
 
     let xstartxyz = hmap.xoffset;
     let ystartxyz = hmap.yoffset;
@@ -39,8 +34,7 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     let white = Rgba([255, 255, 255, 255]);
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz.bin");
-    let file = BufReader::with_capacity(crate::ONE_MEGABYTE, fs.open(&xyz_file_in)?);
-    let mut reader = XyzInternalReader::new(file).unwrap();
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?).unwrap();
     while let Some(r) = reader.next().unwrap() {
         let (x, y, h) = (r.x, r.y, r.z);
         let r3 = r.classification;
@@ -74,10 +68,9 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     }
 
     img2.write_to(
-        &mut BufWriter::new(
-            fs.create(tmpfolder.join("blocks2.png"))
-                .expect("error saving png"),
-        ),
+        &mut fs
+            .create(tmpfolder.join("blocks2.png"))
+            .expect("error saving png"),
         image::ImageFormat::Png,
     )
     .expect("error saving png");
@@ -90,10 +83,9 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     img = image::DynamicImage::ImageRgb8(median_filter(&img.to_rgb8(), filter_size, filter_size));
 
     img.write_to(
-        &mut BufWriter::new(
-            fs.create(tmpfolder.join("blocks.png"))
-                .expect("error saving png"),
-        ),
+        &mut fs
+            .create(tmpfolder.join("blocks.png"))
+            .expect("error saving png"),
         image::ImageFormat::Png,
     )
     .expect("error saving png");

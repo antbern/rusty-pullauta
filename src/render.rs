@@ -1,4 +1,9 @@
 use crate::config::Config;
+use crate::geometry::BinaryDxf;
+use crate::geometry::Classification;
+use crate::geometry::Geometry;
+use crate::geometry::Point2;
+use crate::geometry::Polylines;
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -10,8 +15,7 @@ use log::info;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::io::BufRead;
-use std::io::BufReader;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 
 pub fn render(
@@ -31,7 +35,7 @@ pub fn render(
 
     // Draw vegetation ----------
     let tfw_in = tmpfolder.join("vegetation.pgw");
-    let mut lines = BufReader::new(fs.open(tfw_in).expect("PGW file does not exist")).lines();
+    let mut lines = fs.open(tfw_in).expect("PGW file does not exist").lines();
     let x0 = lines
         .nth(4)
         .expect("no 4 line")
@@ -45,18 +49,18 @@ pub fn render(
         .parse::<f64>()
         .unwrap();
 
-    let mut img_reader = image::ImageReader::new(BufReader::new(
+    let mut img_reader = image::ImageReader::new(
         fs.open(tmpfolder.join("vegetation.png"))
             .expect("Opening vegetation image failed"),
-    ));
+    );
     img_reader.set_format(image::ImageFormat::Png);
     img_reader.no_limits();
     let img = img_reader.decode().unwrap();
 
-    let mut imgug_reader = image::ImageReader::new(BufReader::new(
+    let mut imgug_reader = image::ImageReader::new(
         fs.open(tmpfolder.join("undergrowth.png"))
             .expect("Opening undergrowth image failed"),
-    ));
+    );
     imgug_reader.set_format(image::ImageFormat::Png);
     imgug_reader.no_limits();
     let imgug = imgug_reader.decode().unwrap();
@@ -89,9 +93,8 @@ pub fn render(
 
     let low_file = tmpfolder.join("low.png");
     if fs.exists(&low_file) {
-        let mut low_reader = image::ImageReader::new(BufReader::new(
-            fs.open(low_file).expect("Opening low image failed"),
-        ));
+        let mut low_reader =
+            image::ImageReader::new(fs.open(low_file).expect("Opening low image failed"));
         low_reader.set_format(image::ImageFormat::Png);
         low_reader.no_limits();
         let low = low_reader.decode().unwrap();
@@ -128,27 +131,20 @@ pub fn render(
     draw_curves(fs, config, &mut img, tmpfolder, nodepressions, true).unwrap();
 
     // dotknolls----------
-    let input = tmpfolder.join("dotknolls.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data = data.split("POINT");
+    let input = tmpfolder.join("dotknolls.dxf.bin");
+    let data = BinaryDxf::from_reader(&mut fs.open(input)?)?;
+    let Geometry::Points(points) = data.take_geometry().swap_remove(0) else {
+        return Err(anyhow::anyhow!("dotknolls.dxf.bin should contain points").into());
+    };
 
-    for rec in data.skip(1) {
-        let mut x: f64 = 0.0;
-        let mut y: f64 = 0.0;
-        let val = rec.split('\n').collect::<Vec<&str>>();
-
-        let layer = val[2].trim();
-        if layer != "dotknoll" {
+    for (point, layer) in points.iter() {
+        if *layer != Classification::Dotknoll {
             continue;
         }
-        for (i, v) in val.iter().enumerate() {
-            let vt = v.trim_end();
-            if vt == " 10" {
-                x = (val[i + 1].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor;
-            } else if vt == " 20" {
-                y = (y0 - val[i + 1].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor;
-            }
-        }
+
+        // convert point to image coordinates
+        let x = (point.x - x0) * 600.0 / 254.0 / scalefactor;
+        let y = (y0 - point.y) * 600.0 / 254.0 / scalefactor;
 
         let color = Rgba([166, 85, 43, 255]);
         draw_filled_circle_mut(&mut img, (x as i32, y as i32), 7, color)
@@ -156,9 +152,8 @@ pub fn render(
     // blocks -------------
     let blocks_file = tmpfolder.join("blocks.png");
     if fs.exists(&blocks_file) {
-        let mut blockpurple_reader = image::ImageReader::new(BufReader::new(
-            fs.open(blocks_file).expect("Opening blocks image failed"),
-        ));
+        let mut blockpurple_reader =
+            image::ImageReader::new(fs.open(blocks_file).expect("Opening blocks image failed"));
         blockpurple_reader.set_format(image::ImageFormat::Png);
         blockpurple_reader.no_limits();
         let blockpurple = blockpurple_reader.decode().unwrap();
@@ -191,10 +186,10 @@ pub fn render(
     // blueblack -------------
     let blueblack_file = tmpfolder.join("blueblack.png");
     if fs.exists(&blueblack_file) {
-        let mut imgbb_reader = image::ImageReader::new(BufReader::new(
+        let mut imgbb_reader = image::ImageReader::new(
             fs.open(blueblack_file)
                 .expect("Opening blueblack image failed"),
-        ));
+        );
         imgbb_reader.set_format(image::ImageFormat::Png);
         imgbb_reader.no_limits();
         let imgbb = imgbb_reader.decode().unwrap();
@@ -214,15 +209,16 @@ pub fn render(
         image::imageops::overlay(&mut img, &imgbb_thumb, 0, 0);
     }
 
-    draw_cliffs(fs, config, tmpfolder, "c2g.dxf", &mut img, x0, y0).expect("draw cliffs c2g.dxf");
-    draw_cliffs(fs, config, tmpfolder, "c3g.dxf", &mut img, x0, y0).expect("draw cliffs c3g.dxf");
+    draw_cliffs(fs, config, tmpfolder, "c2g.dxf.bin", &mut img, x0, y0)
+        .expect("draw cliffs c2g.dxf.bin");
+    draw_cliffs(fs, config, tmpfolder, "c3g.dxf.bin", &mut img, x0, y0)
+        .expect("draw cliffs c3g.dxf.bin");
 
     // high -------------
     let high_file = tmpfolder.join("high.png");
     if fs.exists(&high_file) {
-        let mut high_reader = image::ImageReader::new(BufReader::new(
-            fs.open(high_file).expect("Opening high image failed"),
-        ));
+        let mut high_reader =
+            image::ImageReader::new(fs.open(high_file).expect("Opening high image failed"));
         high_reader.set_format(image::ImageFormat::Png);
         high_reader.no_limits();
         let high = high_reader.decode().unwrap();
@@ -242,22 +238,20 @@ pub fn render(
     };
 
     img.write_to(
-        &mut BufWriter::new(
-            fs.create(format!("{filename}.png"))
-                .expect("could not save output png"),
-        ),
+        &mut fs
+            .create(format!("{filename}.png"))
+            .expect("could not save output png"),
         image::ImageFormat::Png,
     )
     .expect("could not write image");
 
     let file_in = tmpfolder.join("vegetation.pgw");
-    let pgw_file_out = fs
+    let mut pgw_file_out = fs
         .create(format!("{filename}.pgw"))
         .expect("Unable to create file");
-    let mut pgw_file_out = BufWriter::new(pgw_file_out);
 
     if let Ok(lines) = fs.open(file_in) {
-        for (i, line) in BufReader::new(lines).lines().enumerate() {
+        for (i, line) in lines.lines().enumerate() {
             let ip = line.unwrap_or(String::new());
             let x: f64 = ip.parse::<f64>().unwrap();
             if i == 0 || i == 3 {
@@ -284,91 +278,62 @@ fn draw_cliffs(
     let scalefactor = config.scalefactor;
 
     let input = tmpfolder.join(file);
-    let data = fs.read_to_string(input).expect("Can not read input file");
+    let dxf = BinaryDxf::from_reader(&mut fs.open(input)?)?;
 
-    // allocate the vectors here to reuse them across iterations
-    let mut x = Vec::<f64>::new();
-    let mut y = Vec::<f64>::new();
-    let mut r = Vec::<&str>::new();
-    let mut val = Vec::<&str>::new();
-    let mut val2 = Vec::<&str>::new();
-    for rec in data.split("POLYLINE").skip(1) {
-        x.clear();
-        y.clear();
+    let Geometry::Polylines2(lines) = dxf.take_geometry().swap_remove(0) else {
+        return Err(anyhow::anyhow!("cliff data should contain polylines").into());
+    };
 
-        r.clear();
-        r.extend(rec.split("VERTEX"));
-
-        val.clear();
-        val.extend(r[1].split('\n'));
-
-        let layer = val[2].trim();
-
-        let mut xline = 0;
-        let mut yline = 0;
-        for (i, v) in val.iter().enumerate() {
-            let vt = v.trim_end();
-            if vt == " 10" {
-                xline = i + 1;
-            } else if vt == " 20" {
-                yline = i + 1;
-            }
-        }
-
-        // pre-reserve memory for all x and y values to fit without intermediate allocations
-        x.reserve(r.len());
-        y.reserve(r.len());
-        for v in r.iter().skip(1) {
-            val2.clear();
-            val2.extend(v.trim_end().split('\n'));
-
-            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
-            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
-        }
-
+    for (mut line, class) in lines.into_iter() {
         // based on the layer we select the cliffcolor
         let cliffcolor = if config.cliffdebug {
-            match layer {
-                "cliff2" => Rgba([100, 0, 100, 255]),
-                "cliff3" => Rgba([0, 100, 100, 255]),
-                "cliff4" => Rgba([100, 100, 0, 255]),
+            match class {
+                Classification::Cliff2 => Rgba([100, 0, 100, 255]),
+                Classification::Cliff3 => Rgba([0, 100, 100, 255]),
+                Classification::Cliff4 => Rgba([100, 100, 0, 255]),
                 _ => Rgba([0, 0, 0, 255]), // black
             }
         } else {
             Rgba([0, 0, 0, 255]) // black
         };
 
-        if x.first() != x.last() || y.first() != y.last() {
-            let last_idx = x.len() - 1;
-            let dist = ((x[0] - x[last_idx]).powi(2) + (y[0] - y[last_idx]).powi(2)).sqrt();
+        // scale and flip all points into pixel-space
+        for p in line.iter_mut() {
+            p.x = (p.x - x0) * 600.0 / 254.0 / scalefactor;
+            p.y = (y0 - p.y) * 600.0 / 254.0 / scalefactor;
+        }
+
+        if line.first() != line.last() {
+            // trick to borrow both first and last as mutable at the same time. If not possible (eg
+            // len == 0, then we should skip this line anyways)
+            let [first, .., last] = &mut line[..] else {
+                continue;
+            };
+
+            let dx = first.x - last.x;
+            let dy = first.y - last.y;
+            let dist = (dx.powi(2) + dy.powi(2)).sqrt();
             if dist > 0.0 {
-                let dx = x[0] - x[last_idx];
-                let dy = y[0] - y[last_idx];
-                x[0] += dx / dist * 1.5;
-                y[0] += dy / dist * 1.5;
-                x[last_idx] -= dx / dist * 1.5;
-                y[last_idx] -= dy / dist * 1.5;
-                draw_filled_circle_mut(img, (x[0] as i32, y[0] as i32), 3, cliffcolor);
-                draw_filled_circle_mut(
-                    img,
-                    (x[last_idx] as i32, y[last_idx] as i32),
-                    3,
-                    cliffcolor,
-                );
+                first.x += dx / dist * 1.5;
+                first.y += dy / dist * 1.5;
+                last.x -= dx / dist * 1.5;
+                last.y -= dy / dist * 1.5;
+                draw_filled_circle_mut(img, (first.x as i32, first.y as i32), 3, cliffcolor);
+                draw_filled_circle_mut(img, (last.x as i32, last.y as i32), 3, cliffcolor);
             }
         }
-        for i in 1..x.len() {
+        for i in 1..line.len() {
             for n in 0..6 {
                 for m in 0..6 {
                     draw_line_segment_mut(
                         img,
                         (
-                            (x[i - 1] + (n as f64) - 3.0).floor() as f32,
-                            (y[i - 1] + (m as f64) - 3.0).floor() as f32,
+                            (line[i - 1].x + (n as f64) - 3.0).floor() as f32,
+                            (line[i - 1].y + (m as f64) - 3.0).floor() as f32,
                         ),
                         (
-                            (x[i] + (n as f64) - 3.0).floor() as f32,
-                            (y[i] + (m as f64) - 3.0).floor() as f32,
+                            (line[i].x + (n as f64) - 3.0).floor() as f32,
+                            (line[i].y + (m as f64) - 3.0).floor() as f32,
                         ),
                         cliffcolor,
                     )
@@ -406,7 +371,7 @@ pub fn draw_curves(
     let mut xstart: f64 = 0.0;
     let mut ystart: f64 = 0.0;
     let tfw_in = tmpfolder.join("vegetation.pgw");
-    let mut lines = BufReader::new(fs.open(tfw_in).expect("PGW file does not exist")).lines();
+    let mut lines = fs.open(tfw_in).expect("PGW file does not exist").lines();
     let x0 = lines
         .nth(4)
         .expect("no 4 line")
@@ -421,7 +386,7 @@ pub fn draw_curves(
         .unwrap();
 
     let heightmap_in = tmpfolder.join("xyz2.hmap");
-    let mut reader = BufReader::new(fs.open(heightmap_in)?);
+    let mut reader = fs.open(heightmap_in)?;
     let hmap = HeightMap::from_bytes(&mut reader)?;
     let xyz = &hmap.grid;
 
@@ -533,87 +498,48 @@ pub fn draw_curves(
         }
     }
 
-    let input = &tmpfolder.join("out2.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let mut data = data.split("POLYLINE").peekable();
+    // read the binary file
 
-    // only create the file if condition is met
-    let mut fp = if formline == 2.0 && !nodepressions {
-        let output = tmpfolder.join("formlines.dxf");
-        let fp = fs.create(output).expect("Unable to create file");
-        let mut fp = BufWriter::new(fp);
-        fp.write_all(
-            data.peek()
-                .expect("should have at least one element")
-                .as_bytes(),
-        )
-        .expect("Could not write file");
-
-        Some(fp)
-    } else {
-        None
+    let input_dxf = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("out2.dxf.bin"))?)
+        .expect("Unable to read out2.dxf.bin");
+    let bounds = input_dxf.bounds().clone();
+    let Geometry::Polylines3(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
+        return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
     };
 
-    // keep the x & y vectors outside the loop to reuse their memory
-    let mut x = Vec::<f64>::new();
-    let mut y = Vec::<f64>::new();
-    let mut r = Vec::<&str>::new();
-    let mut val = Vec::<&str>::new();
-    let mut val2 = Vec::<&str>::new();
-    for rec in data.skip(1) {
-        x.clear();
-        y.clear();
+    let should_generate_formlines = formline == 2.0 && !nodepressions;
+    let mut formlines = Polylines::<Point2, Classification>::new();
 
-        let mut xline = 0;
-        let mut yline = 0;
-
-        // reuse r across iterations
-        r.clear();
-        r.extend(rec.split("VERTEX"));
-
-        // reuse val across iterations
-        val.clear();
-        val.extend(r[1].split('\n'));
-
-        let layer = val[2].trim();
-        for (i, v) in val.iter().enumerate() {
-            let vt = v.trim_end();
-            if vt == " 10" {
-                xline = i + 1;
-            } else if vt == " 20" {
-                yline = i + 1;
-            }
-        }
-        // pre-reserve memory for all x and y values to fit without intermediate allocations
-        x.reserve(r.len());
-        y.reserve(r.len());
-
-        for v in r.iter().skip(1) {
-            // reuse the vector to split the values between iterations
-            val2.clear();
-            val2.extend(v.trim_end().split('\n'));
-
-            x.push((val2[xline].trim().parse::<f64>().unwrap() - x0) * 600.0 / 254.0 / scalefactor);
-            y.push((y0 - val2[yline].trim().parse::<f64>().unwrap()) * 600.0 / 254.0 / scalefactor);
-        }
-        let mut color = Rgba([200, 0, 200, 255]); // purple
-        if layer.contains("contour") {
-            color = Rgba([166, 85, 43, 255]) // brown
+    for (mut line, (layer, _height)) in input_lines.into_iter() {
+        // flip and scale the line points
+        for p in line.iter_mut() {
+            p.x = (p.x - x0) * 600.0 / 254.0 / scalefactor;
+            p.y = (y0 - p.y) * 600.0 / 254.0 / scalefactor;
         }
 
-        if !nodepressions || layer.contains("contour") {
+        // TEMP: split x and y values
+        let x = line.iter().map(|p| p.x).collect::<Vec<_>>();
+        let y = line.iter().map(|p| p.y).collect::<Vec<_>>();
+
+        let color = if layer.is_contour() {
+            Rgba([166, 85, 43, 255]) // brown
+        } else {
+            Rgba([200, 0, 200, 255]) // purple
+        };
+
+        if !nodepressions || layer.is_contour() {
             let mut curvew = 2.0;
-            if layer.contains("index") {
+            if layer.is_index() {
                 curvew = 3.0;
             }
             if formline > 0.0 {
                 if formline == 1.0 {
                     curvew = 2.5
                 }
-                if layer.contains("intermed") {
+                if layer.is_intermed() {
                     curvew = 1.5
                 }
-                if layer.contains("index") {
+                if layer.is_index() {
                     curvew = 3.5
                 }
             }
@@ -799,30 +725,22 @@ pub fn draw_curves(
             let mut linedist = 0.0;
             let mut onegapdone = false;
             let mut gap = 0.0;
-            let mut formlinestart = false;
 
-            let f_label = if layer.contains("depression") && label_depressions {
-                "formline_depression"
+            let f_label = if layer.is_depression() && label_depressions {
+                Classification::FormlineDepression
             } else {
-                "formline"
+                Classification::Formline
             };
+
+            let mut formiline_points = Vec::new();
 
             for i in 1..x.len() {
                 if curvew != 1.5 || formline == 0.0 || help2[i] || smallringtest {
-                    if let (Some(fp), true) = (fp.as_mut(), curvew == 1.5) {
-                        if !formlinestart {
-                            write!(fp, "POLYLINE\r\n 66\r\n1\r\n  8\r\n{f_label}\r\n  0\r\n")
-                                .expect("Could not write file");
-                            formlinestart = true;
-                        }
-                        write!(
-                            fp,
-                            "VERTEX\r\n  8\r\n{}\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                            f_label,
+                    if should_generate_formlines && curvew == 1.5 {
+                        formiline_points.push(Point2::new(
                             x[i] / 600.0 * 254.0 * scalefactor + x0,
-                            -y[i] / 600.0 * 254.0 * scalefactor + y0
-                        )
-                        .expect("Could not write file");
+                            -y[i] / 600.0 * scalefactor * 254.0 + y0,
+                        ));
                     }
 
                     if draw_image {
@@ -922,21 +840,29 @@ pub fn draw_curves(
                             }
                         }
                     }
-                } else if let (Some(fp), true) = (fp.as_mut(), formlinestart) {
-                    fp.write_all(b"SEQEND\r\n  0\r\n")
-                        .expect("Could not write file");
-                    formlinestart = false;
+                } else if !formiline_points.is_empty() {
+                    // line ended, append and start new one
+                    formlines.push(formiline_points, f_label);
+                    formiline_points = Vec::new();
                 }
             }
-            if let (Some(fp), true) = (fp.as_mut(), formlinestart) {
-                fp.write_all(b"SEQEND\r\n  0\r\n")
-                    .expect("Could not write file");
+
+            if !formiline_points.is_empty() {
+                formlines.push(formiline_points, f_label);
             }
         }
     }
-    if let Some(fp) = fp.as_mut() {
-        fp.write_all(b"ENDSEC\r\n  0\r\nEOF\r\n")
-            .expect("Could not write file");
+
+    if should_generate_formlines {
+        let out_formlines = BinaryDxf::new(bounds, vec![formlines.into()]);
+        out_formlines
+            .to_writer(&mut fs.create(tmpfolder.join("formlines.dxf.bin"))?)
+            .expect("Could not write formlines.dxf.bin");
+
+        if config.output_dxf {
+            out_formlines.to_dxf(&mut fs.create(tmpfolder.join("formlines.dxf"))?)?;
+        }
     }
+
     Ok(())
 }
