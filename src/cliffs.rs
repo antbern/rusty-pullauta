@@ -277,6 +277,10 @@ pub fn makecliffs(
         .to_writer(&mut BufWriter::new(f2))
         .expect("Cannot write c2g.dxf.bin");
 
+    if config.output_dxf {
+        f2_dxf.to_dxf(&mut BufWriter::new(fs.create(tmpfolder.join("c2g.dxf"))?))?;
+    }
+
     drop(f2_dxf);
 
     let c2_limit = 2.6 * 2.75;
@@ -369,6 +373,10 @@ pub fn makecliffs(
     f3_dxf
         .to_writer(&mut BufWriter::new(f3))
         .expect("Cannot write c3g.dxf.bin");
+
+    if config.output_dxf {
+        f3_dxf.to_dxf(&mut BufWriter::new(fs.create(tmpfolder.join("c3g.dxf"))?))?;
+    }
 
     img.write_to(
         &mut BufWriter::new(

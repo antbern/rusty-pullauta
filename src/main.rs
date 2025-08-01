@@ -244,8 +244,17 @@ fn main() {
             return;
         }
 
-        pullauta::crop::polylinebindxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
-            .unwrap();
+        pullauta::crop::polylinebindxfcrop(
+            &fs,
+            dxffilein,
+            dxffileout,
+            config.output_dxf,
+            minx,
+            miny,
+            maxx,
+            maxy,
+        )
+        .unwrap();
         return;
     }
 
@@ -264,8 +273,17 @@ fn main() {
             );
             return;
         }
-        pullauta::crop::pointbindxfcrop(&fs, dxffilein, dxffileout, minx, miny, maxx, maxy)
-            .unwrap();
+        pullauta::crop::pointbindxfcrop(
+            &fs,
+            dxffilein,
+            dxffileout,
+            config.output_dxf,
+            minx,
+            miny,
+            maxx,
+            maxy,
+        )
+        .unwrap();
         return;
     }
 
@@ -298,8 +316,15 @@ fn main() {
             hmap.to_file(&fs, xyzfileout).unwrap();
         }
 
-        pullauta::contours::heightmap2contours(&fs, &tmpfolder, cinterval, &hmap, &dxffile)
-            .unwrap();
+        pullauta::contours::heightmap2contours(
+            &fs,
+            &tmpfolder,
+            cinterval,
+            &hmap,
+            &dxffile,
+            config.output_dxf,
+        )
+        .unwrap();
         return;
     }
 

@@ -310,12 +310,21 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
             geometries,
         );
         output.to_writer(&mut BufWriter::new(fs.create(&output_file)?))?;
+
+        if config.output_dxf {
+            let output_file = PathBuf::from(format!("merged_{suffix}.dxf"));
+            output.to_dxf(&mut BufWriter::new(fs.create(&output_file)?))?;
+        }
     }
 
     // output all geometries to a single file
     if let Some(all_bounds) = first_file_bounds {
         let out_merged = BinaryDxf::new(all_bounds, all_geometries);
         out_merged.to_writer(&mut BufWriter::new(fs.create("merged.dxf.bin")?))?;
+
+        if config.output_dxf {
+            out_merged.to_dxf(&mut BufWriter::new(fs.create("merged.dxf")?))?;
+        }
     }
 
     Ok(())
@@ -900,9 +909,14 @@ pub fn smoothjoin(
 
     let out2_dxf = BinaryDxf::new(input_bounds, vec![out2_lines.into()]);
 
-    let output = tmpfolder.join("out2.dxf.bin");
-    let fp = fs.create(output).expect("Unable to create file");
+    let fp = fs
+        .create(tmpfolder.join("out2.dxf.bin"))
+        .expect("Unable to create file");
     out2_dxf.to_writer(&mut BufWriter::new(fp))?;
+
+    if config.output_dxf {
+        out2_dxf.to_dxf(&mut BufWriter::new(fs.create(tmpfolder.join("out2.dxf"))?))?;
+    }
 
     info!("Done");
     Ok(())

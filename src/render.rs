@@ -868,6 +868,12 @@ pub fn draw_curves(
                 fs.create(tmpfolder.join("formlines.dxf.bin"))?,
             ))
             .expect("Could not write formlines.dxf.bin");
+
+        if config.output_dxf {
+            out_formlines.to_dxf(&mut BufWriter::new(
+                fs.create(tmpfolder.join("formlines.dxf"))?,
+            ))?;
+        }
     }
 
     Ok(())

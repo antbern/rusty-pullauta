@@ -118,6 +118,12 @@ pub fn dotknolls(
     dxf.to_writer(&mut BufWriter::new(f))
         .expect("could not write dotknolls.dxf.bin");
 
+    if config.output_dxf {
+        dxf.to_writer(&mut BufWriter::new(
+            fs.create(tmpfolder.join("dotknolls.dxf"))?,
+        ))?;
+    }
+
     info!("Done");
     Ok(())
 }
@@ -789,6 +795,12 @@ pub fn knolldetector(
     detected_dxf.to_writer(&mut BufWriter::new(
         fs.create(tmpfolder.join("detected.dxf.bin"))?,
     ))?;
+
+    if config.output_dxf {
+        detected_dxf.to_writer(&mut BufWriter::new(
+            fs.create(tmpfolder.join("detected.dxf"))?,
+        ))?;
+    }
 
     // write pins to file
     let file_pins = fs

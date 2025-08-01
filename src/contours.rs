@@ -234,6 +234,7 @@ pub fn heightmap2contours(
     cinterval: f64,
     heightmap: &HeightMap,
     dxffile: &str,
+    output_dxf: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut avg_alt = heightmap.grid.clone();
     let w = heightmap.grid.width() - 1;
@@ -527,6 +528,12 @@ pub fn heightmap2contours(
         .expect("Unable to create file");
     dxf.to_writer(&mut BufWriter::new(f))
         .expect("Cannot write binary dxf file");
+
+    if output_dxf {
+        dxf.to_dxf(&mut BufWriter::new(
+            fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?,
+        ))?;
+    }
 
     info!("Done");
 

@@ -83,6 +83,8 @@ Similar as the XYZ files mentioned above, Karttapullautin previously used regula
 ./pullauta bin2dxf temp/c2g.dxf.bin temp/c2g.dxf
 ```
 
+There is also a configuration option `output_dxf` which when set to `1` will output regular `.dxf` files next to the binary files at the expense of higher disk usage and performance.
+
 ### Fine tuning the output
 
 `pullauta` creates a `pullauta.ini` file if it doesn't already exists. Your settings are there. For the second run you can change settings as you wish. Experiment with small file to find best settings for your taste/terrain/lidar data.

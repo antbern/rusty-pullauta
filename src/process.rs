@@ -223,6 +223,7 @@ pub fn process_tile(
             scalefactor * 0.3,
             &xyz_03,
             "contours03.dxf.bin", // dxf curves generated from the heightmap
+            config.output_dxf,
         )
         .expect("contour generation failed");
     }
@@ -250,6 +251,7 @@ pub fn process_tile(
                 basemapcontours,
                 &xyz2,
                 "basemap.dxf.bin", // generate dxf contours
+                config.output_dxf,
             )
             .expect("contour generation failed");
         }
@@ -274,6 +276,7 @@ pub fn process_tile(
                 halfinterval,
                 &xyz_knolls,
                 "out.dxf.bin", // generates dxf curves
+                config.output_dxf,
             )
             .unwrap();
         } else {
@@ -285,6 +288,7 @@ pub fn process_tile(
                 halfinterval,
                 &hmap,
                 "out.dxf.bin", // generate dxf curves
+                config.output_dxf,
             )
             .unwrap();
         }
@@ -820,6 +824,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                     fs,
                     &out2_path,
                     Path::new(&format!("{batchoutfolder}/{laz}_contours.dxf.bin")),
+                    conf.output_dxf,
                     minx,
                     miny,
                     maxx,
@@ -835,6 +840,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                         fs,
                         &dxf_path,
                         Path::new(&format!("{batchoutfolder}/{laz}_{dxf_file}.dxf.bin")),
+                        conf.output_dxf,
                         minx,
                         miny,
                         maxx,
@@ -849,6 +855,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                     fs,
                     &dotknolls_file,
                     Path::new(&format!("{batchoutfolder}/{laz}_dotknolls.dxf.bin")),
+                    conf.output_dxf,
                     minx,
                     miny,
                     maxx,
@@ -864,6 +871,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 fs,
                 &basemap_file,
                 Path::new(&format!("{batchoutfolder}/{laz}_basemap.dxf.bin")),
+                conf.output_dxf,
                 minx,
                 miny,
                 maxx,

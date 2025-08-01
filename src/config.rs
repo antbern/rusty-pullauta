@@ -9,6 +9,9 @@ pub struct Config {
 
     pub experimental_use_in_memory_fs: bool,
 
+    /// Whether to output the result as DXF.
+    pub output_dxf: bool,
+
     // only one can be set at a time
     pub vegeonly: bool,
     pub cliffsonly: bool,
@@ -151,6 +154,8 @@ impl Config {
                 .and_then(|s| s.parse::<T>().ok())
                 .unwrap_or(default)
         }
+
+        let output_dxf: bool = gs.get("output_dxf").unwrap_or("0") == "1";
 
         let pnorthlinesangle: f64 = parse_typed(gs, "northlinesangle", 0.0);
         let pnorthlineswidth: usize = parse_typed(gs, "northlineswidth", 0);
@@ -342,6 +347,7 @@ impl Config {
         Ok(Self {
             batch,
             processes,
+            output_dxf,
             experimental_use_in_memory_fs,
             vegeonly,
             cliffsonly,

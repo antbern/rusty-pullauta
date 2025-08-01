@@ -5,10 +5,12 @@ use crate::geometry::{BinaryDxf, Geometry, Points, Polylines};
 use crate::io::fs::FileSystem;
 
 /// Crop the lines that fall outside the bounds by cutting existing lines.
+#[allow(clippy::too_many_arguments)]
 pub fn polylinebindxfcrop(
     fs: &impl FileSystem,
     input: &Path,
     output: &Path,
+    output_dxf: bool,
     minx: f64,
     miny: f64,
     maxx: f64,
@@ -33,6 +35,11 @@ pub fn polylinebindxfcrop(
     // write the output (TODO: should we populate the new bounds here or keep the old?)
     let out = BinaryDxf::new(bounds, vec![output_lines]);
     out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
+
+    if output_dxf {
+        // remove the .bin extension for the DXF output
+        out.to_dxf(&mut BufWriter::new(fs.create(output.with_extension(""))?))?;
+    }
 
     Ok(())
 }
@@ -89,10 +96,12 @@ fn crop_lines<P: Clone, C: Copy>(
 
 /// Removes points that fall outside the provided bounds and writes the remaining points to the
 /// output file.
+#[allow(clippy::too_many_arguments)]
 pub fn pointbindxfcrop(
     fs: &impl FileSystem,
     input: &Path,
     output: &Path,
+    output_dxf: bool,
     minx: f64,
     miny: f64,
     maxx: f64,
@@ -118,6 +127,11 @@ pub fn pointbindxfcrop(
     // write the output (TODO: should we populate the new bounds here or keep the old?)
     let out = BinaryDxf::new(bounds, vec![output_points.into()]);
     out.to_writer(&mut BufWriter::new(fs.create(output)?))?;
+
+    if output_dxf {
+        // remove the .bin extension for the DXF output
+        out.to_dxf(&mut BufWriter::new(fs.create(output.with_extension(""))?))?;
+    }
 
     Ok(())
 }
