@@ -16,6 +16,7 @@ lazlist*.txt
 temp*.xyz
 ziplist*.txt
 *.dxf
+*.dxf.bin
 *.jpg
 *.jgw
 *.png

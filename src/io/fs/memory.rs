@@ -2,7 +2,7 @@ use super::FileSystem;
 use rustc_hash::FxHashMap as HashMap;
 
 use core::str;
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, BufRead, Seek, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -47,7 +47,7 @@ impl MemoryFileSystem {
         from_internal: impl AsRef<Path>,
         to_external: impl AsRef<Path>,
     ) -> io::Result<()> {
-        let mut reader = io::BufReader::new(self.open(from_internal)?);
+        let mut reader = self.open(from_internal)?;
         let mut writer = io::BufWriter::new(std::fs::File::create(to_external)?);
         std::io::copy(&mut reader, &mut writer)?;
         Ok(())
@@ -268,7 +268,10 @@ impl FileSystem for MemoryFileSystem {
         dir.subdirs.contains_key(&name) || dir.files.contains_key(&name)
     }
 
-    fn open(&self, path: impl AsRef<Path>) -> Result<impl Read + Seek + Send + 'static, io::Error> {
+    fn open(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<impl BufRead + Seek + Send + 'static, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
         let path = path.as_ref();
 
@@ -445,7 +448,7 @@ impl FileSystem for MemoryFileSystem {
 #[cfg(test)]
 mod test {
 
-    use io::BufReader;
+    use std::io::Read;
 
     use super::*;
 
@@ -586,7 +589,7 @@ mod test {
             .write_all(content.as_bytes())
             .unwrap();
 
-        let mut read = BufReader::new(fs.open(path).unwrap());
+        let mut read = fs.open(path).unwrap();
         let mut buff = Vec::new();
         assert_eq!(read.read_to_end(&mut buff).unwrap(), content.len());
 
