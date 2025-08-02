@@ -5,6 +5,7 @@ use std::{
     time::Instant,
 };
 
+use anyhow::Context;
 use log::debug;
 
 use crate::io::fs::FileSystem;
@@ -127,4 +128,28 @@ impl Drop for Timing {
             self.start.elapsed()
         );
     }
+}
+
+/// Helper to read an object serialized to disk
+pub fn read_object<R: std::io::Read, O: serde::de::DeserializeOwned>(
+    mut reader: R,
+) -> anyhow::Result<O> {
+    let value: bincode::serde::Compat<O> =
+        bincode::decode_from_std_read(&mut reader, bincode::config::standard())
+            .context("deserializing from file")?;
+    Ok(value.0)
+}
+
+/// Helper to write an object to disk
+pub fn write_object<W: std::io::Write, O: serde::Serialize>(
+    mut writer: W,
+    value: &O,
+) -> anyhow::Result<()> {
+    bincode::encode_into_std_write(
+        bincode::serde::Compat(value),
+        &mut writer,
+        bincode::config::standard(),
+    )
+    .context("serializing to file")?;
+    Ok(())
 }

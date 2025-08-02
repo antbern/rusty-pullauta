@@ -76,6 +76,15 @@ Previously, Karttapullautin used regular text-based `.xyz` files to store the te
 ```
 > Note: this also works for the binary `.hmap` files.
 
+#### Converting the internal binary geometry format to DXF
+
+Similar as the XYZ files mentioned above, Karttapullautin previously used regular text-based `.dxf` files to store the temporary geometry which could be opened and visualized by many external tools. But with the introduction of an internal (non-stable) binary format for increased performance and reduced disk usage, there is now a new command that can do the conversion into `DXF` for you. Example usage:
+```
+./pullauta bin2dxf temp/c2g.dxf.bin temp/c2g.dxf
+```
+
+There is also a configuration option `output_dxf` which when set to `1` will output regular `.dxf` files next to the binary files at the expense of higher disk usage and performance.
+
 ### Fine tuning the output
 
 `pullauta` creates a `pullauta.ini` file if it doesn't already exists. Your settings are there. For the second run you can change settings as you wish. Experiment with small file to find best settings for your taste/terrain/lidar data.
@@ -104,7 +113,7 @@ In additon to the png raster map imges, Karttapullautin makes also vector contou
 - `c2g.dxf`: big cliffs
 - `vegetation.png + vegetation.pgw`: generalized green/yellow as raster, same as at the background of final map png files.
 
-For importing Maastotietokanta, try reading shape filed directly to your mapping app..
+For importing Maastotietokanta, try reading shape filed directly to your mapping app. Note that the `dxf` files need to be converted from the internal `.bin.dxf` format using the command `bin2dxf` as mentioned above.
 
 ### Batch processing
 

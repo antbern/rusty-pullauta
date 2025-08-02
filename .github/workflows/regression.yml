@@ -142,6 +142,7 @@ jobs:
         mkdir in && mkdir out
         cp test_file.laz in/test_file.laz
         sed -i 's/batch=0/batch=1/g' pullauta.ini
+        sed -i 's/output_dxf=0/output_dxf=1/g' pullauta.ini
 
         # run and store results
         env time -o time_pr.txt target/release/pullauta

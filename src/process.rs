@@ -216,14 +216,14 @@ pub fn process_tile(
     .expect("contour generation failed");
     xyz_03.to_file(fs, tmpfolder.join("xyz_03.hmap")).unwrap();
 
-    if vegeonly || cliffsonly {
-    } else {
+    if !(vegeonly || cliffsonly) {
         contours::heightmap2contours(
             fs,
             tmpfolder,
             scalefactor * 0.3,
             &xyz_03,
-            "contours03.dxf", // dxf curves generated from the heightmap
+            "contours03.dxf.bin", // dxf curves generated from the heightmap
+            config.output_dxf,
         )
         .expect("contour generation failed");
     }
@@ -250,7 +250,8 @@ pub fn process_tile(
                 tmpfolder,
                 basemapcontours,
                 &xyz2,
-                "basemap.dxf", // generate dxf contours
+                "basemap.dxf.bin", // generate dxf contours
+                config.output_dxf,
             )
             .expect("contour generation failed");
         }
@@ -274,7 +275,8 @@ pub fn process_tile(
                 tmpfolder,
                 halfinterval,
                 &xyz_knolls,
-                "out.dxf", // generates dxf curves
+                "out.dxf.bin", // generates dxf curves
+                config.output_dxf,
             )
             .unwrap();
         } else {
@@ -285,7 +287,8 @@ pub fn process_tile(
                 tmpfolder,
                 halfinterval,
                 &hmap,
-                "out.dxf", // generate dxf curves
+                "out.dxf.bin", // generate dxf curves
+                config.output_dxf,
             )
             .unwrap();
         }
@@ -815,12 +818,13 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 }
             }
 
-            let out2_path = PathBuf::from(format!("temp{thread}/out2.dxf"));
+            let out2_path = PathBuf::from(format!("temp{thread}/out2.dxf.bin"));
             if fs.exists(&out2_path) {
-                crop::polylinedxfcrop(
+                crop::polylinebindxfcrop(
                     fs,
                     &out2_path,
-                    Path::new(&format!("{batchoutfolder}/{laz}_contours.dxf")),
+                    Path::new(&format!("{batchoutfolder}/{laz}_contours.dxf.bin")),
+                    conf.output_dxf,
                     minx,
                     miny,
                     maxx,
@@ -830,12 +834,13 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             }
             let dxf_files = ["c2g", "c3g", "contours03", "detected", "formlines"];
             for dxf_file in dxf_files.iter() {
-                let dxf_path = PathBuf::from(format!("temp{thread}/{dxf_file}.dxf"));
+                let dxf_path = PathBuf::from(format!("temp{thread}/{dxf_file}.dxf.bin"));
                 if fs.exists(&dxf_path) {
-                    crop::polylinedxfcrop(
+                    crop::polylinebindxfcrop(
                         fs,
                         &dxf_path,
-                        Path::new(&format!("{batchoutfolder}/{laz}_{dxf_file}.dxf")),
+                        Path::new(&format!("{batchoutfolder}/{laz}_{dxf_file}.dxf.bin")),
+                        conf.output_dxf,
                         minx,
                         miny,
                         maxx,
@@ -844,12 +849,13 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                     .unwrap();
                 }
             }
-            let dotknolls_file = PathBuf::from(format!("temp{thread}/dotknolls.dxf"));
+            let dotknolls_file = PathBuf::from(format!("temp{thread}/dotknolls.dxf.bin"));
             if fs.exists(&dotknolls_file) {
-                crop::pointdxfcrop(
+                crop::pointbindxfcrop(
                     fs,
                     &dotknolls_file,
-                    Path::new(&format!("{batchoutfolder}/{laz}_dotknolls.dxf")),
+                    Path::new(&format!("{batchoutfolder}/{laz}_dotknolls.dxf.bin")),
+                    conf.output_dxf,
                     minx,
                     miny,
                     maxx,
@@ -859,12 +865,13 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             }
         }
 
-        let basemap_file = PathBuf::from(format!("temp{thread}/basemap.dxf"));
+        let basemap_file = PathBuf::from(format!("temp{thread}/basemap.dxf.bin"));
         if fs.exists(&basemap_file) {
-            crop::polylinedxfcrop(
+            crop::polylinebindxfcrop(
                 fs,
                 &basemap_file,
-                Path::new(&format!("{batchoutfolder}/{laz}_basemap.dxf")),
+                Path::new(&format!("{batchoutfolder}/{laz}_basemap.dxf.bin")),
+                conf.output_dxf,
                 minx,
                 miny,
                 maxx,
