@@ -1,10 +1,11 @@
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
+use crate::geometry::{BinaryDxf, Bounds, Classification, Point2, Polylines};
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::io::xyz::XyzInternalReader;
@@ -233,6 +234,7 @@ pub fn heightmap2contours(
     cinterval: f64,
     heightmap: &HeightMap,
     dxffile: &str,
+    output_dxf: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut avg_alt = heightmap.grid.clone();
     let w = heightmap.grid.width() - 1;
@@ -492,38 +494,47 @@ pub fn heightmap2contours(
         level += v;
     }
 
+    // convert the polylines to our internal binary dxf format
+
+    let mut lines = Polylines::new();
+    for polyline in polylines.into_iter() {
+        lines.push(
+            polyline
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (x, y))| {
+                    // original logic for some kind of "thinning" of the lines
+                    let ii = i + 1;
+                    let ldata = polyline.len() - 1;
+                    if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
+                        return None; // skip this point
+                    }
+
+                    // scale the points to world coordinates
+                    let x: f64 = x * size + xmin;
+                    let y: f64 = y * size + ymin;
+
+                    Some(Point2 { x, y })
+                })
+                .collect::<Vec<_>>(),
+            Classification::ContourSimple,
+        );
+    }
+    let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![lines.into()]);
+
+    // write to disk
     let f = fs
         .create(tmpfolder.join(dxffile))
         .expect("Unable to create file");
-    let mut f = BufWriter::new(f);
+    dxf.to_writer(&mut BufWriter::new(f))
+        .expect("Cannot write binary dxf file");
 
-    write!(
-        &mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-    ).expect("Cannot write dxf file");
-
-    for polyline in polylines {
-        f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\ncont\r\n  0\r\n".as_bytes())
-            .expect("Cannot write dxf file");
-        for (i, (x, y)) in polyline.iter().enumerate() {
-            let ii = i + 1;
-            let ldata = polyline.len() - 1;
-            if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
-                continue;
-            }
-            let x: f64 = x * size + xmin;
-            let y: f64 = y * size + ymin;
-            write!(
-                &mut f,
-                "VERTEX\r\n  8\r\ncont\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n  0\r\n",
-            )
-            .expect("Cannot write dxf file");
-        }
-        f.write_all("SEQEND\r\n  0\r\n".as_bytes())
-            .expect("Cannot write dxf file");
+    if output_dxf {
+        dxf.to_dxf(&mut BufWriter::new(
+            fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?,
+        ))?;
     }
-    f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
-        .expect("Cannot write dxf file");
+
     info!("Done");
 
     Ok(())

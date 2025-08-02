@@ -3,10 +3,11 @@ use imageproc::drawing::draw_line_segment_mut;
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
+use crate::geometry::{BinaryDxf, Bounds, Classification, Geometry, Point2, Points, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
@@ -40,60 +41,31 @@ pub fn dotknolls(
         Luma([0xff]),
     );
 
-    let f = fs
-        .create(tmpfolder.join("dotknolls.dxf"))
-        .expect("Unable to create file");
-    let mut f = BufWriter::new(f);
-    write!(&mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{}\r\n 20\r\n{}\r\n  9\r\n$EXTMAX\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n",
-        xstart, ystart, xmax * size + xstart, ymax * size + ystart
-    ).expect("Cannot write dxf file");
+    let data = BinaryDxf::from_reader(&mut BufReader::new(
+        fs.open(tmpfolder.join("out2.dxf.bin"))?,
+    ))?;
+    let Geometry::Polylines3(lines) = data.take_geometry().swap_remove(0) else {
+        return Err(anyhow::anyhow!("out2.dxf.bin should contain polylines").into());
+    };
 
-    let input = tmpfolder.join("out2.dxf");
-    let data = fs.read_to_string(input).expect("Can not read input file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            for (i, v) in r.iter().enumerate() {
-                if i > 0 {
-                    let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                    x.push(val[xline].trim().parse::<f64>().unwrap());
-                    y.push(val[yline].trim().parse::<f64>().unwrap());
-                }
-            }
-        }
-        for i in 1..x.len() {
+    for (line, _) in lines.iter() {
+        for i in 1..line.len() {
             draw_line_segment_mut(
                 &mut im,
                 (
-                    ((x[i - 1] - xstart) / scalefactor).floor() as f32,
-                    ((y[i - 1] - ystart) / scalefactor).floor() as f32,
+                    ((line[i - 1].x - xstart) / scalefactor).floor() as f32,
+                    ((line[i - 1].y - ystart) / scalefactor).floor() as f32,
                 ),
                 (
-                    ((x[i] - xstart) / scalefactor).floor() as f32,
-                    ((y[i] - ystart) / scalefactor).floor() as f32,
+                    ((line[i].x - xstart) / scalefactor).floor() as f32,
+                    ((line[i].y - ystart) / scalefactor).floor() as f32,
                 ),
                 Luma([0x0]),
             )
         }
     }
+
+    let mut dotknoll_points = Points::new();
 
     let input = tmpfolder.join("dotknolls.txt");
     read_lines_no_alloc(fs, input, |line| {
@@ -122,24 +94,36 @@ pub fn dotknolls(
                 i += 1.0;
             }
 
-            let layer = match (ok, depression) {
-                (true, true) => "dotknoll",
-                (true, false) => "udepression",
-                (false, true) => "uglydotknoll",
-                (false, false) => "uglyudepression",
+            let layer2 = match (ok, depression) {
+                (true, true) => Classification::Dotknoll,
+                (true, false) => Classification::Udepression,
+                (false, true) => Classification::UglyDotknoll,
+                (false, false) => Classification::UglyUdepression,
             };
 
-            write!(
-                &mut f,
-                "POINT\r\n  8\r\n{layer}\r\n 10\r\n{x}\r\n 20\r\n{y}\r\n 50\r\n0\r\n  0\r\n"
-            )
-            .expect("Can not write to file");
+            dotknoll_points.push(Point2::new(x, y), layer2);
         }
     })
     .expect("Could not read file");
 
-    f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
-        .expect("Can not write to file");
+    let dxf = BinaryDxf::new(
+        Bounds::new(xstart, xmax * size + xstart, ystart, ymax * size + ystart),
+        vec![dotknoll_points.into()],
+    );
+
+    // write binary
+    let f = fs
+        .create(tmpfolder.join("dotknolls.dxf.bin"))
+        .expect("Unable to create file");
+    dxf.to_writer(&mut BufWriter::new(f))
+        .expect("could not write dotknolls.dxf.bin");
+
+    if config.output_dxf {
+        dxf.to_dxf(&mut BufWriter::new(
+            fs.create(tmpfolder.join("dotknolls.dxf"))?,
+        ))?;
+    }
+
     info!("Done");
     Ok(())
 }
@@ -147,7 +131,7 @@ pub fn knolldetector(
     fs: &impl FileSystem,
     config: &Config,
     tmpfolder: &Path,
-) -> Result<(), Box<dyn Error>> {
+) -> anyhow::Result<()> {
     info!("Detecting knolls...");
     let scalefactor = config.scalefactor;
     let contour_interval = config.contour_interval;
@@ -172,97 +156,69 @@ pub fn knolldetector(
     let xmax = (hmap.grid.width() - 1) as u64;
     let ymax = (hmap.grid.height() - 1) as u64;
 
-    // Temporary hashmap to store the xyz values
+    // Temporary hashmap to store the xyz values (TODO: replace with direct hmap lookup!)
     let mut xyz: HashMap<(u64, u64), f64> = HashMap::default();
     for (x, y, h) in hmap.grid.iter() {
         xyz.insert((x as u64, y as u64), h);
     }
 
-    let data = fs
-        .read_to_string(tmpfolder.join("contours03.dxf"))
-        .expect("Should have been able to read the file");
-    let data: Vec<&str> = data.split("POLYLINE").collect();
-    let f = fs
-        .create(tmpfolder.join("detected.dxf"))
-        .expect("Unable to create file");
-    let mut f = BufWriter::new(f);
-    write!(&mut f,
-        "  0\r\nSECTION\r\n  2\r\nHEADER\r\n  9\r\n$EXTMIN\r\n 10\r\n{xmin}\r\n 20\r\n{ymin}\r\n  9\r\n$EXTMAX\r\n 10\r\n{xmax}\r\n 20\r\n{ymax}\r\n  0\r\nENDSEC\r\n  0\r\nSECTION\r\n  2\r\nENTITIES\r\n  0\r\n"
-    ).expect("Cannot write dxf file");
+    let data = BinaryDxf::from_reader(&mut BufReader::new(
+        fs.open(tmpfolder.join("contours03.dxf.bin"))?,
+    ))?;
+    let Geometry::Polylines2(lines) = data.take_geometry().swap_remove(0) else {
+        anyhow::bail!("contours03.dxf.bin should contain polylines");
+    };
+
+    let detected_bounds = Bounds::new(xmin as f64, xmax as f64, ymin as f64, ymax as f64);
+    let mut detected_lines = Polylines::<Point2, Classification>::new();
 
     let mut heads1: HashMap<String, usize> = HashMap::default();
     let mut heads2: HashMap<String, usize> = HashMap::default();
-    let mut heads = Vec::<String>::with_capacity(data.len());
-    let mut tails = Vec::<String>::with_capacity(data.len());
-    let mut el_x = Vec::<Vec<f64>>::with_capacity(data.len());
-    let mut el_y = Vec::<Vec<f64>>::with_capacity(data.len());
-    el_x.push(vec![]);
-    el_y.push(vec![]);
-    heads.push(String::from("-"));
-    tails.push(String::from("-"));
-    for (j, rec) in data.iter().enumerate() {
-        let mut x = Vec::<f64>::new();
-        let mut y = Vec::<f64>::new();
-        let mut xline = 0;
-        let mut yline = 0;
-        if j > 0 {
-            let r = rec.split("VERTEX").collect::<Vec<&str>>();
-            let apu = r[1];
-            let val = apu.split('\n').collect::<Vec<&str>>();
-            for (i, v) in val.iter().enumerate() {
-                let vt = v.trim_end();
-                if vt == " 10" {
-                    xline = i + 1;
-                }
-                if vt == " 20" {
-                    yline = i + 1;
-                }
-            }
-            if r.len() < 201 {
-                for (i, v) in r.iter().enumerate() {
-                    if i > 0 {
-                        let val = v.trim_end().split('\n').collect::<Vec<&str>>();
-                        x.push(val[xline].trim().parse::<f64>().unwrap());
-                        y.push(val[yline].trim().parse::<f64>().unwrap());
-                    }
-                }
-                let x0 = x.first().unwrap();
-                let xl = x.last().unwrap();
+    let mut heads = Vec::<String>::with_capacity(lines.len());
+    let mut tails = Vec::<String>::with_capacity(lines.len());
+    let mut el_x = Vec::<Vec<f64>>::with_capacity(lines.len());
+    let mut el_y = Vec::<Vec<f64>>::with_capacity(lines.len());
 
-                let y0 = y.first().unwrap();
-                let yl = y.last().unwrap();
+    for (j, (line, _c)) in lines.iter().enumerate() {
+        // TODO; might need to lower to 200
+        if line.len() < 201 {
+            let first = line.first().unwrap();
+            let last = line.last().unwrap();
 
-                let head = format!("{x0}x{y0}");
-                let tail = format!("{xl}x{yl}");
+            let x0 = first.x;
+            let xl = last.x;
+            let y0 = first.y;
+            let yl = last.y;
 
-                heads.push(head);
-                tails.push(tail);
+            let head = format!("{x0}x{y0}");
+            let tail = format!("{xl}x{yl}");
 
-                let head = format!("{x0}x{y0}");
-                let tail = format!("{xl}x{yl}");
+            heads.push(head.clone());
+            tails.push(tail.clone());
 
-                el_x.push(x);
-                el_y.push(y);
-                if *heads1.get(&head).unwrap_or(&0) == 0 {
-                    heads1.insert(head, j);
-                } else {
-                    heads2.insert(head, j);
-                }
-                if *heads1.get(&tail).unwrap_or(&0) == 0 {
-                    heads1.insert(tail, j);
-                } else {
-                    heads2.insert(tail, j);
-                }
+            // TODO: this is not very efficient (collecting all x and y separately into Vecs), but it means the logic further down can stay the same
+            el_x.push(line.iter().map(|p| p.x).collect::<Vec<_>>());
+            el_y.push(line.iter().map(|p| p.y).collect::<Vec<_>>());
+
+            if *heads1.get(&head).unwrap_or(&0) == 0 {
+                heads1.insert(head, j);
             } else {
-                heads.push(String::from("-"));
-                tails.push(String::from("-"));
-                el_x.push(vec![]);
-                el_y.push(vec![]);
+                heads2.insert(head, j);
             }
+            if *heads1.get(&tail).unwrap_or(&0) == 0 {
+                heads1.insert(tail, j);
+            } else {
+                heads2.insert(tail, j);
+            }
+        } else {
+            heads.push(String::from("-"));
+            tails.push(String::from("-"));
+            el_x.push(vec![]);
+            el_y.push(vec![]);
         }
     }
 
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut to_join = 0;
         if !el_x[l].is_empty() {
             let mut end_loop = false;
@@ -352,7 +308,7 @@ pub fn knolldetector(
     }
 
     let mut elevation: HashMap<u64, f64> = HashMap::default();
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = false;
         let el_x_len = el_x[l].len();
         if el_x_len > 0 {
@@ -492,7 +448,7 @@ pub fn knolldetector(
         ytest: f64,
     }
     let mut heads = Vec::<Head>::new();
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         if !el_x[l].is_empty() {
             if el_x[l].first() == el_x[l].last() && el_y[l].first() == el_y[l].last() {
                 heads.push(Head {
@@ -519,7 +475,7 @@ pub fn knolldetector(
         maxy: f64,
     }
     let mut bb: HashMap<usize, BoundingBox> = HashMap::default();
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = false;
         if !el_x[l].is_empty() {
             let mut x = el_x[l].to_vec();
@@ -610,7 +566,7 @@ pub fn knolldetector(
     }
     let mut canditates = Vec::<Candidate>::new();
 
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = true;
         if !el_x[l].is_empty() {
             let mut x = el_x[l].to_vec();
@@ -741,12 +697,9 @@ pub fn knolldetector(
 
     let canditates = new_candidates;
 
-    let file_pins = fs
-        .create(tmpfolder.join("pins.txt"))
-        .expect("Unable to create file");
-    let mut file_pins = BufWriter::new(file_pins);
+    let mut pins = Vec::new();
 
-    for l in 0..data.len() {
+    for l in 0..lines.len() {
         let mut skip = false;
         let ll = l as u64;
         let mut ltopid = 0;
@@ -804,8 +757,13 @@ pub fn knolldetector(
             }
 
             if !skip {
-                f.write_all("POLYLINE\r\n 66\r\n1\r\n  8\r\n1010\r\n  0\r\n".as_bytes())
-                    .expect("Can not write to file");
+                let line = x
+                    .iter()
+                    .zip(y.iter())
+                    .map(|(x, y)| Point2::new(*x, *y))
+                    .collect::<Vec<_>>();
+                detected_lines.push(line, Classification::Knoll1010);
+
                 let mut xa = 0.0;
                 let mut ya = 0.0;
                 for k in 0..x.len() {
@@ -816,47 +774,53 @@ pub fn knolldetector(
                 xa /= xlen;
                 ya /= xlen;
 
-                write!(
-                    &mut file_pins,
-                    "{},{},{},{},{},{},{},{}\r\n",
-                    x[0],
-                    y[0],
-                    *elevation.get(&ll).unwrap(),
-                    xa,
-                    ya,
-                    *elevation.get(&ltopid).unwrap(),
-                    x.iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                    y.iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
-                .expect("Could not write to file");
-
-                for k in 0..x.len() {
-                    write!(
-                        &mut f,
-                        "VERTEX\r\n  8\r\n1010\r\n 10\r\n{}\r\n 20\r\n{}\r\n  0\r\n",
-                        x[k], y[k]
-                    )
-                    .expect("Can not write to file");
-                }
-                f.write_all("SEQEND\r\n  0\r\n".as_bytes())
-                    .expect("Can not write to file");
+                x.push(x[0]);
+                y.push(y[0]);
+                pins.push(Pin {
+                    xx: xa,
+                    yy: ya,
+                    ele: *elevation.get(&ll).unwrap(),
+                    ele2: *elevation.get(&ltopid).unwrap(),
+                    xlist: x,
+                    ylist: y,
+                });
             } else {
                 el_x[l].clear();
                 el_y[l].clear();
             }
         }
     }
-    f.write_all("ENDSEC\r\n  0\r\nEOF\r\n".as_bytes())
-        .expect("Can not write to file");
+
+    let detected_dxf = BinaryDxf::new(detected_bounds, vec![detected_lines.into()]);
+    detected_dxf.to_writer(&mut BufWriter::new(
+        fs.create(tmpfolder.join("detected.dxf.bin"))?,
+    ))?;
+
+    if config.output_dxf {
+        detected_dxf.to_dxf(&mut BufWriter::new(
+            fs.create(tmpfolder.join("detected.dxf"))?,
+        ))?;
+    }
+
+    // write pins to file
+    let file_pins = fs
+        .create(tmpfolder.join("pins.bin"))
+        .expect("Unable to create file");
+    crate::util::write_object(BufWriter::new(file_pins), &pins).expect("Unable to write pins");
 
     info!("Done");
     Ok(())
+}
+
+/// Struct used to store temporary data about pins on disk
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Pin {
+    xx: f64,
+    yy: f64,
+    ele: f64,
+    ele2: f64,
+    xlist: Vec<f64>,
+    ylist: Vec<f64>,
 }
 
 pub fn xyzknolls(
@@ -912,48 +876,14 @@ pub fn xyzknolls(
         }
     }
 
-    struct Pin {
-        xx: f64,
-        yy: f64,
-        ele: f64,
-        ele2: f64,
-        xlist: Vec<f64>,
-        ylist: Vec<f64>,
-    }
-    let mut pins: Vec<Pin> = Vec::new();
-
-    let pins_file_in = tmpfolder.join("pins.txt");
-    if fs.exists(&pins_file_in) {
-        read_lines_no_alloc(fs, pins_file_in, |line| {
-            let mut r = line.trim().split(',');
-            let ele = r.nth(2).unwrap().parse::<f64>().unwrap();
-            let xx = r.next().unwrap().parse::<f64>().unwrap();
-            let yy = r.next().unwrap().parse::<f64>().unwrap();
-            let ele2 = r.next().unwrap().parse::<f64>().unwrap();
-            let xlist = r.next().unwrap();
-            let ylist = r.next().unwrap();
-            let mut x: Vec<f64> = xlist
-                .split(' ')
-                .map(|s| s.parse::<f64>().unwrap())
-                .collect();
-            let mut y: Vec<f64> = ylist
-                .split(' ')
-                .map(|s| s.parse::<f64>().unwrap())
-                .collect();
-            x.push(x[0]);
-            y.push(y[0]);
-
-            pins.push(Pin {
-                xx,
-                yy,
-                ele,
-                ele2,
-                xlist: x,
-                ylist: y,
-            });
-        })
-        .expect("could not read pins file");
-    }
+    // read pins from file if it exists
+    let pins_file_in = tmpfolder.join("pins.bin");
+    let pins: Vec<Pin> = if fs.exists(&pins_file_in) {
+        let pins_file_in = fs.open(pins_file_in).expect("Unable to open file");
+        crate::util::read_object(BufReader::new(pins_file_in)).expect("Unable to write pins")
+    } else {
+        Vec::new()
+    };
 
     // compute closest distance from each pin to another pin
     let mut dist: HashMap<usize, f64> = HashMap::default();
