@@ -1,7 +1,6 @@
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
-use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use crate::config::Config;
@@ -35,10 +34,7 @@ pub fn xyz2heightmap(
     let mut hmax: f64 = f64::MIN;
 
     let xyz_file_in = tmpfolder.join(xyzfilein);
-    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-        crate::ONE_MEGABYTE,
-        fs.open(&xyz_file_in)?,
-    ))?;
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         let x: f64 = r.x;
         let y: f64 = r.y;
@@ -79,10 +75,7 @@ pub fn xyz2heightmap(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    let mut reader = XyzInternalReader::new(BufReader::with_capacity(
-        crate::ONE_MEGABYTE,
-        fs.open(&xyz_file_in)?,
-    ))?;
+    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         if r.classification == 2 || r.classification == water_class {
             let x: f64 = r.x;
@@ -523,16 +516,13 @@ pub fn heightmap2contours(
     let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![lines.into()]);
 
     // write to disk
-    let f = fs
+    let mut f = fs
         .create(tmpfolder.join(dxffile))
         .expect("Unable to create file");
-    dxf.to_writer(&mut BufWriter::new(f))
-        .expect("Cannot write binary dxf file");
+    dxf.to_writer(&mut f).expect("Cannot write binary dxf file");
 
     if output_dxf {
-        dxf.to_dxf(&mut BufWriter::new(
-            fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?,
-        ))?;
+        dxf.to_dxf(&mut fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?)?;
     }
 
     info!("Done");
