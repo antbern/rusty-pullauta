@@ -10,7 +10,17 @@ use crate::geometry::{BinaryDxf, Bounds, Classification, Geometry, Point2, Point
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
-use crate::util::read_lines_no_alloc;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Dotknolls {
+    pub dotknolls: Vec<Dotknoll>,
+}
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Dotknoll {
+    pub x: f64,
+    pub y: f64,
+    pub is_knoll: bool,
+}
 
 pub fn dotknolls(
     fs: &impl FileSystem,
@@ -63,44 +73,44 @@ pub fn dotknolls(
 
     let mut dotknoll_points = Points::new();
 
-    let input = tmpfolder.join("dotknolls.txt");
-    read_lines_no_alloc(fs, input, |line| {
-        let parts = line.split(' ');
-        let r = parts.collect::<Vec<&str>>();
-        if r.len() >= 3 {
-            let depression: bool = r[0] == "1";
-            let x: f64 = r[1].parse::<f64>().unwrap();
-            let y: f64 = r[2].parse::<f64>().unwrap();
-            let mut ok = true;
-            let mut i = (x - xstart) / scalefactor - 3.0;
-            while i < (x - xstart) / scalefactor + 4.0 && ok {
-                let mut j = (y - ystart) / scalefactor - 3.0;
-                while j < (y - ystart) / scalefactor + 4.0 && ok {
-                    if (i as u32) >= im.width() || (j as u32) >= im.height() {
-                        ok = false;
-                        break;
-                    }
-                    let pix = im.get_pixel(i as u32, j as u32);
-                    if pix[0] == 0 {
-                        ok = false;
-                        break;
-                    }
-                    j += 1.0;
-                }
-                i += 1.0;
+    let dotknolls: Dotknolls =
+        crate::util::read_object(&mut fs.open(tmpfolder.join("dotknolls.bin"))?)?;
+
+    for dot in dotknolls.dotknolls {
+        let Dotknoll { x, y, is_knoll } = dot;
+
+        let mut ok = true;
+        let mut i = (x - xstart) / scalefactor - 3.0;
+        while i < (x - xstart) / scalefactor + 4.0 && ok {
+            if (i as u32) >= im.width() {
+                ok = false;
+                break;
             }
-
-            let layer2 = match (ok, depression) {
-                (true, true) => Classification::Dotknoll,
-                (true, false) => Classification::Udepression,
-                (false, true) => Classification::UglyDotknoll,
-                (false, false) => Classification::UglyUdepression,
-            };
-
-            dotknoll_points.push(Point2::new(x, y), layer2);
+            let mut j = (y - ystart) / scalefactor - 3.0;
+            while j < (y - ystart) / scalefactor + 4.0 && ok {
+                if (j as u32) >= im.height() {
+                    ok = false;
+                    break;
+                }
+                let pix = im.get_pixel(i as u32, j as u32);
+                if pix[0] == 0 {
+                    ok = false;
+                    break;
+                }
+                j += 1.0;
+            }
+            i += 1.0;
         }
-    })
-    .expect("Could not read file");
+
+        let layer2 = match (ok, is_knoll) {
+            (true, true) => Classification::Dotknoll,
+            (true, false) => Classification::Udepression,
+            (false, true) => Classification::UglyDotknoll,
+            (false, false) => Classification::UglyUdepression,
+        };
+
+        dotknoll_points.push(Point2::new(x, y), layer2);
+    }
 
     let dxf = BinaryDxf::new(
         Bounds::new(xstart, xmax * size + xstart, ystart, ymax * size + ystart),
