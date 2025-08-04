@@ -82,9 +82,13 @@ pub fn dotknolls(
         let mut ok = true;
         let mut i = (x - xstart) / scalefactor - 3.0;
         while i < (x - xstart) / scalefactor + 4.0 && ok {
+            if (i as u32) >= im.width() {
+                ok = false;
+                break;
+            }
             let mut j = (y - ystart) / scalefactor - 3.0;
             while j < (y - ystart) / scalefactor + 4.0 && ok {
-                if (i as u32) >= im.width() || (j as u32) >= im.height() {
+                if (j as u32) >= im.height() {
                     ok = false;
                     break;
                 }
