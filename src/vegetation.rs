@@ -298,22 +298,21 @@ pub fn makevege(
     };
 
     let mut imggr1 = RgbImage::from_pixel(img_width, img_height, Rgb([255, 255, 255]));
-    for x in 2..w_block {
-        for y in 2..h_block {
+    for x in 0..w_block {
+        for y in 0..h_block {
             let roof = top[(x, y)]
                 - xyz[(
                     (x as f64 * block / size) as usize,
                     (y as f64 * block / size) as usize,
                 )];
 
+            // find lowest firsthit in a 5x5 area
             let mut firsthit2 = firsthit[(x, y)];
-            for i in (x - 2)..x + 3_usize {
-                for j in (y - 2)..y + 3_usize {
-                    if i < w_block && j < h_block {
-                        let value = firsthit[(i, j)];
-                        if value < firsthit2 {
-                            firsthit2 = value;
-                        }
+            for i in x.saturating_sub(2)..(x + 3).min(w_block) {
+                for j in y.saturating_sub(2)..(y + 3).min(h_block) {
+                    let value = firsthit[(i, j)];
+                    if value < firsthit2 {
+                        firsthit2 = value;
                     }
                 }
             }
