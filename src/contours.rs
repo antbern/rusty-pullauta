@@ -577,3 +577,46 @@ fn check_obj_in(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::contours;
+
+    #[test]
+    fn test_grid2contours_empty() {
+        let grid = crate::vec2d::Vec2D::new(5, 5, 0.0);
+        let contours = contours::grid2contours(&grid, 1.0);
+        assert!(
+            contours.is_empty(),
+            "Expected no contours for a uniform grid"
+        );
+    }
+
+    #[test]
+    fn test_grid2contours_single_contour() {
+        let mut grid = crate::vec2d::Vec2D::new(5, 5, 0.0);
+        grid[(2, 2)] = 1.1;
+        let contours = contours::grid2contours(&grid, 1.0);
+        println!("Contours: {:?}", contours);
+        assert_eq!(
+            contours.len(),
+            1,
+            "Expected one contour for a single contour line"
+        );
+        assert_eq!(contours[0].len(), 4, "Expected contour to have 4 points");
+    }
+
+    #[test]
+    fn test_grid2contours_single_contour2() {
+        let mut grid = crate::vec2d::Vec2D::new(5, 5, 2.0);
+        grid[(2, 2)] = 1.1;
+        let contours = contours::grid2contours(&grid, 1.0);
+        println!("Contours: {:?}", contours);
+        assert_eq!(
+            contours.len(),
+            1,
+            "Expected one contour for a single contour line"
+        );
+        assert_eq!(contours[0].len(), 4, "Expected contour to have 4 points");
+    }
+}
