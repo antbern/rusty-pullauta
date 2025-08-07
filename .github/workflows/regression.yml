@@ -37,7 +37,7 @@ jobs:
       id: run_pr_branch
       run: |
         echo "Running code on PR branch"
-        cargo build --release
+        RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
         env time -o time_pr.txt target/release/pullauta test_file.laz
         mv pullautus.png pullautus_pr.png
         mv pullautus_depr.png pullautus_depr_pr.png
@@ -136,7 +136,7 @@ jobs:
       id: run_pr_branch
       run: |
         echo "Running code on PR branch"
-        cargo build --release
+        RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
         # prepare
         cp pullauta.default.ini pullauta.ini
         mkdir in && mkdir out
