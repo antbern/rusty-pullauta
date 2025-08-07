@@ -245,28 +245,7 @@ pub fn makevege(
     let img_width = (w_block as f64 * block) as u32;
     let img_height = (w_block as f64 * block) as u32;
 
-    let greens = (0..greenshades.len())
-        .map(|i| {
-            Rgb([
-                (greentone - greentone / (greenshades.len() - 1) as f64 * i as f64) as u8,
-                (254.0 - (74.0 / (greenshades.len() - 1) as f64) * i as f64) as u8,
-                (greentone - greentone / (greenshades.len() - 1) as f64 * i as f64) as u8,
-            ])
-        })
-        .collect::<Vec<_>>();
-
-    let mut aveg = 0;
-    let mut avecount = 0;
-
-    for x in 1..w_block {
-        for y in 1..h_block {
-            if ghit[(x, y)] > 1 {
-                aveg += firsthit[(x, y)];
-                avecount += 1;
-            }
-        }
-    }
-    let aveg = aveg as f64 / avecount as f64;
+    // render yellow as multiple small squares
     let ye2 = Rgba([255, 219, 166, 255]);
     let mut imgye2 = RgbaImage::from_pixel(img_width, img_height, Rgba([255, 255, 255, 0]));
     for x in 0..(w_3 - 2) {
@@ -290,6 +269,33 @@ pub fn makevege(
             }
         }
     }
+
+    // render green gradients
+    let greens = (0..greenshades.len())
+        .map(|i| {
+            Rgb([
+                (greentone - greentone / (greenshades.len() - 1) as f64 * i as f64) as u8,
+                (254.0 - (74.0 / (greenshades.len() - 1) as f64) * i as f64) as u8,
+                (greentone - greentone / (greenshades.len() - 1) as f64 * i as f64) as u8,
+            ])
+        })
+        .collect::<Vec<_>>();
+
+    // compute global average firsthit
+    let aveg = {
+        let mut aveg = 0;
+        let mut avecount = 0;
+
+        for x in 0..w_block {
+            for y in 0..h_block {
+                if ghit[(x, y)] > 1 {
+                    aveg += firsthit[(x, y)];
+                    avecount += 1;
+                }
+            }
+        }
+        aveg as f64 / avecount as f64
+    };
 
     let mut imggr1 = RgbImage::from_pixel(img_width, img_height, Rgb([255, 255, 255]));
     for x in 2..w_block {
