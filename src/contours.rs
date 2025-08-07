@@ -285,7 +285,7 @@ pub fn heightmap2contours(
 /// Returns a vector of polylines, each represented as a vector of (x, y) tuples in
 /// grid-coordinates.
 /// For now the returned polylines are not annotated with their height.
-/// Note: this will Clone the provided `heightmap`
+/// Note: this will Clone the provided `heightmap`.
 pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f64)>> {
     // clone the heightmap so that we can perform the correction below
     let mut avg_alt = heightmap.clone();
@@ -321,7 +321,8 @@ pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f6
 
     let v = cinterval;
 
-    let mut level: f64 = (hmin / v).floor() * v;
+    // we start at the first level that is above hmin (anything below that will just have empty contours)
+    let mut level: f64 = (hmin / v).ceil() * v;
 
     let mut polylines = Vec::<Vec<(f64, f64)>>::new();
 
