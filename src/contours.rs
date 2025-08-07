@@ -19,7 +19,7 @@ pub fn xyz2heightmap(
     tmpfolder: &Path,
     xyzfilein: &str, // this should be point cloud in
 ) -> Result<HeightMap, Box<dyn Error>> {
-    info!("Generating curves...");
+    info!("Generating heightmap...");
 
     let scalefactor = config.scalefactor;
     let water_class = config.water_class;
@@ -229,6 +229,7 @@ pub fn heightmap2contours(
     dxffile: &str,
     output_dxf: bool,
 ) -> Result<(), Box<dyn Error>> {
+    info!("Generating curves...");
     let polylines = grid2contours(&heightmap.grid, cinterval);
 
     let xmin = heightmap.xoffset;
@@ -286,9 +287,8 @@ pub fn heightmap2contours(
 /// For now the returned polylines are not annotated with their height.
 /// Note: this will Clone the provided `heightmap`
 pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f64)>> {
+    // clone the heightmap so that we can perform the correction below
     let mut avg_alt = heightmap.clone();
-    let w = heightmap.width() - 1;
-    let h = heightmap.height() - 1;
 
     // As per https://github.com/karttapullautin/karttapullautin/discussions/154#discussioncomment-11393907
     // If elevation grid point elavion equals with contour interval steps you will get contour topology issues
@@ -333,10 +333,9 @@ pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f6
         let mut obj = Vec::<(i64, i64, u8)>::new();
         let mut curves: HashMap<(i64, i64, u8), (i64, i64)> = HashMap::default();
 
-        // for i in 0..(avg_alt.width() - 1) {
-        //     for j in 0..(avg_alt.height() - 1) {
-        for i in 1..(w - 1) {
-            for j in 2..(h - 1) {
+        // iterate over all "corners" of the grid
+        for i in 0..(avg_alt.width() - 1) {
+            for j in 0..(avg_alt.height() - 1) {
                 let mut a = avg_alt[(i, j)];
                 let mut b = avg_alt[(i, j + 1)];
                 let mut c = avg_alt[(i + 1, j)];
@@ -606,7 +605,7 @@ mod tests {
             1,
             "Expected one contour for a single contour line"
         );
-        assert_eq!(contours[0].len(), 4, "Expected contour to have 4 points");
+        assert_eq!(contours[0].len(), 7, "Expected contour to have 4 points");
     }
 
     #[test]
@@ -620,6 +619,6 @@ mod tests {
             1,
             "Expected one contour for a single contour line"
         );
-        assert_eq!(contours[0].len(), 4, "Expected contour to have 4 points");
+        assert_eq!(contours[0].len(), 7, "Expected contour to have 4 points");
     }
 }
