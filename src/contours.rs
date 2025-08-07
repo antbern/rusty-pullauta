@@ -21,9 +21,7 @@ pub fn xyz2heightmap(
 ) -> Result<HeightMap, Box<dyn Error>> {
     info!("Generating heightmap...");
 
-    let scalefactor = config.scalefactor;
-    let water_class = config.water_class;
-
+    // read all points to find the bounding box
     let mut xmin: f64 = f64::MAX;
     let mut xmax: f64 = f64::MIN;
 
@@ -66,24 +64,29 @@ pub fn xyz2heightmap(
     }
     drop(reader);
 
-    xmin = (xmin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
-    ymin = (ymin / 2.0 / scalefactor).floor() * 2.0 * scalefactor;
+    let scale = 2.0 * config.scalefactor;
 
-    let w: usize = ((xmax - xmin).ceil() / 2.0 / scalefactor) as usize;
-    let h: usize = ((ymax - ymin).ceil() / 2.0 / scalefactor) as usize;
+    // align bounding box to a grid with the required scale
+    let xmin = (xmin / scale).floor() * scale;
+    let ymin = (ymin / scale).floor() * scale;
+    let xmax = (xmax / scale).ceil() * scale;
+    let ymax = (ymax / scale).ceil() * scale;
+
+    let w: usize = ((xmax - xmin) / scale) as usize;
+    let h: usize = ((ymax - ymin) / scale) as usize;
 
     // a two-dimensional vector of (sum, count) pairs for computing averages
-    let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
+    let mut list_alt = Vec2D::new(w, h, (0f64, 0usize));
 
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
-        if r.classification == 2 || r.classification == water_class {
+        if r.classification == 2 || r.classification == config.water_class {
             let x: f64 = r.x;
             let y: f64 = r.y;
             let h: f64 = r.z;
 
-            let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
-            let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
+            let idx_x = ((x - xmin) / scale) as usize;
+            let idx_y = ((y - ymin) / scale) as usize;
 
             let (sum, count) = &mut list_alt[(idx_x, idx_y)];
             *sum += h;
@@ -93,10 +96,10 @@ pub fn xyz2heightmap(
 
     drop(reader);
 
-    let mut avg_alt = Vec2D::new(w + 1, h + 1, f64::NAN);
+    let mut avg_alt = Vec2D::new(w, h, f64::NAN);
 
-    for x in 0..w + 1 {
-        for y in 0..h + 1 {
+    for x in 0..list_alt.width() {
+        for y in 0..list_alt.height() {
             let (sum, count) = &list_alt[(x, y)];
 
             if *count > 0 {
@@ -105,8 +108,8 @@ pub fn xyz2heightmap(
         }
     }
 
-    for x in 0..w + 1 {
-        for y in 0..h + 1 {
+    for x in 0..avg_alt.width() {
+        for y in 0..avg_alt.height() {
             if avg_alt[(x, y)].is_nan() {
                 // interpolate altitude of pixel
                 // TODO: optimize to first clasify area then assign values
@@ -119,7 +122,7 @@ pub fn xyz2heightmap(
                     i1 -= 1;
                 }
 
-                while i2 < w && avg_alt[(i2, y)].is_nan() {
+                while i2 < w - 1 && avg_alt[(i2, y)].is_nan() {
                     i2 += 1;
                 }
 
@@ -127,7 +130,7 @@ pub fn xyz2heightmap(
                     j1 -= 1;
                 }
 
-                while j2 < h && avg_alt[(x, j2)].is_nan() {
+                while j2 < h - 1 && avg_alt[(x, j2)].is_nan() {
                     j2 += 1;
                 }
 
@@ -157,26 +160,23 @@ pub fn xyz2heightmap(
         }
     }
 
-    for x in 0..w + 1 {
-        for y in 0..h + 1 {
+    for x in 0..avg_alt.width() {
+        for y in 0..avg_alt.height() {
             if avg_alt[(x, y)].is_nan() {
                 // second round of interpolation of altitude of pixel
                 let mut val: f64 = 0.0;
                 let mut c = 0;
-                for i in 0..3 {
-                    let ii: i32 = i - 1;
-                    for j in 0..3 {
-                        let jj: i32 = j - 1;
-                        if y as i32 + jj >= 0 && x as i32 + ii >= 0 {
-                            let x_idx = (x as i32 + ii) as usize;
-                            let y_idx = (y as i32 + jj) as usize;
-                            if x_idx <= w && y_idx <= h && !avg_alt[(x_idx, y_idx)].is_nan() {
-                                c += 1;
-                                val += avg_alt[(x_idx, y_idx)];
-                            }
+
+                // iterate 3x3 cell area around the pixel if possible
+                for x_idx in x.saturating_sub(1)..=(x + 1).min(avg_alt.width() - 1) {
+                    for y_idx in y.saturating_sub(1)..=(y + 1).min(avg_alt.height() - 1) {
+                        if !avg_alt[(x_idx, y_idx)].is_nan() {
+                            c += 1;
+                            val += avg_alt[(x_idx, y_idx)];
                         }
                     }
                 }
+
                 if c > 0 {
                     avg_alt[(x, y)] = val / c as f64;
                 }
@@ -184,22 +184,19 @@ pub fn xyz2heightmap(
         }
     }
 
-    for x in 0..w + 1 {
-        for y in 1..h + 1 {
+    for x in 0..avg_alt.width() {
+        for y in 1..avg_alt.height() {
             if avg_alt[(x, y)].is_nan() {
                 avg_alt[(x, y)] = avg_alt[(x, y - 1)];
             }
         }
-        for yy in 1..h + 1 {
+        for yy in 1..avg_alt.height() {
             let y = h - yy;
             if avg_alt[(x, y)].is_nan() {
                 avg_alt[(x, y)] = avg_alt[(x, y + 1)];
             }
         }
     }
-
-    xmin += 1.0;
-    ymin += 1.0;
 
     // make sure we do not have any NaNs
     for x in 0..avg_alt.width() {
@@ -213,8 +210,8 @@ pub fn xyz2heightmap(
     let hmap = HeightMap {
         xoffset: xmin,
         yoffset: ymin,
-        scale: 2.0 * scalefactor,
-        grid: avg_alt.clone(),
+        scale,
+        grid: avg_alt,
     };
 
     Ok(hmap)
@@ -600,7 +597,7 @@ mod tests {
         let mut grid = crate::vec2d::Vec2D::new(5, 5, 0.0);
         grid[(2, 2)] = 1.1;
         let contours = contours::grid2contours(&grid, 1.0);
-        println!("Contours: {:?}", contours);
+        println!("Contours: {contours:?}");
         assert_eq!(
             contours.len(),
             1,
@@ -614,7 +611,7 @@ mod tests {
         let mut grid = crate::vec2d::Vec2D::new(5, 5, 2.0);
         grid[(2, 2)] = 1.1;
         let contours = contours::grid2contours(&grid, 1.0);
-        println!("Contours: {:?}", contours);
+        println!("Contours: {contours:?}");
         assert_eq!(
             contours.len(),
             1,

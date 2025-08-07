@@ -27,8 +27,6 @@ pub fn makevege(
     let hmap = HeightMap::from_bytes(&mut reader)?;
 
     // in world coordinates
-    let xstart = hmap.xoffset;
-    let ystart = hmap.yoffset;
     let size = hmap.scale;
     let xyz = &hmap.grid;
 
@@ -60,16 +58,17 @@ pub fn makevege(
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz.bin");
 
-    let xmin = xstart;
-    let ymin = ystart;
-    let mut xmax: f64 = f64::MIN;
-    let mut ymax: f64 = f64::MIN;
+    let xmin = hmap.minx();
+    let ymin = hmap.miny();
+    let xmax = hmap.maxx();
+    let ymax = hmap.maxy();
 
-    let w_block = ((hmap.maxx() - xmin) / block + 0.5).ceil() as usize;
-    let h_block = ((hmap.maxy() - ymin) / block + 0.5).ceil() as usize;
+    // here we overlay two other grids on top of the heightmap, but with the same origin
+    let w_block = ((xmax - xmin) / block).ceil() as usize;
+    let h_block = ((ymax - ymin) / block).ceil() as usize;
 
-    let w_3 = ((hmap.maxx() - xmin) / 3.0).ceil() as usize;
-    let h_3 = ((hmap.maxy() - ymin) / 3.0).ceil() as usize;
+    let w_3 = ((xmax - xmin) / 3.0).ceil() as usize;
+    let h_3 = ((ymax - ymin) / 3.0).ceil() as usize;
 
     let mut top = Vec2D::new(w_block, h_block, 0.0); // block
     let mut yhit = Vec2D::new(w_3, h_3, 0_u32); // 3.0
@@ -86,12 +85,7 @@ pub fn makevege(
             let r4 = r.number_of_returns;
             let r5 = r.return_number;
 
-            if xmax < x {
-                xmax = x;
-            }
-            if ymax < y {
-                ymax = y;
-            }
+            // TODO: remove check (point is always in bounds since the heightmap covers _at least_ all points)
             if x > xmin && y > ymin {
                 let xx = ((x - xmin) / block) as usize;
                 let yy = ((y - ymin) / block) as usize;
@@ -148,26 +142,45 @@ pub fn makevege(
             let r4 = r.number_of_returns;
             let r5 = r.return_number;
 
+            // TODO: same here, remove!
             if x > xmin && y > ymin {
                 if r5 == 1 {
-                    let xx = ((x - xmin) / block + 0.5) as usize;
-                    let yy = ((y - ymin) / block + 0.5) as usize;
+                    let xx = ((x - xmin) / block) as usize;
+                    let yy = ((y - ymin) / block) as usize;
                     firsthit[(xx, yy)] += 1;
                 }
 
-                let xx = ((x - xmin) / size) as usize;
-                let yy = ((y - ymin) / size) as usize;
-                let a = xyz[(xx, yy)];
-                let b = xyz[(xx + 1, yy)];
-                let c = xyz[(xx, yy + 1)];
-                let d = xyz[(xx + 1, yy + 1)];
+                // linear interpolation of the height at the point based on the surrpoinding cells in the heightmap
+                let thelele = {
+                    let xx = ((x - xmin) / size) as usize;
+                    let yy = ((y - ymin) / size) as usize;
 
-                let distx = (x - xmin) / size - xx as f64;
-                let disty = (y - ymin) / size - yy as f64;
+                    let a = xyz[(xx, yy)];
 
-                let ab = a * (1.0 - distx) + b * distx;
-                let cd = c * (1.0 - distx) + d * distx;
-                let thelele = ab * (1.0 - disty) + cd * disty;
+                    // if we are on the edge, simply extend the values
+                    let (b, c, d) = if xx < xyz.width() - 1 && yy < xyz.height() - 1 {
+                        // inside, take all values
+                        (xyz[(xx + 1, yy)], xyz[(xx, yy + 1)], xyz[(xx + 1, yy + 1)])
+                    } else if xx < xyz.width() - 1 {
+                        // on right edge, extend to the right
+                        (xyz[(xx + 1, yy)], a, a)
+                    } else if yy < xyz.height() - 1 {
+                        // on bottom edge, extend downwards
+                        (a, xyz[(xx, yy + 1)], a)
+                    } else {
+                        // in corner, use this height for all
+                        (a, a, a)
+                    };
+
+                    let distx = (x - xmin) / size - xx as f64;
+                    let disty = (y - ymin) / size - yy as f64;
+
+                    // linear interpolation of the elevation at the point
+                    let ab = a * (1.0 - distx) + b * distx;
+                    let cd = c * (1.0 - distx) + d * distx;
+                    ab * (1.0 - disty) + cd * disty
+                };
+
                 let xx = ((x - xmin) / block / (step as f64) + 0.5) as usize;
                 let yy = ((y - ymin) / block / (step as f64) + 0.5) as usize;
                 let hh = h - thelele;
@@ -184,14 +197,13 @@ pub fn makevege(
                     ug_entry.ugg += 0.05;
                 }
 
-                let xx = ((x - xmin) / block + 0.5) as usize;
-                let yy = ((y - ymin) / block + 0.5) as usize;
-                let yyy = ((y - ymin) / block) as usize; // necessary due to bug in perl version
+                let xx = ((x - xmin) / block) as usize;
+                let yy = ((y - ymin) / block) as usize;
                 if r3 == 2 || greenground >= hh {
                     if r4 == 1 && r5 == 1 {
-                        ghit[(xx, yyy)] += firstandlastreturnasground;
+                        ghit[(xx, yy)] += firstandlastreturnasground;
                     } else {
-                        ghit[(xx, yyy)] += 1;
+                        ghit[(xx, yy)] += 1;
                     }
                 } else {
                     let mut last = 1.0;
