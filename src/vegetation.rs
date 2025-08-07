@@ -118,8 +118,8 @@ pub fn makevege(
 
     let step: f32 = 6.0;
 
-    let w_block_step = ((xmax - xmin) / (block * step as f64)).ceil() as usize + 1;
-    let h_block_step = ((ymax - ymin) / (block * step as f64)).ceil() as usize + 1;
+    let w_block_step = ((xmax - xmin) / (block * step as f64)).ceil() as usize;
+    let h_block_step = ((ymax - ymin) / (block * step as f64)).ceil() as usize;
 
     #[derive(Default, Clone)]
     struct UggItem {
@@ -176,8 +176,8 @@ pub fn makevege(
                 ab * (1.0 - disty) + cd * disty
             };
 
-            let xx = ((x - xmin) / block / (step as f64) + 0.5) as usize;
-            let yy = ((y - ymin) / block / (step as f64) + 0.5) as usize;
+            let xx = ((x - xmin) / block / (step as f64)) as usize;
+            let yy = ((y - ymin) / block / (step as f64)) as usize;
             let hh = h - thelele;
             let ug_entry = &mut ug[(xx, yy)];
             if hh <= 1.2 {
@@ -209,6 +209,7 @@ pub fn makevege(
                     }
                 }
 
+                // NOTE: the use of top here means that we cannot combine the two processing loops into one
                 let top_val = top[(xx, yy)];
                 for &Zone {
                     low,
@@ -233,8 +234,6 @@ pub fn makevege(
     }
     // rebind the variables to be non-mut for the rest of the function
     let (firsthit, ug, ghit, greenhit, highit) = (firsthit, ug, ghit, greenhit, highit);
-
-    let scalefactor = config.scalefactor;
 
     let img_width = (w_block as f64 * block) as u32;
     let img_height = (h_block as f64 * block) as u32;
@@ -521,6 +520,8 @@ pub fn makevege(
         .expect("could not save output png");
 
     drop(imgwater); // explicitly drop imgwater to free memory
+
+    let scalefactor = config.scalefactor;
 
     let underg = Rgba([64, 121, 0, 255]);
     let tmpfactor = (600.0 / 254.0 / scalefactor) as f32;
