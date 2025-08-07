@@ -333,6 +333,8 @@ pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f6
         let mut obj = Vec::<(i64, i64, u8)>::new();
         let mut curves: HashMap<(i64, i64, u8), (i64, i64)> = HashMap::default();
 
+        // for i in 0..(avg_alt.width() - 1) {
+        //     for j in 0..(avg_alt.height() - 1) {
         for i in 1..(w - 1) {
             for j in 2..(h - 1) {
                 let mut a = avg_alt[(i, j)];
@@ -340,141 +342,142 @@ pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f6
                 let mut c = avg_alt[(i + 1, j)];
                 let mut d = avg_alt[(i + 1, j + 1)];
 
+                // if all corners are below or above the level, skip
                 if a < level && b < level && c < level && d < level
                     || a > level && b > level && c > level && d > level
                 {
-                    // skip
-                } else {
-                    let temp: f64 = (a / v + 0.5).floor() * v;
-                    if (a - temp).abs() < 0.05 {
-                        if a - temp < 0.0 {
-                            a = temp - 0.05;
-                        } else {
-                            a = temp + 0.05;
-                        }
-                    }
+                    continue;
+                }
 
-                    let temp: f64 = (b / v + 0.5).floor() * v;
-                    if (b - temp).abs() < 0.05 {
-                        if b - temp < 0.0 {
-                            b = temp - 0.05;
-                        } else {
-                            b = temp + 0.05;
-                        }
+                let temp: f64 = (a / v + 0.5).floor() * v;
+                if (a - temp).abs() < 0.05 {
+                    if a - temp < 0.0 {
+                        a = temp - 0.05;
+                    } else {
+                        a = temp + 0.05;
                     }
+                }
 
-                    let temp: f64 = (c / v + 0.5).floor() * v;
-                    if (c - temp).abs() < 0.05 {
-                        if c - temp < 0.0 {
-                            c = temp - 0.05;
-                        } else {
-                            c = temp + 0.05;
-                        }
+                let temp: f64 = (b / v + 0.5).floor() * v;
+                if (b - temp).abs() < 0.05 {
+                    if b - temp < 0.0 {
+                        b = temp - 0.05;
+                    } else {
+                        b = temp + 0.05;
                     }
+                }
 
-                    let temp: f64 = (d / v + 0.5).floor() * v;
-                    if (d - temp).abs() < 0.05 {
-                        if d - temp < 0.0 {
-                            d = temp - 0.05;
-                        } else {
-                            d = temp + 0.05;
-                        }
+                let temp: f64 = (c / v + 0.5).floor() * v;
+                if (c - temp).abs() < 0.05 {
+                    if c - temp < 0.0 {
+                        c = temp - 0.05;
+                    } else {
+                        c = temp + 0.05;
                     }
+                }
 
-                    if a < b {
-                        if level < b && level > a {
-                            let x1: f64 = i as f64;
-                            let y1: f64 = j as f64 + (level - a) / (b - a);
-                            if level > c {
-                                let x2: f64 = i as f64 + (b - level) / (b - c);
-                                let y2: f64 = j as f64 + (level - c) / (b - c);
-                                check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                            } else if level < c {
-                                let x2: f64 = i as f64 + (level - a) / (c - a);
-                                let y2: f64 = j as f64;
-                                check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                            }
-                        }
-                    } else if b < a && level < a && level > b {
+                let temp: f64 = (d / v + 0.5).floor() * v;
+                if (d - temp).abs() < 0.05 {
+                    if d - temp < 0.0 {
+                        d = temp - 0.05;
+                    } else {
+                        d = temp + 0.05;
+                    }
+                }
+
+                if a < b {
+                    if level < b && level > a {
                         let x1: f64 = i as f64;
-                        let y1: f64 = j as f64 + (a - level) / (a - b);
-                        if level < c {
-                            let x2: f64 = i as f64 + (level - b) / (c - b);
-                            let y2: f64 = j as f64 + (c - level) / (c - b);
+                        let y1: f64 = j as f64 + (level - a) / (b - a);
+                        if level > c {
+                            let x2: f64 = i as f64 + (b - level) / (b - c);
+                            let y2: f64 = j as f64 + (level - c) / (b - c);
                             check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                        } else if level > c {
-                            let x2: f64 = i as f64 + (a - level) / (a - c);
+                        } else if level < c {
+                            let x2: f64 = i as f64 + (level - a) / (c - a);
                             let y2: f64 = j as f64;
                             check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
                         }
                     }
+                } else if b < a && level < a && level > b {
+                    let x1: f64 = i as f64;
+                    let y1: f64 = j as f64 + (a - level) / (a - b);
+                    if level < c {
+                        let x2: f64 = i as f64 + (level - b) / (c - b);
+                        let y2: f64 = j as f64 + (c - level) / (c - b);
+                        check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                    } else if level > c {
+                        let x2: f64 = i as f64 + (a - level) / (a - c);
+                        let y2: f64 = j as f64;
+                        check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                    }
+                }
 
-                    if a < c {
-                        if level < c && level > a {
-                            let x1: f64 = i as f64 + (level - a) / (c - a);
-                            let y1: f64 = j as f64;
-                            if level > b {
-                                let x2: f64 = i as f64 + (level - b) / (c - b);
-                                let y2: f64 = j as f64 + (c - level) / (c - b);
-                                check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                            }
-                        }
-                    } else if a > c && level < a && level > c {
-                        let x1: f64 = i as f64 + (a - level) / (a - c);
+                if a < c {
+                    if level < c && level > a {
+                        let x1: f64 = i as f64 + (level - a) / (c - a);
                         let y1: f64 = j as f64;
+                        if level > b {
+                            let x2: f64 = i as f64 + (level - b) / (c - b);
+                            let y2: f64 = j as f64 + (c - level) / (c - b);
+                            check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                        }
+                    }
+                } else if a > c && level < a && level > c {
+                    let x1: f64 = i as f64 + (a - level) / (a - c);
+                    let y1: f64 = j as f64;
+                    if level < b {
+                        let x2: f64 = i as f64 + (b - level) / (b - c);
+                        let y2: f64 = j as f64 + (level - c) / (b - c);
+                        check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                    }
+                }
+
+                if c < d {
+                    if level < d && level > c {
+                        let x1: f64 = i as f64 + 1.0;
+                        let y1: f64 = j as f64 + (level - c) / (d - c);
                         if level < b {
+                            let x2: f64 = i as f64 + (b - level) / (b - c);
+                            let y2: f64 = j as f64 + (level - c) / (b - c);
+                            check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                        } else if level > b {
+                            let x2: f64 = i as f64 + (level - b) / (d - b);
+                            let y2: f64 = j as f64 + 1.0;
+                            check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                        }
+                    }
+                } else if c > d && level < c && level > d {
+                    let x1: f64 = i as f64 + 1.0;
+                    let y1: f64 = j as f64 + (c - level) / (c - d);
+                    if level > b {
+                        let x2: f64 = i as f64 + (level - b) / (c - b);
+                        let y2: f64 = j as f64 + (c - level) / (c - b);
+                        check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                    } else if level < b {
+                        let x2: f64 = i as f64 + (b - level) / (b - d);
+                        let y2: f64 = j as f64 + 1.0;
+                        check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
+                    }
+                }
+
+                if d < b {
+                    if level < b && level > d {
+                        let x1: f64 = i as f64 + (b - level) / (b - d);
+                        let y1: f64 = j as f64 + 1.0;
+                        if level > c {
                             let x2: f64 = i as f64 + (b - level) / (b - c);
                             let y2: f64 = j as f64 + (level - c) / (b - c);
                             check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
                         }
                     }
-
-                    if c < d {
-                        if level < d && level > c {
-                            let x1: f64 = i as f64 + 1.0;
-                            let y1: f64 = j as f64 + (level - c) / (d - c);
-                            if level < b {
-                                let x2: f64 = i as f64 + (b - level) / (b - c);
-                                let y2: f64 = j as f64 + (level - c) / (b - c);
-                                check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                            } else if level > b {
-                                let x2: f64 = i as f64 + (level - b) / (d - b);
-                                let y2: f64 = j as f64 + 1.0;
-                                check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                            }
-                        }
-                    } else if c > d && level < c && level > d {
-                        let x1: f64 = i as f64 + 1.0;
-                        let y1: f64 = j as f64 + (c - level) / (c - d);
-                        if level > b {
-                            let x2: f64 = i as f64 + (level - b) / (c - b);
-                            let y2: f64 = j as f64 + (c - level) / (c - b);
-                            check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                        } else if level < b {
-                            let x2: f64 = i as f64 + (b - level) / (b - d);
-                            let y2: f64 = j as f64 + 1.0;
-                            check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                        }
-                    }
-
-                    if d < b {
-                        if level < b && level > d {
-                            let x1: f64 = i as f64 + (b - level) / (b - d);
-                            let y1: f64 = j as f64 + 1.0;
-                            if level > c {
-                                let x2: f64 = i as f64 + (b - level) / (b - c);
-                                let y2: f64 = j as f64 + (level - c) / (b - c);
-                                check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                            }
-                        }
-                    } else if b < d && level < d && level > b {
-                        let x1: f64 = i as f64 + (level - b) / (d - b);
-                        let y1: f64 = j as f64 + 1.0;
-                        if level < c {
-                            let x2: f64 = i as f64 + (level - b) / (c - b);
-                            let y2: f64 = j as f64 + (c - level) / (c - b);
-                            check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
-                        }
+                } else if b < d && level < d && level > b {
+                    let x1: f64 = i as f64 + (level - b) / (d - b);
+                    let y1: f64 = j as f64 + 1.0;
+                    if level < c {
+                        let x2: f64 = i as f64 + (level - b) / (c - b);
+                        let y2: f64 = j as f64 + (c - level) / (c - b);
+                        check_obj_in(&mut obj, &mut curves, x1, x2, y1, y2);
                     }
                 }
             }
