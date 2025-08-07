@@ -49,7 +49,7 @@ pub fn dotknolls(
         Luma([0xff]),
     );
 
-    let data = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("out2.dxf.bin"))?)?;
+    let data = BinaryDxf::from_reader(fs, tmpfolder.join("out2.dxf.bin"))?;
     let Geometry::Polylines3(lines) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("out2.dxf.bin should contain polylines").into());
     };
@@ -73,8 +73,7 @@ pub fn dotknolls(
 
     let mut dotknoll_points = Points::new();
 
-    let dotknolls: Dotknolls =
-        crate::util::read_object(&mut fs.open(tmpfolder.join("dotknolls.bin"))?)?;
+    let dotknolls: Dotknolls = fs.read_object(tmpfolder.join("dotknolls.bin"))?;
 
     for dot in dotknolls.dotknolls {
         let Dotknoll { x, y, is_knoll } = dot;
@@ -118,10 +117,7 @@ pub fn dotknolls(
     );
 
     // write binary
-    let mut f = fs
-        .create(tmpfolder.join("dotknolls.dxf.bin"))
-        .expect("Unable to create file");
-    dxf.to_writer(&mut f)
+    dxf.to_fs(fs, tmpfolder.join("dotknolls.dxf.bin"))
         .expect("could not write dotknolls.dxf.bin");
 
     if config.output_dxf {
@@ -165,7 +161,7 @@ pub fn knolldetector(
         xyz.insert((x as u64, y as u64), h);
     }
 
-    let data = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("contours03.dxf.bin"))?)?;
+    let data = BinaryDxf::from_reader(fs, tmpfolder.join("contours03.dxf.bin"))?;
     let Geometry::Polylines2(lines) = data.take_geometry().swap_remove(0) else {
         anyhow::bail!("contours03.dxf.bin should contain polylines");
     };
@@ -802,17 +798,15 @@ pub fn knolldetector(
     }
 
     let detected_dxf = BinaryDxf::new(detected_bounds, vec![detected_lines.into()]);
-    detected_dxf.to_writer(&mut fs.create(tmpfolder.join("detected.dxf.bin"))?)?;
+    detected_dxf.to_fs(fs, tmpfolder.join("detected.dxf.bin"))?;
 
     if config.output_dxf {
         detected_dxf.to_dxf(&mut fs.create(tmpfolder.join("detected.dxf"))?)?;
     }
 
     // write pins to file
-    let file_pins = fs
-        .create(tmpfolder.join("pins.bin"))
-        .expect("Unable to create file");
-    crate::util::write_object(file_pins, &pins).expect("Unable to write pins");
+    fs.write_object(tmpfolder.join("pins.bin"), &pins)
+        .expect("Unable to write pins");
 
     info!("Done");
     Ok(())
@@ -883,8 +877,7 @@ pub fn xyzknolls(
     // read pins from file if it exists
     let pins_file_in = tmpfolder.join("pins.bin");
     let pins: Vec<Pin> = if fs.exists(&pins_file_in) {
-        let pins_file_in = fs.open(pins_file_in).expect("Unable to open file");
-        crate::util::read_object(pins_file_in).expect("Unable to write pins")
+        fs.read_object(pins_file_in).expect("Unable to read pins")
     } else {
         Vec::new()
     };

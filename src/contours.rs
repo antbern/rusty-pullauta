@@ -520,10 +520,8 @@ pub fn heightmap2contours(
     let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![lines.into()]);
 
     // write to disk
-    let mut f = fs
-        .create(tmpfolder.join(dxffile))
-        .expect("Unable to create file");
-    dxf.to_writer(&mut f).expect("Cannot write binary dxf file");
+    dxf.to_fs(fs, tmpfolder.join(dxffile))
+        .expect("Cannot write binary dxf file");
 
     if output_dxf {
         dxf.to_dxf(&mut fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?)?;

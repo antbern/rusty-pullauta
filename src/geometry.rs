@@ -3,6 +3,10 @@
 //!
 //! These types also have helpers for exporting them to DXF format.
 
+use anyhow::Context;
+
+use crate::io::fs::FileSystem;
+
 /// A 2D point
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Point2 {
@@ -207,12 +211,20 @@ impl BinaryDxf {
     }
 
     /// Serialize this object to a writer.
-    pub fn to_writer<W: std::io::Write>(&self, writer: &mut W) -> anyhow::Result<()> {
-        crate::util::write_object(writer, self)
+    pub fn to_fs(
+        &self,
+        fs: &impl FileSystem,
+        path: impl AsRef<std::path::Path>,
+    ) -> anyhow::Result<()> {
+        fs.write_object(path, self)
+            .context("writing BinaryDxf to file system")
     }
     /// Read this object from a reader. Returns an error if the version does not match.
-    pub fn from_reader<R: std::io::Read>(reader: &mut R) -> anyhow::Result<Self> {
-        let object: Self = crate::util::read_object(reader)?;
+    pub fn from_reader(
+        fs: &impl FileSystem,
+        path: impl AsRef<std::path::Path>,
+    ) -> anyhow::Result<Self> {
+        let object: Self = fs.read_object(path)?;
         anyhow::ensure!(
             object.version == env!("CARGO_PKG_VERSION"),
             "Binary DXF file was created with another version, please remove and recreate"

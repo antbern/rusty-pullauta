@@ -131,8 +131,7 @@ pub fn render(
     draw_curves(fs, config, &mut img, tmpfolder, nodepressions, true).unwrap();
 
     // dotknolls----------
-    let input = tmpfolder.join("dotknolls.dxf.bin");
-    let data = BinaryDxf::from_reader(&mut fs.open(input)?)?;
+    let data = BinaryDxf::from_reader(fs, tmpfolder.join("dotknolls.dxf.bin"))?;
     let Geometry::Points(points) = data.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("dotknolls.dxf.bin should contain points").into());
     };
@@ -277,8 +276,7 @@ fn draw_cliffs(
 ) -> Result<(), Box<dyn Error>> {
     let scalefactor = config.scalefactor;
 
-    let input = tmpfolder.join(file);
-    let dxf = BinaryDxf::from_reader(&mut fs.open(input)?)?;
+    let dxf = BinaryDxf::from_reader(fs, tmpfolder.join(file))?;
 
     let Geometry::Polylines2(lines) = dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("cliff data should contain polylines").into());
@@ -500,7 +498,7 @@ pub fn draw_curves(
 
     // read the binary file
 
-    let input_dxf = BinaryDxf::from_reader(&mut fs.open(tmpfolder.join("out2.dxf.bin"))?)
+    let input_dxf = BinaryDxf::from_reader(fs, tmpfolder.join("out2.dxf.bin"))
         .expect("Unable to read out2.dxf.bin");
     let bounds = input_dxf.bounds().clone();
     let Geometry::Polylines3(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
@@ -856,7 +854,7 @@ pub fn draw_curves(
     if should_generate_formlines {
         let out_formlines = BinaryDxf::new(bounds, vec![formlines.into()]);
         out_formlines
-            .to_writer(&mut fs.create(tmpfolder.join("formlines.dxf.bin"))?)
+            .to_fs(fs, tmpfolder.join("formlines.dxf.bin"))
             .expect("Could not write formlines.dxf.bin");
 
         if config.output_dxf {

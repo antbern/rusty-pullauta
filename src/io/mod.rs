@@ -46,7 +46,7 @@ pub fn internal2xyz(fs: &impl FileSystem, input: &str, output: &str) -> std::io:
 
 /// Helper for converting a binary DXF file to a regular DXF file.
 pub fn bin2dxf(fs: &impl FileSystem, input: &str, output: &str) -> anyhow::Result<()> {
-    let binary = BinaryDxf::from_reader(&mut fs.open(input)?)?;
+    let binary = BinaryDxf::from_reader(fs, input)?;
     binary.to_dxf(&mut fs.create(output)?)?;
     Ok(())
 }

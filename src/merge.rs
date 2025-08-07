@@ -262,7 +262,7 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
         let mut geometries: Vec<Geometry> = Vec::with_capacity(files.len());
 
         for file in files {
-            let loaded = BinaryDxf::from_reader(&mut fs.open(&file)?)?;
+            let loaded = BinaryDxf::from_reader(fs, &file)?;
 
             // we always use the bounds of the first loaded file
             if first_file_bounds.is_none() {
@@ -322,7 +322,7 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
                 .expect("this should be set since we load at least one file"),
             geometries,
         );
-        output.to_writer(&mut fs.create(&output_file)?)?;
+        output.to_fs(fs, output_file)?;
 
         if config.output_dxf {
             let output_file = PathBuf::from(format!("merged_{suffix}.dxf"));
@@ -333,7 +333,7 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
     // output all geometries to a single file
     if let Some(all_bounds) = first_file_bounds {
         let out_merged = BinaryDxf::new(all_bounds, all_geometries);
-        out_merged.to_writer(&mut fs.create("merged.dxf.bin")?)?;
+        out_merged.to_fs(fs, "merged.dxf.bin")?;
 
         if config.output_dxf {
             out_merged.to_dxf(&mut fs.create("merged.dxf")?)?;
@@ -402,9 +402,8 @@ pub fn smoothjoin(
     }
 
     // read the binary input
-    let input = tmpfolder.join("out.dxf.bin");
-    let input_dxf =
-        BinaryDxf::from_reader(&mut fs.open(input)?).expect("Unable to read out.dxf.bin");
+    let input_dxf = BinaryDxf::from_reader(fs, tmpfolder.join("out.dxf.bin"))
+        .expect("Unable to read out.dxf.bin");
 
     let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in the output
     let Geometry::Polylines2(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
@@ -923,16 +922,13 @@ pub fn smoothjoin(
         }
     }
 
-    crate::util::write_object(
-        &mut fs.create(tmpfolder.join("dotknolls.bin"))?,
+    fs.write_object(
+        tmpfolder.join("dotknolls.bin"),
         &super::knolls::Dotknolls { dotknolls },
     )?;
 
     let out2_dxf = BinaryDxf::new(input_bounds, vec![out2_lines.into()]);
-
-    let output = tmpfolder.join("out2.dxf.bin");
-    let mut fp = fs.create(output).expect("Unable to create file");
-    out2_dxf.to_writer(&mut fp)?;
+    out2_dxf.to_fs(fs, tmpfolder.join("out2.dxf.bin"))?;
 
     if config.output_dxf {
         out2_dxf.to_dxf(&mut fs.create(tmpfolder.join("out2.dxf"))?)?;
