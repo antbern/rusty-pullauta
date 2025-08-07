@@ -24,7 +24,7 @@ jobs:
       with:
         fetch-depth: 2
 
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.88
     - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
@@ -123,7 +123,7 @@ jobs:
       with:
         fetch-depth: 2
 
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.88
     - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
