@@ -229,14 +229,66 @@ pub fn heightmap2contours(
     dxffile: &str,
     output_dxf: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mut avg_alt = heightmap.grid.clone();
-    let w = heightmap.grid.width() - 1;
-    let h = heightmap.grid.height() - 1;
+    let polylines = grid2contours(&heightmap.grid, cinterval);
+
     let xmin = heightmap.xoffset;
     let ymin = heightmap.yoffset;
     let xmax = heightmap.maxx();
     let ymax = heightmap.maxy();
     let size = heightmap.scale;
+
+    // convert the polylines to our internal binary dxf format,
+    // including some thinning of the lines
+    let mut lines = Polylines::new();
+    for polyline in polylines.into_iter() {
+        lines.push(
+            polyline
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (x, y))| {
+                    // original logic for some kind of "thinning" of the lines
+                    let ii = i + 1;
+                    let ldata = polyline.len() - 1;
+                    if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
+                        return None; // skip this point
+                    }
+
+                    // scale the points to world coordinates
+                    let x: f64 = x * size + xmin;
+                    let y: f64 = y * size + ymin;
+
+                    Some(Point2 { x, y })
+                })
+                .collect::<Vec<_>>(),
+            Classification::ContourSimple,
+        );
+    }
+    let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![lines.into()]);
+
+    // write to disk
+    let mut f = fs
+        .create(tmpfolder.join(dxffile))
+        .expect("Unable to create file");
+    dxf.to_writer(&mut f).expect("Cannot write binary dxf file");
+
+    if output_dxf {
+        dxf.to_dxf(&mut fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?)?;
+    }
+
+    info!("Done");
+
+    Ok(())
+}
+
+/// Inner function to generate contours from a heightmap.
+/// Returns a vector of polylines, each represented as a vector of (x, y) tuples in
+/// grid-coordinates.
+/// For now the returned polylines are not annotated with their height.
+/// Note: this will Clone the provided `heightmap`
+pub fn grid2contours(heightmap: &Vec2D<f64>, cinterval: f64) -> Vec<Vec<(f64, f64)>> {
+    let mut avg_alt = heightmap.clone();
+    let w = heightmap.width() - 1;
+    let h = heightmap.height() - 1;
 
     // As per https://github.com/karttapullautin/karttapullautin/discussions/154#discussioncomment-11393907
     // If elevation grid point elavion equals with contour interval steps you will get contour topology issues
@@ -487,47 +539,7 @@ pub fn heightmap2contours(
         level += v;
     }
 
-    // convert the polylines to our internal binary dxf format
-
-    let mut lines = Polylines::new();
-    for polyline in polylines.into_iter() {
-        lines.push(
-            polyline
-                .iter()
-                .enumerate()
-                .filter_map(|(i, (x, y))| {
-                    // original logic for some kind of "thinning" of the lines
-                    let ii = i + 1;
-                    let ldata = polyline.len() - 1;
-                    if ii > 5 && ii < ldata - 5 && ldata > 12 && ii % 2 == 0 {
-                        return None; // skip this point
-                    }
-
-                    // scale the points to world coordinates
-                    let x: f64 = x * size + xmin;
-                    let y: f64 = y * size + ymin;
-
-                    Some(Point2 { x, y })
-                })
-                .collect::<Vec<_>>(),
-            Classification::ContourSimple,
-        );
-    }
-    let dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![lines.into()]);
-
-    // write to disk
-    let mut f = fs
-        .create(tmpfolder.join(dxffile))
-        .expect("Unable to create file");
-    dxf.to_writer(&mut f).expect("Cannot write binary dxf file");
-
-    if output_dxf {
-        dxf.to_dxf(&mut fs.create(tmpfolder.join(dxffile.strip_suffix(".bin").unwrap()))?)?;
-    }
-
-    info!("Done");
-
-    Ok(())
+    polylines
 }
 
 fn check_obj_in(
