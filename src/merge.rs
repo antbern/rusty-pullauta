@@ -405,10 +405,29 @@ pub fn smoothjoin(
     let knollhead_output = tmpfolder.join("knollheads.txt");
     let mut knollhead_fp = fs.create(knollhead_output).expect("Unable to create file");
 
-    let mut heads1: HashMap<String, usize> = HashMap::default();
-    let mut heads2: HashMap<String, usize> = HashMap::default();
-    let mut heads = Vec::<String>::with_capacity(input_lines.len());
-    let mut tails = Vec::<String>::with_capacity(input_lines.len());
+    // Internal type used to index into the hashmaps and vectors.
+    // Since using f64 coordinates directly has problems with rounding (and do not impl Eq and
+    // Hash), we can use an integer representation of the coordinates to index into the HashMaps.
+    // By multiplying by 1000, we can keep a precision of 3 decimal places, which is sufficient for
+    // what we need.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    struct Key {
+        x: i64,
+        y: i64,
+    }
+    impl Key {
+        fn new(x: f64, y: f64) -> Self {
+            Key {
+                x: (x * 1000.0) as i64,
+                y: (y * 1000.0) as i64,
+            }
+        }
+    }
+
+    let mut heads1: HashMap<Key, usize> = HashMap::default();
+    let mut heads2: HashMap<Key, usize> = HashMap::default();
+    let mut heads = Vec::<Key>::with_capacity(input_lines.len());
+    let mut tails = Vec::<Key>::with_capacity(input_lines.len());
     let mut el_x = Vec::<Vec<f64>>::with_capacity(input_lines.len());
     let mut el_y = Vec::<Vec<f64>>::with_capacity(input_lines.len());
 
@@ -416,15 +435,11 @@ pub fn smoothjoin(
         let first = line.first().unwrap();
         let last = line.last().unwrap();
 
-        let x0 = first.x;
-        let xl = last.x;
-        let y0 = first.y;
-        let yl = last.y;
-        let head = format!("{x0}x{y0}");
-        let tail = format!("{xl}x{yl}");
+        let head = Key::new(first.x, first.y);
+        let tail = Key::new(last.x, last.y);
 
-        heads.push(head.clone());
-        tails.push(tail.clone());
+        heads.push(head);
+        tails.push(tail);
 
         // TODO: this is not very efficient (collecting all x and y separately into Vecs), but it means the logic further down can stay the same
         el_x.push(line.iter().map(|p| p.x).collect::<Vec<_>>());
@@ -470,56 +485,44 @@ pub fn smoothjoin(
                 }
                 if !end_loop {
                     if tails[l] == heads[to_join] {
-                        let tmp = tails[l].to_string();
-                        heads2.insert(tmp, 0);
-                        let tmp = tails[l].to_string();
-                        heads1.insert(tmp, 0);
+                        heads2.insert(tails[l], 0);
+                        heads1.insert(tails[l], 0);
                         let mut to_append = el_x[to_join].to_vec();
                         el_x[l].append(&mut to_append);
                         let mut to_append = el_y[to_join].to_vec();
                         el_y[l].append(&mut to_append);
-                        let tmp = tails[to_join].to_string();
-                        tails[l] = tmp;
+                        tails[l] = tails[to_join];
                         el_x[to_join].clear();
                     } else if tails[l] == tails[to_join] {
-                        let tmp = tails[l].to_string();
-                        heads2.insert(tmp, 0);
-                        let tmp = tails[l].to_string();
-                        heads1.insert(tmp, 0);
+                        heads2.insert(tails[l], 0);
+                        heads1.insert(tails[l], 0);
                         let mut to_append = el_x[to_join].to_vec();
                         to_append.reverse();
                         el_x[l].append(&mut to_append);
                         let mut to_append = el_y[to_join].to_vec();
                         to_append.reverse();
                         el_y[l].append(&mut to_append);
-                        let tmp = heads[to_join].to_string();
-                        tails[l] = tmp;
+                        tails[l] = heads[to_join];
                         el_x[to_join].clear();
                     } else if heads[l] == tails[to_join] {
-                        let tmp = heads[l].to_string();
-                        heads2.insert(tmp, 0);
-                        let tmp = heads[l].to_string();
-                        heads1.insert(tmp, 0);
+                        heads2.insert(heads[l], 0);
+                        heads1.insert(heads[l], 0);
                         let to_append = el_x[to_join].to_vec();
                         el_x[l].splice(0..0, to_append);
                         let to_append = el_y[to_join].to_vec();
                         el_y[l].splice(0..0, to_append);
-                        let tmp = heads[to_join].to_string();
-                        heads[l] = tmp;
+                        heads[l] = heads[to_join];
                         el_x[to_join].clear();
                     } else if heads[l] == heads[to_join] {
-                        let tmp = heads[l].to_string();
-                        heads2.insert(tmp, 0);
-                        let tmp = heads[l].to_string();
-                        heads1.insert(tmp, 0);
+                        heads2.insert(heads[l], 0);
+                        heads1.insert(heads[l], 0);
                         let mut to_append = el_x[to_join].to_vec();
                         to_append.reverse();
                         el_x[l].splice(0..0, to_append);
                         let mut to_append = el_y[to_join].to_vec();
                         to_append.reverse();
                         el_y[l].splice(0..0, to_append);
-                        let tmp = tails[to_join].to_string();
-                        heads[l] = tmp;
+                        heads[l] = tails[to_join];
                         el_x[to_join].clear();
                     }
                 }
