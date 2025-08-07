@@ -243,7 +243,7 @@ pub fn makevege(
     let scalefactor = config.scalefactor;
 
     let img_width = (w_block as f64 * block) as u32;
-    let img_height = (w_block as f64 * block) as u32;
+    let img_height = (h_block as f64 * block) as u32;
 
     // render yellow as multiple small squares
     let ye2 = Rgba([255, 219, 166, 255]);
