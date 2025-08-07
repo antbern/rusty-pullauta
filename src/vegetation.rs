@@ -240,15 +240,10 @@ pub fn makevege(
     // rebind the variables to be non-mut for the rest of the function
     let (firsthit, ug, ghit, greenhit, highit) = (firsthit, ug, ghit, greenhit, highit);
 
-    let w = (xmax - xmin).floor() / block;
-    let h = (ymax - ymin).floor() / block;
-    let wy = (xmax - xmin).floor() / 3.0;
-    let hy = (ymax - ymin).floor() / 3.0;
-
     let scalefactor = config.scalefactor;
 
-    let img_width = (w * block) as u32;
-    let img_height = (h * block) as u32;
+    let img_width = (w_block as f64 * block) as u32;
+    let img_height = (w_block as f64 * block) as u32;
 
     let greens = (0..greenshades.len())
         .map(|i| {
@@ -263,8 +258,8 @@ pub fn makevege(
     let mut aveg = 0;
     let mut avecount = 0;
 
-    for x in 1..(w as usize) {
-        for y in 1..(h as usize) {
+    for x in 1..w_block {
+        for y in 1..h_block {
             if ghit[(x, y)] > 1 {
                 aveg += firsthit[(x, y)];
                 avecount += 1;
@@ -274,11 +269,12 @@ pub fn makevege(
     let aveg = aveg as f64 / avecount as f64;
     let ye2 = Rgba([255, 219, 166, 255]);
     let mut imgye2 = RgbaImage::from_pixel(img_width, img_height, Rgba([255, 255, 255, 0]));
-    for x in 4..(wy as usize - 3) {
-        for y in 4..(hy as usize - 3) {
+    for x in 0..(w_3 - 2) {
+        for y in 0..(h_3 - 2) {
             let mut ghit2 = 0;
             let mut highhit2 = 0;
 
+            // sum in a 2x2 area
             for i in x..x + 2 {
                 for j in y..y + 2 {
                     ghit2 += yhit[(i, j)];
@@ -288,7 +284,7 @@ pub fn makevege(
             if ghit2 as f64 / (highhit2 as f64 + ghit2 as f64 + 0.01) > yellowthreshold {
                 draw_filled_rect_mut(
                     &mut imgye2,
-                    Rect::at(x as i32 * 3 + 2, (hy as i32 - y as i32) * 3 - 3).of_size(3, 3),
+                    Rect::at(x as i32 * 3 + 2, (h_3 as i32 - y as i32) * 3 - 3).of_size(3, 3),
                     ye2,
                 );
             }
@@ -296,8 +292,8 @@ pub fn makevege(
     }
 
     let mut imggr1 = RgbImage::from_pixel(img_width, img_height, Rgb([255, 255, 255]));
-    for x in 2..w as usize {
-        for y in 2..h as usize {
+    for x in 2..w_block {
+        for y in 2..h_block {
             let roof = top[(x, y)]
                 - xyz[(
                     (x as f64 * block / size) as usize,
@@ -346,7 +342,7 @@ pub fn makevege(
                         &mut imggr1,
                         Rect::at(
                             ((x as f64 - 0.5) * block) as i32 - addition,
-                            (((h - y as f64) - 0.5) * block) as i32 - addition,
+                            (((h_block as f64 - y as f64) - 0.5) * block) as i32 - addition,
                         )
                         .of_size(
                             (block as i32 + addition) as u32,
@@ -531,19 +527,19 @@ pub fn makevege(
     let tmpfactor = (600.0 / 254.0 / scalefactor) as f32;
 
     let bf32 = block as f32;
-    let hf32 = h as f32;
-    let ww = w as f32 * bf32;
+    let hf32 = h_block as f32;
+    let ww = w_block as f32 * bf32;
     let hh = hf32 * bf32;
     let mut x = 0.0_f32;
 
     let mut imgug = RgbaImage::from_pixel(
-        (w * block * 600.0 / 254.0 / scalefactor) as u32,
-        (h * block * 600.0 / 254.0 / scalefactor) as u32,
+        (w_block as f64 * block * 600.0 / 254.0 / scalefactor) as u32,
+        (h_block as f64 * block * 600.0 / 254.0 / scalefactor) as u32,
         Rgba([255, 255, 255, 0]),
     );
     let mut img_ug_bit = GrayImage::from_pixel(
-        (w * block * 600.0 / 254.0 / scalefactor) as u32,
-        (h * block * 600.0 / 254.0 / scalefactor) as u32,
+        (w_block as f64 * block * 600.0 / 254.0 / scalefactor) as u32,
+        (h_block as f64 * block * 600.0 / 254.0 / scalefactor) as u32,
         Luma([0x00]),
     );
     loop {
