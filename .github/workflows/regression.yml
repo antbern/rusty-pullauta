@@ -24,7 +24,7 @@ jobs:
       with:
         fetch-depth: 2
 
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.88
     - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
@@ -37,8 +37,8 @@ jobs:
       id: run_pr_branch
       run: |
         echo "Running code on PR branch"
-        cargo build --release
-        env time -o time_pr.txt target/release/pullauta test_file.laz
+        RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
+        env time -o time_pr.txt target/x86_64-unknown-linux-gnu/release/pullauta test_file.laz
         mv pullautus.png pullautus_pr.png
         mv pullautus_depr.png pullautus_depr_pr.png
         mv temp/ temp_pr/
@@ -123,7 +123,7 @@ jobs:
       with:
         fetch-depth: 2
 
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@1.88
     - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
@@ -136,7 +136,7 @@ jobs:
       id: run_pr_branch
       run: |
         echo "Running code on PR branch"
-        cargo build --release
+        RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
         # prepare
         cp pullauta.default.ini pullauta.ini
         mkdir in && mkdir out
@@ -145,11 +145,11 @@ jobs:
         sed -i 's/output_dxf=0/output_dxf=1/g' pullauta.ini
 
         # run and store results
-        env time -o time_pr.txt target/release/pullauta
+        env time -o time_pr.txt target/x86_64-unknown-linux-gnu/release/pullauta
         echo "**pngmerge**: " >> time_pr.txt
-        env time -a -o time_pr.txt target/release/pullauta pngmerge 1
+        env time -a -o time_pr.txt target/x86_64-unknown-linux-gnu/release/pullauta pngmerge 1
         echo "**pngmergedepr**: " >> time_pr.txt
-        env time -a -o time_pr.txt target/release/pullauta pngmergedepr 1
+        env time -a -o time_pr.txt target/x86_64-unknown-linux-gnu/release/pullauta pngmergedepr 1
         mkdir output_pr
         mv out/ output_pr/
         mv temp*/ output_pr/
