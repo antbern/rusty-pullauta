@@ -190,7 +190,7 @@ fn main() {
             scale = args[0].parse::<f64>().unwrap();
         }
         pullauta::merge::bindxfmerge(&fs, &config).unwrap();
-        pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
+        pullauta::merge::pngmergevege(&fs, &config, scale, false).unwrap();
         return;
     }
 
@@ -222,7 +222,16 @@ fn main() {
         if !args.is_empty() {
             scale = args[0].parse::<f64>().unwrap();
         }
-        pullauta::merge::pngmergevege(&fs, &config, scale).unwrap();
+        pullauta::merge::pngmergevege(&fs, &config, scale, false).unwrap();
+        return;
+    }
+
+    if command == "pngmergevegeundergrowth" {
+        let mut scale = 1.0;
+        if !args.is_empty() {
+            scale = args[0].parse::<f64>().unwrap();
+        }
+        pullauta::merge::pngmergevege(&fs, &config, scale, true).unwrap();
         return;
     }
 

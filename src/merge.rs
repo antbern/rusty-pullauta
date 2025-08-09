@@ -1,4 +1,4 @@
-use image::{Rgb, RgbImage};
+use image::{RgbImage, Rgba, RgbaImage};
 use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::error::Error;
@@ -11,6 +11,7 @@ use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::vec2d::Vec2D;
+use image::buffer::ConvertBuffer;
 
 fn merge_png(
     fs: &impl FileSystem,
@@ -25,7 +26,7 @@ fn merge_png(
     let mut ymin = f64::MAX;
     let mut xmax = f64::MIN;
     let mut ymax = f64::MIN;
-    let mut res = f64::NAN;
+    let mut min_res = f64::MAX;
     for png in png_files.iter() {
         let filename = png.as_path().file_name().unwrap().to_str().unwrap();
         let full_filename = format!("{batchoutfolder}/{filename}");
@@ -40,12 +41,12 @@ fn merge_png(
         if fs.exists(input) {
             let data = fs.read_to_string(input).expect("Can not read input file");
             let d: Vec<&str> = data.split('\n').collect();
-            let tfw0 = d[0].trim().parse::<f64>().unwrap();
+            let res = d[0].trim().parse::<f64>().unwrap();
             let tfw4 = d[4].trim().parse::<f64>().unwrap();
             let tfw5 = d[5].trim().parse::<f64>().unwrap();
 
-            if res.is_nan() {
-                res = tfw0;
+            if res < min_res {
+                min_res = res
             }
             if tfw4 < xmin {
                 xmin = tfw4;
@@ -61,10 +62,10 @@ fn merge_png(
             }
         }
     }
-    let mut im = RgbImage::from_pixel(
-        ((xmax - xmin) / res / scale) as u32,
-        ((ymax - ymin) / res / scale) as u32,
-        Rgb([255, 255, 255]),
+    let mut im = RgbaImage::from_pixel(
+        ((xmax - xmin) / min_res / scale) as u32,
+        ((ymax - ymin) / min_res / scale) as u32,
+        Rgba([255, 255, 255, 0]),
     );
     for png in png_files.iter() {
         let filename = png.as_path().file_name().unwrap().to_str().unwrap();
@@ -80,30 +81,35 @@ fn merge_png(
 
             let data = fs.read_to_string(pgw).expect("Can not read input file");
             let d: Vec<&str> = data.split('\n').collect();
+
+            let res = d[0].trim().parse::<f64>().unwrap();
             let tfw4 = d[4].trim().parse::<f64>().unwrap();
             let tfw5 = d[5].trim().parse::<f64>().unwrap();
 
             let img2 = image::imageops::thumbnail(
-                &img.to_rgb8(),
-                (width / scale + 0.5) as u32,
-                (height / scale + 0.5) as u32,
+                &img,
+                (res / min_res / scale * width + 0.5) as u32,
+                (res / min_res / scale * height + 0.5) as u32,
             );
+
             image::imageops::overlay(
                 &mut im,
                 &img2,
-                ((tfw4 - xmin) / res / scale) as i64,
-                ((-tfw5 + ymax) / res / scale) as i64,
+                ((tfw4 - xmin) / min_res / scale) as i64,
+                ((ymax - tfw5) / min_res / scale) as i64,
             );
         }
     }
 
-    im.write_to(
-        &mut fs
-            .create(format!("{outfilename}.jpg"))
-            .expect("could not save output jpg"),
-        image::ImageFormat::Jpeg,
-    )
-    .expect("could not save output jpg");
+    let im_rgb8: RgbImage = im.convert();
+    im_rgb8
+        .write_to(
+            &mut fs
+                .create(format!("{outfilename}.jpg"))
+                .expect("could not save output jpg"),
+            image::ImageFormat::Jpeg,
+        )
+        .expect("could not save output jpg");
 
     im.write_to(
         &mut fs
@@ -119,8 +125,8 @@ fn merge_png(
     write!(
         &mut tfw_file,
         "{}\r\n0\r\n0\r\n{}\r\n{}\r\n{}\r\n",
-        res * scale,
-        -res * scale,
+        min_res * scale,
+        -min_res * scale,
         xmin,
         ymax
     )
@@ -138,13 +144,16 @@ pub fn pngmergevege(
     fs: &impl FileSystem,
     config: &Config,
     scale: f64,
+    include_undergrowth: bool,
 ) -> Result<(), Box<dyn Error>> {
     let batchoutfolder = &config.batchoutfolder;
 
     let mut png_files: Vec<PathBuf> = Vec::new();
     for path in fs.list(batchoutfolder).unwrap() {
         let filename = path.file_name().unwrap().to_str().unwrap();
-        if filename.ends_with("_vege.png") {
+        if filename.ends_with("_vege.png")
+            || (include_undergrowth && filename.ends_with("_undergrowth.png"))
+        {
             png_files.push(path);
         }
     }
@@ -152,7 +161,14 @@ pub fn pngmergevege(
         info!("No _vege.png files found in output directory");
         return Ok(());
     }
-    merge_png(fs, config, png_files, "merged_vege", scale).unwrap();
+
+    let output_name = if include_undergrowth {
+        "merged_vege_undergrowth"
+    } else {
+        "merged_vege"
+    };
+
+    merge_png(fs, config, png_files, output_name, scale).unwrap();
     Ok(())
 }
 
