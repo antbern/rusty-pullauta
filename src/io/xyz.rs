@@ -10,21 +10,23 @@ use log::debug;
 const XYZ_MAGIC: &[u8] = b"XYZB";
 
 /// A single record of an observed laser data point needed by the algorithms.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct XyzRecord {
     pub x: f64,
     pub y: f64,
-    pub z: f64,
+    pub z: f32,
     pub classification: u8,
     pub number_of_returns: u8,
     pub return_number: u8,
+    // padding bytes to make the struct exactly 24 bytes long
+    pub _padding: u8,
 }
 
 impl FromToBytes for XyzRecord {
     fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let x = f64::from_bytes(reader)?;
         let y = f64::from_bytes(reader)?;
-        let z = f64::from_bytes(reader)?;
+        let z = f32::from_bytes(reader)?;
 
         let mut buff = [0; 3];
         reader.read_exact(&mut buff)?;
@@ -38,6 +40,7 @@ impl FromToBytes for XyzRecord {
             classification,
             number_of_returns,
             return_number,
+            _padding: 0,
         })
     }
 
@@ -198,6 +201,7 @@ mod test {
             classification: 4,
             number_of_returns: 5,
             return_number: 6,
+            _padding: 0,
         };
 
         let mut buff = Vec::new();
@@ -219,6 +223,7 @@ mod test {
             classification: 4,
             number_of_returns: 5,
             return_number: 6,
+            _padding: 0,
         };
 
         writer.write_record(&record).unwrap();

@@ -36,7 +36,7 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     let xyz_file_in = tmpfolder.join("xyztemp.xyz.bin");
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?).unwrap();
     while let Some(r) = reader.next().unwrap() {
-        let (x, y, h) = (r.x, r.y, r.z);
+        let (x, y, h) = (r.x, r.y, r.z as f64);
         let r3 = r.classification;
         let r4 = r.number_of_returns;
         let r5 = r.return_number;
