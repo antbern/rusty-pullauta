@@ -10,7 +10,8 @@ use log::debug;
 const XYZ_MAGIC: &[u8] = b"XYZB";
 
 /// A single record of an observed laser data point needed by the algorithms.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, bytemuck::NoUninit, bytemuck::AnyBitPattern)]
+#[repr(C)]
 pub struct XyzRecord {
     pub x: f64,
     pub y: f64,
@@ -24,38 +25,18 @@ pub struct XyzRecord {
 
 impl FromToBytes for XyzRecord {
     fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let x = f64::from_bytes(reader)?;
-        let y = f64::from_bytes(reader)?;
-        let z = f32::from_bytes(reader)?;
-
-        let mut buff = [0; 3];
+        let mut buff = [0u8; size_of::<Self>()];
         reader.read_exact(&mut buff)?;
-        let classification = buff[0];
-        let number_of_returns = buff[1];
-        let return_number = buff[2];
-        Ok(Self {
-            x,
-            y,
-            z,
-            classification,
-            number_of_returns,
-            return_number,
-            _padding: 0,
-        })
+
+        let record = bytemuck::from_bytes::<Self>(&buff);
+
+        Ok(*record)
     }
 
     fn to_bytes<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        // write the x, y, z coordinates
-        self.x.to_bytes(writer)?;
-        self.y.to_bytes(writer)?;
-        self.z.to_bytes(writer)?;
-
-        // write the classification, number of returns, return number, and intensity
-        writer.write_all(&[
-            self.classification,
-            self.number_of_returns,
-            self.return_number,
-        ])
+        let bytes = bytemuck::bytes_of(self);
+        writer.write_all(bytes)?;
+        Ok(())
     }
 }
 
