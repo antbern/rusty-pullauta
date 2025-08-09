@@ -97,7 +97,7 @@ pub fn makecliffs(
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
     while let Some(r) = reader.next()? {
         if cliff_thin == 1.0 || rng.sample(randdist) {
-            let (x, y, h) = (r.x, r.y, r.z);
+            let (x, y, h) = (r.x, r.y, r.z as f64);
             let r3 = r.classification;
 
             if r3 == 2 {

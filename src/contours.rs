@@ -38,7 +38,7 @@ pub fn xyz2heightmap(
     while let Some(r) = reader.next()? {
         let x: f64 = r.x;
         let y: f64 = r.y;
-        let h: f64 = r.z;
+        let h: f64 = r.z as f64;
 
         if xmin > x {
             xmin = x;
@@ -80,7 +80,7 @@ pub fn xyz2heightmap(
         if r.classification == 2 || r.classification == water_class {
             let x: f64 = r.x;
             let y: f64 = r.y;
-            let h: f64 = r.z;
+            let h: f64 = r.z as f64;
 
             let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
             let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;

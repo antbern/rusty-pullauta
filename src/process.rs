@@ -120,7 +120,7 @@ pub fn process_tile(
             let mut parts = line.split(' ');
             let x = parts.next().unwrap().parse::<f64>().unwrap();
             let y = parts.next().unwrap().parse::<f64>().unwrap();
-            let z = parts.next().unwrap().parse::<f64>().unwrap();
+            let z = parts.next().unwrap().parse::<f32>().unwrap();
 
             let classification = parts.next().unwrap().parse::<u8>().unwrap();
             let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
@@ -134,6 +134,7 @@ pub fn process_tile(
                     classification,
                     number_of_returns,
                     return_number,
+                    ..Default::default()
                 })
                 .expect("Could not write record");
         })
@@ -170,10 +171,11 @@ pub fn process_tile(
                 writer.write_record(&crate::io::xyz::XyzRecord {
                     x: pt.x * xfactor,
                     y: pt.y * yfactor,
-                    z: pt.z * zfactor + zoff,
+                    z: (pt.z * zfactor + zoff) as f32,
                     classification: u8::from(pt.classification),
                     number_of_returns: pt.number_of_returns,
                     return_number: pt.return_number,
+                    ..Default::default()
                 })?;
             }
         }
@@ -438,10 +440,11 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                             .write_record(&crate::io::xyz::XyzRecord {
                                 x: pt.x,
                                 y: pt.y,
-                                z: pt.z + zoff,
+                                z: (pt.z + zoff) as f32,
                                 classification: u8::from(pt.classification),
                                 number_of_returns: pt.number_of_returns,
                                 return_number: pt.return_number,
+                                ..Default::default()
                             })
                             .expect("Could not write record");
                     }

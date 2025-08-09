@@ -81,7 +81,7 @@ pub fn makevege(
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let x: f64 = r.x;
             let y: f64 = r.y;
-            let h: f64 = r.z;
+            let h: f64 = r.z as f64;
             let r3 = r.classification;
             let r4 = r.number_of_returns;
             let r5 = r.return_number;
@@ -143,7 +143,7 @@ pub fn makevege(
         if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
             let x: f64 = r.x;
             let y: f64 = r.y;
-            let h: f64 = r.z - zoffset;
+            let h: f64 = r.z as f64 - zoffset;
             let r3 = r.classification;
             let r4 = r.number_of_returns;
             let r5 = r.return_number;
