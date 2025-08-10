@@ -227,9 +227,12 @@ mod test {
         let data = writer.finish().unwrap().into_inner();
         let cursor = Cursor::new(data);
         let mut reader = super::XyzInternalReader::new(cursor).unwrap();
-        assert_eq!(reader.next_chunk().unwrap().unwrap(), &[record]);
-        assert_eq!(reader.next_chunk().unwrap().unwrap(), &[record]);
-        assert_eq!(reader.next_chunk().unwrap().unwrap(), &[record]);
+        let chunk = reader.next_chunk().unwrap().unwrap();
+
+        assert_eq!(chunk.len(), 3);
+        assert_eq!(chunk[0], record);
+        assert_eq!(chunk[1], record);
+        assert_eq!(chunk[2], record);
         assert_eq!(reader.next_chunk().unwrap(), None);
     }
 }
