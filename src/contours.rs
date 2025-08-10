@@ -35,8 +35,8 @@ pub fn xyz2heightmap(
 
     let xyz_file_in = tmpfolder.join(xyzfilein);
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next_chunk()? {
-        for r in r {
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
             let x: f64 = r.x;
             let y: f64 = r.y;
             let h: f64 = r.z as f64;
@@ -78,8 +78,8 @@ pub fn xyz2heightmap(
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next_chunk()? {
-        for r in r {
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
             if r.classification == 2 || r.classification == water_class {
                 let x: f64 = r.x;
                 let y: f64 = r.y;

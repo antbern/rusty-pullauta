@@ -127,6 +127,7 @@ pub fn process_tile(
             let number_of_returns = parts.next().unwrap().parse::<u8>().unwrap();
             let return_number = parts.next().unwrap().parse::<u8>().unwrap();
 
+            // TODO: write muliple records at once?
             writer
                 .write_records(&[crate::io::xyz::XyzRecord {
                     x,
@@ -447,6 +448,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             {
                 let mut reader = Reader::new(fs.open(laz_p).expect("Could not open file"))
                     .expect("Could not create reader");
+                // TODO: read &write muliple records at once here too?
                 for ptu in reader.points() {
                     let pt = ptu.unwrap();
                     if pt.x > minx2

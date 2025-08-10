@@ -95,8 +95,8 @@ pub fn makecliffs(
     let randdist = rand::distr::Bernoulli::new(cliff_thin).unwrap();
 
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next_chunk()? {
-        for r in r {
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
             if cliff_thin == 1.0 || rng.sample(randdist) {
                 let (x, y, h) = (r.x, r.y, r.z as f64);
                 let r3 = r.classification;

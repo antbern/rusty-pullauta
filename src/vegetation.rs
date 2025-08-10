@@ -77,8 +77,8 @@ pub fn makevege(
 
     let mut i = 0;
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next_chunk()? {
-        for r in r {
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
             if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
                 let x: f64 = r.x;
                 let y: f64 = r.y;
@@ -141,8 +141,8 @@ pub fn makevege(
 
     let mut i = 0;
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next_chunk()? {
-        for r in r {
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
             if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
                 let x: f64 = r.x;
                 let y: f64 = r.y;
@@ -477,8 +477,8 @@ pub fn makevege(
     let water = config.water;
     if buildings > 0 || water > 0 {
         let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-        while let Some(r) = reader.next_chunk()? {
-            for r in r {
+        while let Some(chunk) = reader.next_chunk()? {
+            for r in chunk {
                 let (x, y) = (r.x, r.y);
                 let c: u8 = r.classification;
 
