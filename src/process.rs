@@ -16,6 +16,7 @@ use crate::crop;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
 use crate::io::xyz::XyzInternalWriter;
+use crate::io::xyz::XyzRecord;
 use crate::knolls;
 use crate::merge;
 use crate::render;
@@ -127,7 +128,7 @@ pub fn process_tile(
             let return_number = parts.next().unwrap().parse::<u8>().unwrap();
 
             writer
-                .write_record(&crate::io::xyz::XyzRecord {
+                .write_records(&[crate::io::xyz::XyzRecord {
                     x,
                     y,
                     z,
@@ -135,7 +136,7 @@ pub fn process_tile(
                     number_of_returns,
                     return_number,
                     ..Default::default()
-                })
+                }])
                 .expect("Could not write record");
         })
         .expect("Could not read file");
@@ -165,19 +166,37 @@ pub fn process_tile(
         let mut writer =
             XyzInternalWriter::new(fs.create(&target_file).expect("Could not create writer"));
 
-        for ptu in reader.points() {
-            let pt = ptu.unwrap();
-            if thinfactor == 1.0 || rng.sample(randdist) {
-                writer.write_record(&crate::io::xyz::XyzRecord {
-                    x: pt.x * xfactor,
-                    y: pt.y * yfactor,
-                    z: (pt.z * zfactor + zoff) as f32,
-                    classification: u8::from(pt.classification),
-                    number_of_returns: pt.number_of_returns,
-                    return_number: pt.return_number,
-                    ..Default::default()
-                })?;
+        // compute the buffer size for 50MB RAM usage
+        const TEMPSIZE: usize =
+            50 * 1024 * 1024 / (size_of::<las::Point>() + size_of::<XyzRecord>());
+        let mut points = Vec::with_capacity(TEMPSIZE);
+        let mut records = Vec::with_capacity(TEMPSIZE);
+        loop {
+            points.clear();
+            let n = reader.read_points_into(TEMPSIZE as u64, &mut points)?;
+
+            if n == 0 {
+                break;
             }
+
+            // convert all read points to records
+            records.clear();
+            for pt in &points {
+                if thinfactor == 1.0 || rng.sample(randdist) {
+                    records.push(crate::io::xyz::XyzRecord {
+                        x: pt.x * xfactor,
+                        y: pt.y * yfactor,
+                        z: (pt.z * zfactor + zoff) as f32,
+                        classification: u8::from(pt.classification),
+                        number_of_returns: pt.number_of_returns,
+                        return_number: pt.return_number,
+                        ..Default::default()
+                    });
+                }
+            }
+
+            // write all at once
+            writer.write_records(&records)?;
         }
         writer.finish().expect("Unable to finish writing");
     } else if filename.ends_with(".xyz.bin") {
@@ -437,7 +456,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                         && (thinfactor == 1.0 || rng.sample(randdist))
                     {
                         writer
-                            .write_record(&crate::io::xyz::XyzRecord {
+                            .write_records(&[crate::io::xyz::XyzRecord {
                                 x: pt.x,
                                 y: pt.y,
                                 z: (pt.z + zoff) as f32,
@@ -445,7 +464,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                                 number_of_returns: pt.number_of_returns,
                                 return_number: pt.return_number,
                                 ..Default::default()
-                            })
+                            }])
                             .expect("Could not write record");
                     }
                 }

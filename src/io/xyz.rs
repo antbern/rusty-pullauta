@@ -56,7 +56,7 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
         }
     }
 
-    pub fn write_record(&mut self, record: &XyzRecord) -> std::io::Result<()> {
+    pub fn write_records(&mut self, records: &[XyzRecord]) -> std::io::Result<()> {
         let inner = self
             .inner
             .as_mut()
@@ -71,8 +71,10 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
             u64::MAX.to_bytes(inner)?;
         }
 
-        record.to_bytes(inner)?;
-        self.records_written += 1;
+        let bytes: &[u8] = bytemuck::cast_slice(records);
+        inner.write_all(bytes)?;
+
+        self.records_written += records.len() as u64;
         Ok(())
     }
 
@@ -207,9 +209,9 @@ mod test {
             _padding: 0,
         };
 
-        writer.write_record(&record).unwrap();
-        writer.write_record(&record).unwrap();
-        writer.write_record(&record).unwrap();
+        writer.write_records(&[record]).unwrap();
+        writer.write_records(&[record]).unwrap();
+        writer.write_records(&[record]).unwrap();
 
         // now read the records
         let data = writer.finish().unwrap().into_inner();
