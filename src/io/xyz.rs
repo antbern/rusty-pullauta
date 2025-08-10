@@ -116,7 +116,7 @@ pub struct XyzInternalReader<R: Read> {
     records_read: u64,
     // for stats
     start: Option<Instant>,
-    buffer: XyzRecord,
+    buffer: [XyzRecord; 1024],
 }
 
 impl<R: Read> XyzInternalReader<R> {
@@ -138,12 +138,11 @@ impl<R: Read> XyzInternalReader<R> {
             n_records,
             records_read: 0,
             start: None,
-            buffer: XyzRecord::default(),
+            buffer: [XyzRecord::default(); 1024],
         })
     }
 
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> std::io::Result<Option<&XyzRecord>> {
+    pub fn next_chunk(&mut self) -> std::io::Result<Option<&[XyzRecord]>> {
         if self.records_read >= self.n_records {
             // TODO: log statistics about the read records
             if let Some(start) = self.start {
@@ -163,13 +162,18 @@ impl<R: Read> XyzInternalReader<R> {
             self.start = Some(Instant::now());
         }
 
+        // read as many as we can fit in the buffer
+        let records_left = self.n_records - self.records_read;
+        let records_to_read = (self.buffer.len() as u64).min(records_left);
+
         // treat buffer as mutable slice of bytes
-        let buffer: &mut [u8] = bytemuck::bytes_of_mut(&mut self.buffer);
+        let records_buffer = &mut self.buffer[..records_to_read as usize];
+        let buffer: &mut [u8] = bytemuck::cast_slice_mut(records_buffer);
         self.inner.read_exact(buffer)?;
-        self.records_read += 1;
+        self.records_read += records_to_read;
 
         // return reference to it
-        Ok(Some(&self.buffer))
+        Ok(Some(records_buffer))
     }
 }
 
@@ -223,9 +227,9 @@ mod test {
         let data = writer.finish().unwrap().into_inner();
         let cursor = Cursor::new(data);
         let mut reader = super::XyzInternalReader::new(cursor).unwrap();
-        assert_eq!(reader.next().unwrap().unwrap(), &record);
-        assert_eq!(reader.next().unwrap().unwrap(), &record);
-        assert_eq!(reader.next().unwrap().unwrap(), &record);
-        assert_eq!(reader.next().unwrap(), None);
+        assert_eq!(reader.next_chunk().unwrap().unwrap(), &[record]);
+        assert_eq!(reader.next_chunk().unwrap().unwrap(), &[record]);
+        assert_eq!(reader.next_chunk().unwrap().unwrap(), &[record]);
+        assert_eq!(reader.next_chunk().unwrap(), None);
     }
 }
