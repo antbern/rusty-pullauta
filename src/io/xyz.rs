@@ -116,6 +116,7 @@ pub struct XyzInternalReader<R: Read> {
     records_read: u64,
     // for stats
     start: Option<Instant>,
+    buffer: XyzRecord,
 }
 
 impl<R: Read> XyzInternalReader<R> {
@@ -137,11 +138,12 @@ impl<R: Read> XyzInternalReader<R> {
             n_records,
             records_read: 0,
             start: None,
+            buffer: XyzRecord::default(),
         })
     }
 
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> std::io::Result<Option<XyzRecord>> {
+    pub fn next(&mut self) -> std::io::Result<Option<&XyzRecord>> {
         if self.records_read >= self.n_records {
             // TODO: log statistics about the read records
             if let Some(start) = self.start {
@@ -161,9 +163,13 @@ impl<R: Read> XyzInternalReader<R> {
             self.start = Some(Instant::now());
         }
 
-        let record = XyzRecord::from_bytes(&mut self.inner)?;
+        // treat buffer as mutable slice of bytes
+        let buffer: &mut [u8] = bytemuck::bytes_of_mut(&mut self.buffer);
+        self.inner.read_exact(buffer)?;
         self.records_read += 1;
-        Ok(Some(record))
+
+        // return reference to it
+        Ok(Some(&self.buffer))
     }
 }
 
@@ -217,9 +223,9 @@ mod test {
         let data = writer.finish().unwrap().into_inner();
         let cursor = Cursor::new(data);
         let mut reader = super::XyzInternalReader::new(cursor).unwrap();
-        assert_eq!(reader.next().unwrap().unwrap(), record);
-        assert_eq!(reader.next().unwrap().unwrap(), record);
-        assert_eq!(reader.next().unwrap().unwrap(), record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
+        assert_eq!(reader.next().unwrap().unwrap(), &record);
         assert_eq!(reader.next().unwrap(), None);
     }
 }
