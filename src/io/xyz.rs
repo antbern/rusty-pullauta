@@ -62,6 +62,10 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
             .as_mut()
             .ok_or_else(|| std::io::Error::other("writer has already been finished"))?;
 
+        if records.is_empty() {
+            return Ok(()); // nothing to write
+        }
+
         // write the header (format + length) on the first write
         if self.records_written == 0 {
             self.start = Some(Instant::now());
