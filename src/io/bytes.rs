@@ -19,18 +19,6 @@ impl FromToBytes for f64 {
     }
 }
 
-impl FromToBytes for f32 {
-    fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let mut buff = [0; 4];
-        reader.read_exact(&mut buff)?;
-        Ok(f32::from_ne_bytes(buff))
-    }
-
-    fn to_bytes<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_all(&self.to_ne_bytes())
-    }
-}
-
 impl FromToBytes for usize {
     fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let mut buff = [0; usize::BITS as usize / 8];

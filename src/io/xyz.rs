@@ -23,23 +23,6 @@ pub struct XyzRecord {
     pub _padding: u8,
 }
 
-impl FromToBytes for XyzRecord {
-    fn from_bytes<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let mut buff = [0u8; size_of::<Self>()];
-        reader.read_exact(&mut buff)?;
-
-        let record = bytemuck::from_bytes::<Self>(&buff);
-
-        Ok(*record)
-    }
-
-    fn to_bytes<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        let bytes = bytemuck::bytes_of(self);
-        writer.write_all(bytes)?;
-        Ok(())
-    }
-}
-
 pub struct XyzInternalWriter<W: Write + Seek> {
     inner: Option<W>,
     records_written: u64,
@@ -194,25 +177,6 @@ mod test {
     use crate::io::xyz::XyzRecord;
 
     use super::*;
-
-    #[test]
-    fn test_xyz_record() {
-        let record = XyzRecord {
-            x: 1.0,
-            y: 2.0,
-            z: 3.0,
-            classification: 4,
-            number_of_returns: 5,
-            return_number: 6,
-            _padding: 0,
-        };
-
-        let mut buff = Vec::new();
-        record.to_bytes(&mut buff).unwrap();
-        let read_record = XyzRecord::from_bytes(&mut buff.as_slice()).unwrap();
-
-        assert_eq!(record, read_record);
-    }
 
     #[test]
     fn test_writer_reader_many() {
