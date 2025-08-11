@@ -96,10 +96,13 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
         if let Some(start) = self.start {
             let elapsed = start.elapsed();
             debug!(
-                "Wrote {} records in {:.2?} ({:.2?}/record)",
+                "Wrote {} records in {:.2?} ({:.2?}/record, {:.3}M records/s, {:.2}MB/s)",
                 self.records_written,
                 elapsed,
                 elapsed / self.records_written as u32,
+                self.records_written as f64 / (10e6 * elapsed.as_secs_f64()),
+                self.records_written as f64 * size_of::<XyzRecord>() as f64
+                    / (1024.0 * 1024.0 * elapsed.as_secs_f64()),
             );
         }
         Ok(inner)
@@ -152,10 +155,13 @@ impl<R: Read> XyzInternalReader<R> {
             if let Some(start) = self.start {
                 let elapsed = start.elapsed();
                 debug!(
-                    "Read {} records in {:.2?} ({:.2?}/record)",
+                    "Read {} records in {:.2?} ({:.2?}/record, {:.3}M records/s, {:.2}MB/s)",
                     self.records_read,
                     elapsed,
                     elapsed / self.records_read as u32,
+                    self.records_read as f64 / (10e6 * elapsed.as_secs_f64()),
+                    self.records_read as f64 * size_of::<XyzRecord>() as f64
+                        / (1024.0 * 1024.0 * elapsed.as_secs_f64()),
                 );
             }
 
