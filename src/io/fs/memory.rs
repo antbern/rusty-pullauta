@@ -98,6 +98,46 @@ impl Root {
         Ok(dir)
     }
 
+    /// Get an existing [`FileEntry`].
+    fn get_file_entry(&self, path: impl AsRef<Path>) -> Result<&FileEntry, io::Error> {
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the directory
+        let dir = self.get_directory(parent)?;
+
+        // get file name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        // get the file entry
+        let file = match dir.files.get(&name) {
+            Some(file) => file,
+            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
+        };
+        Ok(file)
+    }
+
+    /// Get a mutable reference to an existing [`FileEntry`], or create a new one if it does not exist.
+    fn get_file_entry_or_create(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Result<&mut FileEntry, io::Error> {
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the parent directory
+        let dir = self.get_directory_mut(parent)?;
+
+        // get file name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        // open or create new file
+        let file = dir.files.entry(name).or_insert(FileEntry::new_empty());
+        Ok(file)
+    }
+
     /// Resolve a path to a canonical path (removing "..", "." and "/") containing only the direct path coponents.
     fn resolve_path(&self, path: &Path) -> Result<Vec<String>, io::Error> {
         let mut part: Vec<String> = Vec::new();
@@ -154,20 +194,20 @@ struct FileEntry {
 
 impl FileEntry {
     /// Create a new empty file entry.
-    fn new_data() -> Self {
+    fn new_empty() -> Self {
         Self {
-            data: Arc::new(RwLock::new(FileContent::Data(FileData::new()))),
+            data: Arc::new(RwLock::new(FileContent::Empty)),
         }
     }
 }
-impl std::fmt::Debug for FileData {
+impl std::fmt::Debug for FileBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let len = self.0.len();
-        f.debug_struct("FileData").field("len", &len).finish()
+        f.debug_struct("FileBytes").field("len", &len).finish()
     }
 }
 
-/// A file that is currently being written too. Has a link back to the [`FileData`] so it can
+/// A file that is currently being written too. Has a link back to the [`FileContent`] so it can
 /// swap it whenever the writer is dropped.
 struct WritableFile {
     /// The data beeing written to the file
@@ -197,28 +237,29 @@ impl Drop for WritableFile {
     fn drop(&mut self) {
         let data = core::mem::replace(&mut self.data, io::Cursor::new(Vec::new()));
         let mut data_link = self.data_link.write().expect("file data lock poisoned");
-        *data_link = FileContent::Data(FileData(Arc::new(data.into_inner())));
+        *data_link = FileContent::Data(FileBytes(Arc::new(data.into_inner())));
     }
 }
 
+/// Contains the actual file content, cheap to clone!
 #[derive(Debug, Clone)]
 enum FileContent {
-    Data(FileData),
+    /// An empty (recently created) file.
+    Empty,
+
+    /// A file containing binary data.
+    Data(FileBytes),
+
+    /// A file containing and object.
     Object(Arc<dyn std::any::Any + Send + Sync>),
 }
 
 /// Holds the data of a file. Cheap to clone because the data is behind an [`Arc`].
 #[derive(Clone)]
-struct FileData(Arc<Vec<u8>>);
-
-impl FileData {
-    fn new() -> Self {
-        Self(Arc::new(Vec::new()))
-    }
-}
+struct FileBytes(Arc<Vec<u8>>);
 
 /// this allows us to treat [`FileData`] as a slice of bytes, which is useful for the [`Read`] trait
-impl AsRef<[u8]> for FileData {
+impl AsRef<[u8]> for FileBytes {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
@@ -281,24 +322,10 @@ impl FileSystem for MemoryFileSystem {
         path: impl AsRef<Path>,
     ) -> Result<impl BufRead + Seek + Send + 'static, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
-
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
-        };
+        let file = root.get_file_entry(path)?;
 
         // we can only read a binary file
-
         let FileContent::Data(file_data) = &*file.data.read().unwrap() else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -312,20 +339,8 @@ impl FileSystem for MemoryFileSystem {
 
     fn create(&self, path: impl AsRef<Path>) -> Result<impl Write + Seek, io::Error> {
         let mut root = self.root.write().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
-
-        // find the parent directory
-        let dir = root.get_directory_mut(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // open or create new file
-        let file = dir.files.entry(name).or_insert(FileEntry::new_data());
-
-        // we can only write
+        let file = root.get_file_entry_or_create(path)?;
 
         // now we replace the arc with a new one which we will write to. This way existing readers
         // will continue to read the old data, while we start filling up some new data)
@@ -338,21 +353,8 @@ impl FileSystem for MemoryFileSystem {
 
     fn read_to_string(&self, path: impl AsRef<Path>) -> Result<String, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
-
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
-        };
+        let file = root.get_file_entry(path)?;
 
         // string reading is only available for binary files
         let FileContent::Data(file_data) = &*file.data.read().expect("file data lock poisoned")
@@ -412,21 +414,8 @@ impl FileSystem for MemoryFileSystem {
 
     fn file_size(&self, path: impl AsRef<Path>) -> Result<u64, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
-
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
-        };
+        let file = root.get_file_entry(path)?;
 
         // size is only available for binary files
         let FileContent::Data(file_data) = &*file.data.read().expect("file data lock poisoned")
@@ -442,33 +431,17 @@ impl FileSystem for MemoryFileSystem {
 
     fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), io::Error> {
         let mut root = self.root.write().expect("root lock poisoned");
-        let from = from.as_ref();
-        let to = to.as_ref();
 
-        let from_parent = file_parent(from)?;
-        let to_parent = file_parent(to)?;
-
-        // find the from directory
-        let from_dir = root.get_directory(from_parent)?;
-
-        // get the from file entry and clone the data
-        let from_name = from.file_name().unwrap().to_string_lossy().to_string();
-        let from_file = match from_dir.files.get(&from_name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
-        };
+        // extract the data to copy
+        let from_file = root.get_file_entry(&from)?;
         let from_data = from_file
             .data
             .read()
             .expect("file data lock poisoned")
             .clone();
 
-        // find the to directory
-        let to_dir = root.get_directory_mut(to_parent)?;
+        let to_file = root.get_file_entry_or_create(&to)?;
 
-        // get file names
-        let to_name = to.file_name().unwrap().to_string_lossy().to_string();
-        let to_file = to_dir.files.entry(to_name).or_insert(FileEntry::new_data());
         // copy the data
         let mut to_data = to_file.data.write().expect("file data lock poisoned");
         *to_data = from_data;
@@ -483,19 +456,7 @@ impl FileSystem for MemoryFileSystem {
         value: O,
     ) -> anyhow::Result<()> {
         let mut root = self.root.write().expect("root lock poisoned");
-        let path = path.as_ref();
-
-        let parent = file_parent(path)?;
-
-        // find the parent directory
-        let dir = root.get_directory_mut(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // open or create new file
-        let file = dir.files.entry(name).or_insert(FileEntry::new_data());
-
+        let file = root.get_file_entry_or_create(path)?;
         file.data = Arc::new(RwLock::new(FileContent::Object(Arc::new(value))));
         Ok(())
     }
@@ -505,33 +466,18 @@ impl FileSystem for MemoryFileSystem {
         path: impl AsRef<Path>,
     ) -> anyhow::Result<ReadObject<O>> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
-
-        let parent = file_parent(path)?;
-
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found").into()),
-        };
+        let file = root.get_file_entry(&path)?;
 
         // we can only read an object file
-
         let FileContent::Object(file_data) = &*file.data.read().unwrap() else {
-            anyhow::bail!("file {} is not an object file", path.display());
+            anyhow::bail!("file {} is not an object file", path.as_ref().display());
         };
 
         // try to downcast the object to the type we expect
         let Ok(object) = file_data.clone().downcast::<O>() else {
             anyhow::bail!(
                 "file {} is not an object file of type {}",
-                path.display(),
+                path.as_ref().display(),
                 std::any::type_name::<O>(),
             );
         };
@@ -543,7 +489,7 @@ impl FileSystem for MemoryFileSystem {
 #[cfg(test)]
 mod test {
 
-    use std::io::Read;
+    use std::{io::Read, ops::Deref};
 
     use super::*;
 
@@ -809,5 +755,32 @@ mod test {
 
         let read = fs.read_to_string(path2).unwrap();
         assert_eq!(read, content);
+    }
+
+    #[test]
+    fn test_write_read_object() {
+        let fs = super::MemoryFileSystem::new();
+        let path1 = "object1.bin";
+        let value = vec![1, 2, 3, 4, 5];
+
+        fs.write_object(path1, value.clone()).unwrap();
+
+        let obj: ReadObject<Vec<i32>> = fs.read_object(path1).unwrap();
+        assert_eq!(obj.deref(), &value);
+    }
+
+    #[test]
+    fn test_write_move_read_object() {
+        let fs = super::MemoryFileSystem::new();
+        let path1 = "object1.bin";
+        let path2 = "object2.bin";
+        let value = vec![1, 2, 3, 4, 5];
+
+        fs.write_object(path1, value.clone()).unwrap();
+
+        fs.copy(path1, path2).unwrap();
+
+        let obj: ReadObject<Vec<i32>> = fs.read_object(path2).unwrap();
+        assert_eq!(obj.deref(), &value);
     }
 }
