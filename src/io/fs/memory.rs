@@ -1,3 +1,5 @@
+use crate::io::fs::ReadObject;
+
 use super::FileSystem;
 use rustc_hash::FxHashMap as HashMap;
 
@@ -147,14 +149,14 @@ fn file_parent(path: &Path) -> Result<&Path, io::Error> {
 struct FileEntry {
     /// data is stored as an Arc to allow for multiple readers.
     /// Wrapped in an [`RwLock`] to allow for swapping the value when the Writer is dropped / finished.
-    data: Arc<RwLock<FileData>>,
+    data: Arc<RwLock<FileContent>>,
 }
 
 impl FileEntry {
     /// Create a new empty file entry.
-    fn new() -> Self {
+    fn new_data() -> Self {
         Self {
-            data: Arc::new(RwLock::new(FileData::new())),
+            data: Arc::new(RwLock::new(FileContent::Data(FileData::new()))),
         }
     }
 }
@@ -171,7 +173,7 @@ struct WritableFile {
     /// The data beeing written to the file
     data: io::Cursor<Vec<u8>>,
     /// links back to the file entry so we can swap the data when the writer is dropped
-    data_link: Arc<RwLock<FileData>>,
+    data_link: Arc<RwLock<FileContent>>,
 }
 
 impl Write for WritableFile {
@@ -195,8 +197,14 @@ impl Drop for WritableFile {
     fn drop(&mut self) {
         let data = core::mem::replace(&mut self.data, io::Cursor::new(Vec::new()));
         let mut data_link = self.data_link.write().expect("file data lock poisoned");
-        *data_link = FileData(Arc::new(data.into_inner()));
+        *data_link = FileContent::Data(FileData(Arc::new(data.into_inner())));
     }
+}
+
+#[derive(Debug, Clone)]
+enum FileContent {
+    Data(FileData),
+    Object(Arc<dyn std::any::Any + Send + Sync>),
 }
 
 /// Holds the data of a file. Cheap to clone because the data is behind an [`Arc`].
@@ -289,9 +297,17 @@ impl FileSystem for MemoryFileSystem {
             None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
         };
 
+        // we can only read a binary file
+
+        let FileContent::Data(file_data) = &*file.data.read().unwrap() else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not a binary file",
+            ));
+        };
+
         // create a reader by cloning the Arc
-        let data = file.data.read().unwrap().clone();
-        Ok(io::Cursor::new(data))
+        Ok(io::Cursor::new(file_data.clone()))
     }
 
     fn create(&self, path: impl AsRef<Path>) -> Result<impl Write + Seek, io::Error> {
@@ -307,7 +323,9 @@ impl FileSystem for MemoryFileSystem {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
 
         // open or create new file
-        let file = dir.files.entry(name).or_insert(FileEntry::new());
+        let file = dir.files.entry(name).or_insert(FileEntry::new_data());
+
+        // we can only write
 
         // now we replace the arc with a new one which we will write to. This way existing readers
         // will continue to read the old data, while we start filling up some new data)
@@ -336,11 +354,17 @@ impl FileSystem for MemoryFileSystem {
             None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
         };
 
-        // create a reader by cloning the Arc
-        let data = file.data.read().unwrap();
+        // string reading is only available for binary files
+        let FileContent::Data(file_data) = &*file.data.read().expect("file data lock poisoned")
+        else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not a binary file",
+            ));
+        };
 
         // convert to string lossily expecting all data to be valid utf8
-        let str = str::from_utf8(&data.0).map_err(|e| {
+        let str = str::from_utf8(&file_data.0).map_err(|e| {
             io::Error::new(io::ErrorKind::InvalidInput, format!("invalid UTF-8: {e} "))
         })?;
 
@@ -404,8 +428,16 @@ impl FileSystem for MemoryFileSystem {
             None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
         };
 
-        let data = file.data.read().expect("file data lock poisoned");
-        Ok(data.0.len() as u64)
+        // size is only available for binary files
+        let FileContent::Data(file_data) = &*file.data.read().expect("file data lock poisoned")
+        else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not a binary file",
+            ));
+        };
+
+        Ok(file_data.0.len() as u64)
     }
 
     fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), io::Error> {
@@ -436,12 +468,75 @@ impl FileSystem for MemoryFileSystem {
 
         // get file names
         let to_name = to.file_name().unwrap().to_string_lossy().to_string();
-        let to_file = to_dir.files.entry(to_name).or_insert(FileEntry::new());
+        let to_file = to_dir.files.entry(to_name).or_insert(FileEntry::new_data());
         // copy the data
         let mut to_data = to_file.data.write().expect("file data lock poisoned");
         *to_data = from_data;
 
         Ok(())
+    }
+
+    /// Specially implemented to avoid the default serialization.
+    fn write_object<O: serde::Serialize + Send + Sync + std::any::Any + 'static>(
+        &self,
+        path: impl AsRef<Path>,
+        value: O,
+    ) -> anyhow::Result<()> {
+        let mut root = self.root.write().expect("root lock poisoned");
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the parent directory
+        let dir = root.get_directory_mut(parent)?;
+
+        // get file name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        // open or create new file
+        let file = dir.files.entry(name).or_insert(FileEntry::new_data());
+
+        file.data = Arc::new(RwLock::new(FileContent::Object(Arc::new(value))));
+        Ok(())
+    }
+
+    fn read_object<O: serde::de::DeserializeOwned + Send + Sync + std::any::Any + 'static>(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> anyhow::Result<ReadObject<O>> {
+        let root = self.root.read().expect("root lock poisoned");
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the directory
+        let dir = root.get_directory(parent)?;
+
+        // get file name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        // get the file entry
+        let file = match dir.files.get(&name) {
+            Some(file) => file,
+            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found").into()),
+        };
+
+        // we can only read an object file
+
+        let FileContent::Object(file_data) = &*file.data.read().unwrap() else {
+            anyhow::bail!("file {} is not an object file", path.display());
+        };
+
+        // try to downcast the object to the type we expect
+        let Ok(object) = file_data.clone().downcast::<O>() else {
+            anyhow::bail!(
+                "file {} is not an object file of type {}",
+                path.display(),
+                std::any::type_name::<O>(),
+            );
+        };
+
+        Ok(ReadObject::Shared(object))
     }
 }
 

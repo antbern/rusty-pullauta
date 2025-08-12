@@ -1,6 +1,7 @@
 use std::{
     io::{self, BufRead, Seek, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use anyhow::Context;
@@ -44,23 +45,23 @@ pub trait FileSystem: std::fmt::Debug {
     fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), io::Error>;
 
     /// Read a serialized object from a file. Returns a reference-counted object handle.
-    fn read_object<O: serde::de::DeserializeOwned>(
+    fn read_object<O: serde::de::DeserializeOwned + Send + Sync + std::any::Any + 'static>(
         &self,
         path: impl AsRef<Path>,
-    ) -> anyhow::Result<O> {
+    ) -> anyhow::Result<ReadObject<O>> {
         // default implementation just reads the object using bincode
         let mut reader = self.open(path).context("opening file for reading")?;
         let value: bincode::serde::Compat<O> =
             bincode::decode_from_std_read(&mut reader, bincode::config::standard())
                 .context("deserializing from file")?;
-        Ok(value.0)
+        Ok(ReadObject::Owned(value.0))
     }
 
     /// Write an object to a file.
-    fn write_object<O: serde::Serialize>(
+    fn write_object<O: serde::Serialize + Send + Sync + std::any::Any + 'static>(
         &self,
         path: impl AsRef<Path>,
-        value: &O,
+        value: O,
     ) -> anyhow::Result<()> {
         // default implementation just stores the object using bincode
         let mut writer = self.create(path).context("creating file for writing")?;
@@ -81,5 +82,32 @@ pub trait FileSystem: std::fmt::Debug {
         let mut reader = image::ImageReader::new(self.open(path).expect("Could not open file"));
         reader.set_format(image::ImageFormat::Png);
         reader.decode()
+    }
+}
+
+/// An Object that has been read from the file system.
+pub enum ReadObject<T> {
+    Owned(T),
+    Shared(Arc<T>),
+}
+
+impl<T> std::ops::Deref for ReadObject<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            ReadObject::Owned(value) => value,
+            ReadObject::Shared(value) => value,
+        }
+    }
+}
+
+impl<T: Clone> ReadObject<T> {
+    /// Convert the object to an owned value.
+    pub fn into_owned(self) -> T {
+        match self {
+            ReadObject::Owned(value) => value,
+            ReadObject::Shared(value) => (*value).clone(),
+        }
     }
 }

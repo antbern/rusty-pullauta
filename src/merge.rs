@@ -263,6 +263,7 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
 
         for file in files {
             let loaded = BinaryDxf::from_reader(fs, &file)?;
+            let loaded = loaded.into_owned();
 
             // we always use the bounds of the first loaded file
             if first_file_bounds.is_none() {
@@ -322,22 +323,23 @@ pub fn bindxfmerge(fs: &impl FileSystem, config: &Config) -> anyhow::Result<()> 
                 .expect("this should be set since we load at least one file"),
             geometries,
         );
-        output.to_fs(fs, output_file)?;
 
         if config.output_dxf {
             let output_file = PathBuf::from(format!("merged_{suffix}.dxf"));
             output.to_dxf(&mut fs.create(&output_file)?)?;
         }
+
+        output.to_fs(fs, output_file)?;
     }
 
     // output all geometries to a single file
     if let Some(all_bounds) = first_file_bounds {
         let out_merged = BinaryDxf::new(all_bounds, all_geometries);
-        out_merged.to_fs(fs, "merged.dxf.bin")?;
 
         if config.output_dxf {
             out_merged.to_dxf(&mut fs.create("merged.dxf")?)?;
         }
+        out_merged.to_fs(fs, "merged.dxf.bin")?;
     }
 
     Ok(())
@@ -406,7 +408,7 @@ pub fn smoothjoin(
         .expect("Unable to read out.dxf.bin");
 
     let input_bounds = input_dxf.bounds().clone(); // store the bounds for usage in the output
-    let Geometry::Polylines2(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
+    let Some(Geometry::Polylines2(input_lines)) = input_dxf.geometry().first() else {
         return Err(anyhow::anyhow!("out.dxf.bin does not contain polylines").into());
     };
 
@@ -924,15 +926,16 @@ pub fn smoothjoin(
 
     fs.write_object(
         tmpfolder.join("dotknolls.bin"),
-        &super::knolls::Dotknolls { dotknolls },
+        super::knolls::Dotknolls { dotknolls },
     )?;
 
     let out2_dxf = BinaryDxf::new(input_bounds, vec![out2_lines.into()]);
-    out2_dxf.to_fs(fs, tmpfolder.join("out2.dxf.bin"))?;
 
     if config.output_dxf {
         out2_dxf.to_dxf(&mut fs.create(tmpfolder.join("out2.dxf"))?)?;
     }
+
+    out2_dxf.to_fs(fs, tmpfolder.join("out2.dxf.bin"))?;
 
     info!("Done");
     Ok(())

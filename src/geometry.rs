@@ -5,7 +5,7 @@
 
 use anyhow::Context;
 
-use crate::io::fs::FileSystem;
+use crate::io::fs::{FileSystem, ReadObject};
 
 /// A 2D point
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -165,12 +165,12 @@ impl From<Polylines<Point3, (Classification, f64)>> for Geometry {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BinaryDxf {
     /// the version of the program that created this file, used to detect stale temp files
     version: String,
     bounds: Bounds,
-    data: Vec<Geometry>,
+    geometry: Vec<Geometry>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -197,7 +197,7 @@ impl BinaryDxf {
         Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             bounds,
-            data,
+            geometry: data,
         }
     }
 
@@ -207,12 +207,16 @@ impl BinaryDxf {
 
     /// Get the points in this geometry, or [`None`] if does not contain [`Polylines`] data.
     pub fn take_geometry(self) -> Vec<Geometry> {
-        self.data
+        self.geometry
+    }
+
+    pub fn geometry(&self) -> &[Geometry] {
+        &self.geometry
     }
 
     /// Serialize this object to a writer.
     pub fn to_fs(
-        &self,
+        self,
         fs: &impl FileSystem,
         path: impl AsRef<std::path::Path>,
     ) -> anyhow::Result<()> {
@@ -223,8 +227,8 @@ impl BinaryDxf {
     pub fn from_reader(
         fs: &impl FileSystem,
         path: impl AsRef<std::path::Path>,
-    ) -> anyhow::Result<Self> {
-        let object: Self = fs.read_object(path)?;
+    ) -> anyhow::Result<ReadObject<Self>> {
+        let object: ReadObject<Self> = fs.read_object(path)?;
         anyhow::ensure!(
             object.version == env!("CARGO_PKG_VERSION"),
             "Binary DXF file was created with another version, please remove and recreate"
@@ -240,7 +244,7 @@ impl BinaryDxf {
             self.bounds.xmin, self.bounds.ymin, self.bounds.xmax, self.bounds.ymax
         )?;
 
-        for geom in &self.data {
+        for geom in &self.geometry {
             match geom {
                 Geometry::Points(points) => {
                     for (point, class) in points.points.iter().zip(&points.classification) {

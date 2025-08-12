@@ -132,7 +132,7 @@ pub fn render(
 
     // dotknolls----------
     let data = BinaryDxf::from_reader(fs, tmpfolder.join("dotknolls.dxf.bin"))?;
-    let Geometry::Points(points) = data.take_geometry().swap_remove(0) else {
+    let Some(Geometry::Points(points)) = data.geometry().first() else {
         return Err(anyhow::anyhow!("dotknolls.dxf.bin should contain points").into());
     };
 
@@ -276,7 +276,7 @@ fn draw_cliffs(
 ) -> Result<(), Box<dyn Error>> {
     let scalefactor = config.scalefactor;
 
-    let dxf = BinaryDxf::from_reader(fs, tmpfolder.join(file))?;
+    let dxf = BinaryDxf::from_reader(fs, tmpfolder.join(file))?.into_owned();
 
     let Geometry::Polylines2(lines) = dxf.take_geometry().swap_remove(0) else {
         return Err(anyhow::anyhow!("cliff data should contain polylines").into());
@@ -501,23 +501,24 @@ pub fn draw_curves(
     let input_dxf = BinaryDxf::from_reader(fs, tmpfolder.join("out2.dxf.bin"))
         .expect("Unable to read out2.dxf.bin");
     let bounds = input_dxf.bounds().clone();
-    let Geometry::Polylines3(input_lines) = input_dxf.take_geometry().swap_remove(0) else {
+    let Some(Geometry::Polylines3(input_lines)) = input_dxf.geometry().first() else {
         return Err(anyhow::anyhow!("out2.dxf.bin does not contain polylines").into());
     };
 
     let should_generate_formlines = formline == 2.0 && !nodepressions;
     let mut formlines = Polylines::<Point2, Classification>::new();
 
-    for (mut line, (layer, _height)) in input_lines.into_iter() {
-        // flip and scale the line points
-        for p in line.iter_mut() {
-            p.x = (p.x - x0) * 600.0 / 254.0 / scalefactor;
-            p.y = (y0 - p.y) * 600.0 / 254.0 / scalefactor;
-        }
-
+    for (line, (layer, _height)) in input_lines.iter() {
         // TEMP: split x and y values
-        let x = line.iter().map(|p| p.x).collect::<Vec<_>>();
-        let y = line.iter().map(|p| p.y).collect::<Vec<_>>();
+        // + flip and scale the points
+        let x = line
+            .iter()
+            .map(|p| (p.x - x0) * 600.0 / 254.0 / scalefactor)
+            .collect::<Vec<_>>();
+        let y = line
+            .iter()
+            .map(|p| (y0 - p.y) * 600.0 / 254.0 / scalefactor)
+            .collect::<Vec<_>>();
 
         let color = if layer.is_contour() {
             Rgba([166, 85, 43, 255]) // brown
@@ -853,13 +854,14 @@ pub fn draw_curves(
 
     if should_generate_formlines {
         let out_formlines = BinaryDxf::new(bounds, vec![formlines.into()]);
-        out_formlines
-            .to_fs(fs, tmpfolder.join("formlines.dxf.bin"))
-            .expect("Could not write formlines.dxf.bin");
 
         if config.output_dxf {
             out_formlines.to_dxf(&mut fs.create(tmpfolder.join("formlines.dxf"))?)?;
         }
+
+        out_formlines
+            .to_fs(fs, tmpfolder.join("formlines.dxf.bin"))
+            .expect("Could not write formlines.dxf.bin");
     }
 
     Ok(())

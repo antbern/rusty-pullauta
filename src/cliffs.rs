@@ -266,16 +266,14 @@ pub fn makecliffs(
 
     let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f2_lines.into()]);
 
-    // save binary file
-    f2_dxf
-        .to_fs(fs, tmpfolder.join("c2g.dxf.bin"))
-        .expect("Cannot write c3g.dxf.bin");
-
     if config.output_dxf {
         f2_dxf.to_dxf(&mut fs.create(tmpfolder.join("c2g.dxf"))?)?;
     }
 
-    drop(f2_dxf);
+    // save binary file
+    f2_dxf
+        .to_fs(fs, tmpfolder.join("c2g.dxf.bin"))
+        .expect("Cannot write c3g.dxf.bin");
 
     let c2_limit = 2.6 * 2.75;
 
@@ -360,14 +358,14 @@ pub fn makecliffs(
 
     let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f3_lines.into()]);
 
+    if config.output_dxf {
+        f3_dxf.to_dxf(&mut fs.create(tmpfolder.join("c3g.dxf"))?)?;
+    }
+
     // save binary file
     f3_dxf
         .to_fs(fs, tmpfolder.join("c3g.dxf.bin"))
         .expect("Cannot write c3g.dxf.bin");
-
-    if config.output_dxf {
-        f3_dxf.to_dxf(&mut fs.create(tmpfolder.join("c3g.dxf"))?)?;
-    }
 
     img.write_to(
         &mut fs

@@ -8,14 +8,14 @@ use std::path::Path;
 use crate::config::Config;
 use crate::geometry::{BinaryDxf, Bounds, Classification, Geometry, Point2, Points, Polylines};
 use crate::io::bytes::FromToBytes;
-use crate::io::fs::FileSystem;
+use crate::io::fs::{FileSystem, ReadObject};
 use crate::io::heightmap::HeightMap;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Dotknolls {
     pub dotknolls: Vec<Dotknoll>,
 }
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Dotknoll {
     pub x: f64,
     pub y: f64,
@@ -50,7 +50,7 @@ pub fn dotknolls(
     );
 
     let data = BinaryDxf::from_reader(fs, tmpfolder.join("out2.dxf.bin"))?;
-    let Geometry::Polylines3(lines) = data.take_geometry().swap_remove(0) else {
+    let Some(Geometry::Polylines3(lines)) = data.geometry().first() else {
         return Err(anyhow::anyhow!("out2.dxf.bin should contain polylines").into());
     };
 
@@ -73,10 +73,10 @@ pub fn dotknolls(
 
     let mut dotknoll_points = Points::new();
 
-    let dotknolls: Dotknolls = fs.read_object(tmpfolder.join("dotknolls.bin"))?;
+    let dotknolls: ReadObject<Dotknolls> = fs.read_object(tmpfolder.join("dotknolls.bin"))?;
 
-    for dot in dotknolls.dotknolls {
-        let Dotknoll { x, y, is_knoll } = dot;
+    for dot in &dotknolls.dotknolls {
+        let &Dotknoll { x, y, is_knoll } = dot;
 
         let mut ok = true;
         let mut i = (x - xstart) / scalefactor - 3.0;
@@ -115,14 +115,13 @@ pub fn dotknolls(
         Bounds::new(xstart, xmax * size + xstart, ystart, ymax * size + ystart),
         vec![dotknoll_points.into()],
     );
+    if config.output_dxf {
+        dxf.to_dxf(&mut fs.create(tmpfolder.join("dotknolls.dxf"))?)?;
+    }
 
     // write binary
     dxf.to_fs(fs, tmpfolder.join("dotknolls.dxf.bin"))
         .expect("could not write dotknolls.dxf.bin");
-
-    if config.output_dxf {
-        dxf.to_dxf(&mut fs.create(tmpfolder.join("dotknolls.dxf"))?)?;
-    }
 
     info!("Done");
     Ok(())
@@ -162,7 +161,7 @@ pub fn knolldetector(
     }
 
     let data = BinaryDxf::from_reader(fs, tmpfolder.join("contours03.dxf.bin"))?;
-    let Geometry::Polylines2(lines) = data.take_geometry().swap_remove(0) else {
+    let Some(Geometry::Polylines2(lines)) = data.geometry().first() else {
         anyhow::bail!("contours03.dxf.bin should contain polylines");
     };
 
@@ -798,14 +797,13 @@ pub fn knolldetector(
     }
 
     let detected_dxf = BinaryDxf::new(detected_bounds, vec![detected_lines.into()]);
-    detected_dxf.to_fs(fs, tmpfolder.join("detected.dxf.bin"))?;
-
     if config.output_dxf {
         detected_dxf.to_dxf(&mut fs.create(tmpfolder.join("detected.dxf"))?)?;
     }
+    detected_dxf.to_fs(fs, tmpfolder.join("detected.dxf.bin"))?;
 
     // write pins to file
-    fs.write_object(tmpfolder.join("pins.bin"), &pins)
+    fs.write_object(tmpfolder.join("pins.bin"), pins)
         .expect("Unable to write pins");
 
     info!("Done");
@@ -813,7 +811,7 @@ pub fn knolldetector(
 }
 
 /// Struct used to store temporary data about pins on disk
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct Pin {
     xx: f64,
     yy: f64,
@@ -877,7 +875,9 @@ pub fn xyzknolls(
     // read pins from file if it exists
     let pins_file_in = tmpfolder.join("pins.bin");
     let pins: Vec<Pin> = if fs.exists(&pins_file_in) {
-        fs.read_object(pins_file_in).expect("Unable to read pins")
+        fs.read_object::<Vec<Pin>>(pins_file_in)
+            .expect("Unable to read pins")
+            .into_owned()
     } else {
         Vec::new()
     };
@@ -985,8 +985,7 @@ pub fn xyzknolls(
                     y0 = y1;
                 }
                 if hit % 2 == 1 {
-                    let tmp = xyz2.grid[(ii, jj)] + move1;
-                    xyz2.grid[(ii, jj)] = tmp;
+                    xyz2.grid[(ii, jj)] += move1;
                     let coords = format!("{ii}_{jj}");
                     touched.insert(coords, true);
                 }
