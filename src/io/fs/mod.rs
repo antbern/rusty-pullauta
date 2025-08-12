@@ -6,6 +6,8 @@ use std::{
 
 use anyhow::Context;
 
+use crate::io::xyz::{XyzReader, XyzWriter};
+
 pub mod local;
 pub mod memory;
 
@@ -72,6 +74,20 @@ pub trait FileSystem: std::fmt::Debug {
         )
         .context("serializing to file")?;
         Ok(())
+    }
+
+    /// Write an XYZ file in binary format. Optionally provides a size hint for the number of records.
+    fn write_xyz(
+        &self,
+        path: impl AsRef<Path>,
+        _hint_number_of_records: Option<u64>,
+    ) -> Result<impl XyzWriter, io::Error> {
+        Ok(super::xyz::XyzInternalWriter::new(self.create(path)?))
+    }
+
+    /// Read an XYZ file in binary format.
+    fn read_xyz(&self, path: impl AsRef<Path>) -> Result<impl XyzReader, io::Error> {
+        super::xyz::XyzInternalReader::new(self.open(path)?)
     }
 
     /// Read an image in PNG format.

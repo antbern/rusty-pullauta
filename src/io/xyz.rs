@@ -23,7 +23,15 @@ pub struct XyzRecord {
     pub _padding: u8,
 }
 
-pub struct XyzInternalWriter<W: Write + Seek> {
+pub trait XyzWriter {
+    /// Write a slice of XYZ records to the writer.
+    fn write_records(&mut self, records: &[XyzRecord]) -> std::io::Result<()>;
+
+    /// Call when done writing to finalize the file.
+    fn finish(&mut self) -> std::io::Result<()>;
+}
+
+pub(super) struct XyzInternalWriter<W: Write + Seek> {
     inner: Option<W>,
     records_written: u64,
     // for stats
@@ -39,7 +47,14 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
         }
     }
 
-    pub fn write_records(&mut self, records: &[XyzRecord]) -> std::io::Result<()> {
+    #[cfg(test)]
+    pub fn take_inner(&mut self) -> W {
+        self.inner.take().expect("writer has already been finished")
+    }
+}
+
+impl<W: Write + Seek> XyzWriter for XyzInternalWriter<W> {
+    fn write_records(&mut self, records: &[XyzRecord]) -> std::io::Result<()> {
         let inner = self
             .inner
             .as_mut()
@@ -65,10 +80,10 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
         Ok(())
     }
 
-    pub fn finish(&mut self) -> std::io::Result<W> {
+    fn finish(&mut self) -> std::io::Result<()> {
         let mut inner = self
             .inner
-            .take()
+            .as_mut()
             .ok_or_else(|| std::io::Error::other("writer has already been finished"))?;
 
         // seek to the beginning of the file and write the number of records
@@ -88,7 +103,7 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
                     / (1024.0 * 1024.0 * elapsed.as_secs_f64()),
             );
         }
-        Ok(inner)
+        Ok(())
     }
 }
 
@@ -100,7 +115,12 @@ impl<W: Write + Seek> Drop for XyzInternalWriter<W> {
     }
 }
 
-pub struct XyzInternalReader<R: Read> {
+pub trait XyzReader {
+    /// Read the next chunk of XYZ records. Returns `None` when there are no more records.
+    fn next_chunk(&mut self) -> std::io::Result<Option<&[XyzRecord]>>;
+}
+
+pub(super) struct XyzInternalReader<R: Read> {
     inner: R,
     n_records: u64,
     records_read: u64,
@@ -131,8 +151,9 @@ impl<R: Read> XyzInternalReader<R> {
             buffer: [XyzRecord::default(); 1024],
         })
     }
-
-    pub fn next_chunk(&mut self) -> std::io::Result<Option<&[XyzRecord]>> {
+}
+impl<R: Read> XyzReader for XyzInternalReader<R> {
+    fn next_chunk(&mut self) -> std::io::Result<Option<&[XyzRecord]>> {
         if self.records_read >= self.n_records {
             // TODO: log statistics about the read records
             if let Some(start) = self.start {
@@ -196,9 +217,10 @@ mod test {
         writer.write_records(&[record]).unwrap();
         writer.write_records(&[record]).unwrap();
         writer.write_records(&[record]).unwrap();
+        writer.finish().unwrap();
 
         // now read the records
-        let data = writer.finish().unwrap().into_inner();
+        let data = writer.take_inner().into_inner();
         let cursor = Cursor::new(data);
         let mut reader = super::XyzInternalReader::new(cursor).unwrap();
         let chunk = reader.next_chunk().unwrap().unwrap();

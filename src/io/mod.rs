@@ -1,9 +1,9 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use fs::FileSystem;
 use heightmap::HeightMap;
 
-use crate::geometry::BinaryDxf;
+use crate::{geometry::BinaryDxf, io::xyz::XyzReader};
 
 pub mod bytes;
 pub mod fs;
@@ -13,7 +13,7 @@ pub mod xyz;
 /// Helper function to convert an internal xyz file to a regular xyz file.
 pub fn internal2xyz(fs: &impl FileSystem, input: &str, output: &str) -> std::io::Result<()> {
     if input.ends_with(".xyz.bin") {
-        let mut reader = xyz::XyzInternalReader::new(fs.open(Path::new(input))?)?;
+        let mut reader = fs.read_xyz(input)?;
         let mut writer = fs.create(output)?;
 
         while let Some(record) = reader.next_chunk()? {

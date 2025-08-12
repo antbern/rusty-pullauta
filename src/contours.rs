@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::geometry::{BinaryDxf, Bounds, Classification, Point2, Polylines};
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
-use crate::io::xyz::XyzInternalReader;
+use crate::io::xyz::XyzReader;
 use crate::vec2d::Vec2D;
 
 /// Create a heightmap from a point cloud file.
@@ -34,7 +34,7 @@ pub fn xyz2heightmap(
     let mut hmax: f64 = f64::MIN;
 
     let xyz_file_in = tmpfolder.join(xyzfilein);
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+    let mut reader = fs.read_xyz(&xyz_file_in)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             let x: f64 = r.x;
@@ -77,7 +77,7 @@ pub fn xyz2heightmap(
     // a two-dimensional vector of (sum, count) pairs for computing averages
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+    let mut reader = fs.read_xyz(&xyz_file_in)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             if r.classification == 2 || r.classification == water_class {

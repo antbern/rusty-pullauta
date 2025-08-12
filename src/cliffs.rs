@@ -10,7 +10,7 @@ use crate::geometry::{BinaryDxf, Bounds, Classification, Point2, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
-use crate::io::xyz::XyzInternalReader;
+use crate::io::xyz::XyzReader;
 use crate::vec2d::Vec2D;
 
 pub fn makecliffs(
@@ -94,7 +94,7 @@ pub fn makecliffs(
     let mut rng = rand::rng();
     let randdist = rand::distr::Bernoulli::new(cliff_thin).unwrap();
 
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+    let mut reader = fs.read_xyz(&xyz_file_in)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             if cliff_thin == 1.0 || rng.sample(randdist) {
