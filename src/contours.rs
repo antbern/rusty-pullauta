@@ -35,33 +35,35 @@ pub fn xyz2heightmap(
 
     let xyz_file_in = tmpfolder.join(xyzfilein);
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next()? {
-        let x: f64 = r.x;
-        let y: f64 = r.y;
-        let h: f64 = r.z;
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
+            let x: f64 = r.x;
+            let y: f64 = r.y;
+            let h: f64 = r.z as f64;
 
-        if xmin > x {
-            xmin = x;
-        }
+            if xmin > x {
+                xmin = x;
+            }
 
-        if xmax < x {
-            xmax = x;
-        }
+            if xmax < x {
+                xmax = x;
+            }
 
-        if ymin > y {
-            ymin = y;
-        }
+            if ymin > y {
+                ymin = y;
+            }
 
-        if ymax < y {
-            ymax = y;
-        }
+            if ymax < y {
+                ymax = y;
+            }
 
-        if hmin > h {
-            hmin = h;
-        }
+            if hmin > h {
+                hmin = h;
+            }
 
-        if hmax < h {
-            hmax = h;
+            if hmax < h {
+                hmax = h;
+            }
         }
     }
     drop(reader);
@@ -76,18 +78,20 @@ pub fn xyz2heightmap(
     let mut list_alt = Vec2D::new(w + 2, h + 2, (0f64, 0usize));
 
     let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
-    while let Some(r) = reader.next()? {
-        if r.classification == 2 || r.classification == water_class {
-            let x: f64 = r.x;
-            let y: f64 = r.y;
-            let h: f64 = r.z;
+    while let Some(chunk) = reader.next_chunk()? {
+        for r in chunk {
+            if r.classification == 2 || r.classification == water_class {
+                let x: f64 = r.x;
+                let y: f64 = r.y;
+                let h: f64 = r.z as f64;
 
-            let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
-            let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
+                let idx_x = ((x - xmin).floor() / 2.0 / scalefactor) as usize;
+                let idx_y = ((y - ymin).floor() / 2.0 / scalefactor) as usize;
 
-            let (sum, count) = &mut list_alt[(idx_x, idx_y)];
-            *sum += h;
-            *count += 1;
+                let (sum, count) = &mut list_alt[(idx_x, idx_y)];
+                *sum += h;
+                *count += 1;
+            }
         }
     }
 
