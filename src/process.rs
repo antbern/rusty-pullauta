@@ -495,6 +495,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             }
         }
         writer.finish().expect("Unable to finish writing");
+        drop(writer);
 
         let tmpfolder = PathBuf::from(format!("temp{thread}"));
 

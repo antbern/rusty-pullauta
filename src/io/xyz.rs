@@ -36,6 +36,7 @@ pub(super) struct XyzInternalWriter<W: Write + Seek> {
     records_written: u64,
     // for stats
     start: Option<Instant>,
+    was_finished: bool,
 }
 
 impl<W: Write + Seek> XyzInternalWriter<W> {
@@ -44,6 +45,7 @@ impl<W: Write + Seek> XyzInternalWriter<W> {
             inner: Some(inner),
             records_written: 0,
             start: None,
+            was_finished: false,
         }
     }
 
@@ -89,6 +91,7 @@ impl<W: Write + Seek> XyzWriter for XyzInternalWriter<W> {
         // seek to the beginning of the file and write the number of records
         inner.seek(std::io::SeekFrom::Start(XYZ_MAGIC.len() as u64))?;
         self.records_written.to_bytes(&mut inner)?;
+        self.was_finished = true;
 
         // log statistics about the written records
         if let Some(start) = self.start {
@@ -109,8 +112,8 @@ impl<W: Write + Seek> XyzWriter for XyzInternalWriter<W> {
 
 impl<W: Write + Seek> Drop for XyzInternalWriter<W> {
     fn drop(&mut self) {
-        if self.inner.is_some() {
-            self.finish().expect("failed to finish writer in Drop");
+        if !self.was_finished {
+            panic!("XyzInternalWriter was not finished before being dropped.");
         }
     }
 }

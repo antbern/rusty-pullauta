@@ -252,6 +252,9 @@ enum FileContent {
 
     /// A file containing and object.
     Object(Arc<dyn std::any::Any + Send + Sync>),
+
+    /// XYZ file data, which is a sequence of records.
+    XyzRecords(Arc<[crate::io::xyz::XyzRecord]>),
 }
 
 /// Holds the data of a file. Cheap to clone because the data is behind an [`Arc`].
@@ -483,6 +486,98 @@ impl FileSystem for MemoryFileSystem {
         };
 
         Ok(ReadObject::Shared(object))
+    }
+
+    /// Override the default implementation to write an XYZ file directly into RAM.
+    fn write_xyz(
+        &self,
+        path: impl AsRef<Path>,
+        hint_number_of_records: Option<u64>,
+    ) -> Result<impl crate::io::xyz::XyzWriter, io::Error> {
+        let mut root = self.root.write().expect("root lock poisoned");
+
+        let file = root.get_file_entry_or_create(path)?;
+
+        // now we replace the arc with a new one which we will write to. This way existing readers
+        // will continue to read the old data, while we start filling up some new data)
+        let writer = XyzMemoryWriter {
+            records: Vec::with_capacity(hint_number_of_records.unwrap_or(0) as usize),
+            data_link: file.data.clone(), // linked to the place where the data is stored
+            was_finished: false,
+        };
+        Ok(writer)
+    }
+
+    /// Override the default implementation to read an XYZ file directly from RAM.
+    fn read_xyz(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<impl crate::io::xyz::XyzReader, io::Error> {
+        let root = self.root.read().expect("root lock poisoned");
+        let file = root.get_file_entry(path)?;
+
+        let FileContent::XyzRecords(records) = &*file.data.read().expect("file data lock poisoned")
+        else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not an XYZ file",
+            ));
+        };
+
+        Ok(XyzMemoryReader {
+            records: records.clone(),
+            exhausted: false,
+        })
+    }
+}
+
+struct XyzMemoryWriter {
+    records: Vec<crate::io::xyz::XyzRecord>,
+
+    /// links back to the file entry so we can swap the data when the writer is dropped
+    data_link: Arc<RwLock<FileContent>>,
+
+    was_finished: bool,
+}
+impl Drop for XyzMemoryWriter {
+    // swap the data into the file entry on drop
+    fn drop(&mut self) {
+        if !self.was_finished {
+            panic!("XyzMemoryWriter was not finished before being dropped");
+        }
+    }
+}
+
+impl crate::io::xyz::XyzWriter for XyzMemoryWriter {
+    fn write_records(&mut self, records: &[crate::io::xyz::XyzRecord]) -> std::io::Result<()> {
+        self.records.extend_from_slice(records);
+        Ok(())
+    }
+
+    fn finish(&mut self) -> io::Result<()> {
+        let data = core::mem::take(&mut self.records);
+        let mut data_link = self.data_link.write().expect("file data lock poisoned");
+        *data_link = FileContent::XyzRecords(data.into());
+        self.was_finished = true;
+        Ok(())
+    }
+}
+
+struct XyzMemoryReader {
+    /// A pointer to the records of the file
+    records: Arc<[crate::io::xyz::XyzRecord]>,
+    /// Used to keep track of whether we have already read the records.
+    exhausted: bool,
+}
+
+impl crate::io::xyz::XyzReader for XyzMemoryReader {
+    fn next_chunk(&mut self) -> std::io::Result<Option<&[crate::io::xyz::XyzRecord]>> {
+        if !self.exhausted {
+            self.exhausted = true;
+            Ok(Some(&self.records))
+        } else {
+            Ok(None)
+        }
     }
 }
 
