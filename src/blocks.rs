@@ -6,7 +6,7 @@ use log::info;
 use rustc_hash::FxHashMap as HashMap;
 use std::{error::Error, path::Path};
 
-use crate::io::{bytes::FromToBytes, fs::FileSystem, heightmap::HeightMap, xyz::XyzInternalReader};
+use crate::io::{bytes::FromToBytes, fs::FileSystem, heightmap::HeightMap, xyz::XyzReader};
 
 pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Error>> {
     info!("Identifying blocks...");
@@ -34,8 +34,8 @@ pub fn blocks(fs: &impl FileSystem, tmpfolder: &Path) -> Result<(), Box<dyn Erro
     let white = Rgba([255, 255, 255, 255]);
 
     let xyz_file_in = tmpfolder.join("xyztemp.xyz.bin");
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?).unwrap();
-    while let Some(chunk) = reader.next_chunk().unwrap() {
+    let mut reader = fs.read_xyz(xyz_file_in).unwrap();
+    while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             let (x, y, h) = (r.x, r.y, r.z as f64);
             let r3 = r.classification;

@@ -12,7 +12,7 @@ use crate::config::{Config, Zone};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
-use crate::io::xyz::XyzInternalReader;
+use crate::io::xyz::XyzReader;
 use crate::vec2d::Vec2D;
 
 pub fn makevege(
@@ -76,7 +76,7 @@ pub fn makevege(
     let mut noyhit = Vec2D::new(w_3, h_3, 0_u32); // 3.0
 
     let mut i = 0;
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+    let mut reader = fs.read_xyz(&xyz_file_in)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
@@ -140,7 +140,7 @@ pub fn makevege(
     let mut ug = Vec2D::new(w_block_step, h_block_step, UggItem::default()); // block / step
 
     let mut i = 0;
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+    let mut reader = fs.read_xyz(&xyz_file_in)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             if vegethin == 0 || ((i + 1) as u32) % vegethin == 0 {
@@ -476,7 +476,7 @@ pub fn makevege(
     let buildings = config.buildings;
     let water = config.water;
     if buildings > 0 || water > 0 {
-        let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+        let mut reader = fs.read_xyz(&xyz_file_in)?;
         while let Some(chunk) = reader.next_chunk()? {
             for r in chunk {
                 let (x, y) = (r.x, r.y);

@@ -1,3 +1,5 @@
+use crate::io::fs::ReadObject;
+
 use super::FileSystem;
 use rustc_hash::FxHashMap as HashMap;
 
@@ -96,6 +98,46 @@ impl Root {
         Ok(dir)
     }
 
+    /// Get an existing [`FileEntry`].
+    fn get_file_entry(&self, path: impl AsRef<Path>) -> Result<&FileEntry, io::Error> {
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the directory
+        let dir = self.get_directory(parent)?;
+
+        // get file name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        // get the file entry
+        let file = match dir.files.get(&name) {
+            Some(file) => file,
+            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
+        };
+        Ok(file)
+    }
+
+    /// Get a mutable reference to an existing [`FileEntry`], or create a new one if it does not exist.
+    fn get_file_entry_or_create(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Result<&mut FileEntry, io::Error> {
+        let path = path.as_ref();
+
+        let parent = file_parent(path)?;
+
+        // find the parent directory
+        let dir = self.get_directory_mut(parent)?;
+
+        // get file name
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        // open or create new file
+        let file = dir.files.entry(name).or_insert(FileEntry::new_empty());
+        Ok(file)
+    }
+
     /// Resolve a path to a canonical path (removing "..", "." and "/") containing only the direct path coponents.
     fn resolve_path(&self, path: &Path) -> Result<Vec<String>, io::Error> {
         let mut part: Vec<String> = Vec::new();
@@ -147,31 +189,31 @@ fn file_parent(path: &Path) -> Result<&Path, io::Error> {
 struct FileEntry {
     /// data is stored as an Arc to allow for multiple readers.
     /// Wrapped in an [`RwLock`] to allow for swapping the value when the Writer is dropped / finished.
-    data: Arc<RwLock<FileData>>,
+    data: Arc<RwLock<FileContent>>,
 }
 
 impl FileEntry {
     /// Create a new empty file entry.
-    fn new() -> Self {
+    fn new_empty() -> Self {
         Self {
-            data: Arc::new(RwLock::new(FileData::new())),
+            data: Arc::new(RwLock::new(FileContent::Empty)),
         }
     }
 }
-impl std::fmt::Debug for FileData {
+impl std::fmt::Debug for FileBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let len = self.0.len();
-        f.debug_struct("FileData").field("len", &len).finish()
+        f.debug_struct("FileBytes").field("len", &len).finish()
     }
 }
 
-/// A file that is currently being written too. Has a link back to the [`FileData`] so it can
+/// A file that is currently being written too. Has a link back to the [`FileContent`] so it can
 /// swap it whenever the writer is dropped.
 struct WritableFile {
     /// The data beeing written to the file
     data: io::Cursor<Vec<u8>>,
     /// links back to the file entry so we can swap the data when the writer is dropped
-    data_link: Arc<RwLock<FileData>>,
+    data_link: Arc<RwLock<FileContent>>,
 }
 
 impl Write for WritableFile {
@@ -195,22 +237,32 @@ impl Drop for WritableFile {
     fn drop(&mut self) {
         let data = core::mem::replace(&mut self.data, io::Cursor::new(Vec::new()));
         let mut data_link = self.data_link.write().expect("file data lock poisoned");
-        *data_link = FileData(Arc::new(data.into_inner()));
+        *data_link = FileContent::Data(FileBytes(Arc::new(data.into_inner())));
     }
+}
+
+/// Contains the actual file content, cheap to clone!
+#[derive(Debug, Clone)]
+enum FileContent {
+    /// An empty (recently created) file.
+    Empty,
+
+    /// A file containing binary data.
+    Data(FileBytes),
+
+    /// A file containing and object.
+    Object(Arc<dyn std::any::Any + Send + Sync>),
+
+    /// XYZ file data, which is a sequence of records.
+    XyzRecords(Arc<[crate::io::xyz::XyzRecord]>),
 }
 
 /// Holds the data of a file. Cheap to clone because the data is behind an [`Arc`].
 #[derive(Clone)]
-struct FileData(Arc<Vec<u8>>);
-
-impl FileData {
-    fn new() -> Self {
-        Self(Arc::new(Vec::new()))
-    }
-}
+struct FileBytes(Arc<Vec<u8>>);
 
 /// this allows us to treat [`FileData`] as a slice of bytes, which is useful for the [`Read`] trait
-impl AsRef<[u8]> for FileData {
+impl AsRef<[u8]> for FileBytes {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
@@ -273,41 +325,25 @@ impl FileSystem for MemoryFileSystem {
         path: impl AsRef<Path>,
     ) -> Result<impl BufRead + Seek + Send + 'static, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
+        let file = root.get_file_entry(path)?;
 
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
+        // we can only read a binary file
+        let FileContent::Data(file_data) = &*file.data.read().unwrap() else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not a binary file",
+            ));
         };
 
         // create a reader by cloning the Arc
-        let data = file.data.read().unwrap().clone();
-        Ok(io::Cursor::new(data))
+        Ok(io::Cursor::new(file_data.clone()))
     }
 
     fn create(&self, path: impl AsRef<Path>) -> Result<impl Write + Seek, io::Error> {
         let mut root = self.root.write().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
-
-        // find the parent directory
-        let dir = root.get_directory_mut(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // open or create new file
-        let file = dir.files.entry(name).or_insert(FileEntry::new());
+        let file = root.get_file_entry_or_create(path)?;
 
         // now we replace the arc with a new one which we will write to. This way existing readers
         // will continue to read the old data, while we start filling up some new data)
@@ -320,27 +356,20 @@ impl FileSystem for MemoryFileSystem {
 
     fn read_to_string(&self, path: impl AsRef<Path>) -> Result<String, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
+        let file = root.get_file_entry(path)?;
 
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
+        // string reading is only available for binary files
+        let FileContent::Data(file_data) = &*file.data.read().expect("file data lock poisoned")
+        else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not a binary file",
+            ));
         };
 
-        // create a reader by cloning the Arc
-        let data = file.data.read().unwrap();
-
         // convert to string lossily expecting all data to be valid utf8
-        let str = str::from_utf8(&data.0).map_err(|e| {
+        let str = str::from_utf8(&file_data.0).map_err(|e| {
             io::Error::new(io::ErrorKind::InvalidInput, format!("invalid UTF-8: {e} "))
         })?;
 
@@ -388,67 +417,174 @@ impl FileSystem for MemoryFileSystem {
 
     fn file_size(&self, path: impl AsRef<Path>) -> Result<u64, io::Error> {
         let root = self.root.read().expect("root lock poisoned");
-        let path = path.as_ref();
 
-        let parent = file_parent(path)?;
+        let file = root.get_file_entry(path)?;
 
-        // find the directory
-        let dir = root.get_directory(parent)?;
-
-        // get file name
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        // get the file entry
-        let file = match dir.files.get(&name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
+        // size is only available for binary files
+        let FileContent::Data(file_data) = &*file.data.read().expect("file data lock poisoned")
+        else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not a binary file",
+            ));
         };
 
-        let data = file.data.read().expect("file data lock poisoned");
-        Ok(data.0.len() as u64)
+        Ok(file_data.0.len() as u64)
     }
 
     fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), io::Error> {
         let mut root = self.root.write().expect("root lock poisoned");
-        let from = from.as_ref();
-        let to = to.as_ref();
 
-        let from_parent = file_parent(from)?;
-        let to_parent = file_parent(to)?;
-
-        // find the from directory
-        let from_dir = root.get_directory(from_parent)?;
-
-        // get the from file entry and clone the data
-        let from_name = from.file_name().unwrap().to_string_lossy().to_string();
-        let from_file = match from_dir.files.get(&from_name) {
-            Some(file) => file,
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "file not found")),
-        };
+        // extract the data to copy
+        let from_file = root.get_file_entry(&from)?;
         let from_data = from_file
             .data
             .read()
             .expect("file data lock poisoned")
             .clone();
 
-        // find the to directory
-        let to_dir = root.get_directory_mut(to_parent)?;
+        let to_file = root.get_file_entry_or_create(&to)?;
 
-        // get file names
-        let to_name = to.file_name().unwrap().to_string_lossy().to_string();
-        let to_file = to_dir.files.entry(to_name).or_insert(FileEntry::new());
         // copy the data
         let mut to_data = to_file.data.write().expect("file data lock poisoned");
         *to_data = from_data;
 
         Ok(())
     }
+
+    /// Specially implemented to avoid the default serialization.
+    fn write_object<O: serde::Serialize + Send + Sync + std::any::Any + 'static>(
+        &self,
+        path: impl AsRef<Path>,
+        value: O,
+    ) -> anyhow::Result<()> {
+        let mut root = self.root.write().expect("root lock poisoned");
+        let file = root.get_file_entry_or_create(path)?;
+        file.data = Arc::new(RwLock::new(FileContent::Object(Arc::new(value))));
+        Ok(())
+    }
+
+    fn read_object<O: serde::de::DeserializeOwned + Send + Sync + std::any::Any + 'static>(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> anyhow::Result<ReadObject<O>> {
+        let root = self.root.read().expect("root lock poisoned");
+        let file = root.get_file_entry(&path)?;
+
+        // we can only read an object file
+        let FileContent::Object(file_data) = &*file.data.read().unwrap() else {
+            anyhow::bail!("file {} is not an object file", path.as_ref().display());
+        };
+
+        // try to downcast the object to the type we expect
+        let Ok(object) = file_data.clone().downcast::<O>() else {
+            anyhow::bail!(
+                "file {} is not an object file of type {}",
+                path.as_ref().display(),
+                std::any::type_name::<O>(),
+            );
+        };
+
+        Ok(ReadObject::Shared(object))
+    }
+
+    /// Override the default implementation to write an XYZ file directly into RAM.
+    fn write_xyz(
+        &self,
+        path: impl AsRef<Path>,
+        hint_number_of_records: Option<u64>,
+    ) -> Result<impl crate::io::xyz::XyzWriter, io::Error> {
+        let mut root = self.root.write().expect("root lock poisoned");
+
+        let file = root.get_file_entry_or_create(path)?;
+
+        // now we replace the arc with a new one which we will write to. This way existing readers
+        // will continue to read the old data, while we start filling up some new data)
+        let writer = XyzMemoryWriter {
+            records: Vec::with_capacity(hint_number_of_records.unwrap_or(0) as usize),
+            data_link: file.data.clone(), // linked to the place where the data is stored
+            was_finished: false,
+        };
+        Ok(writer)
+    }
+
+    /// Override the default implementation to read an XYZ file directly from RAM.
+    fn read_xyz(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<impl crate::io::xyz::XyzReader, io::Error> {
+        let root = self.root.read().expect("root lock poisoned");
+        let file = root.get_file_entry(path)?;
+
+        let FileContent::XyzRecords(records) = &*file.data.read().expect("file data lock poisoned")
+        else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "file is not an XYZ file",
+            ));
+        };
+
+        Ok(XyzMemoryReader {
+            records: records.clone(),
+            exhausted: false,
+        })
+    }
+}
+
+struct XyzMemoryWriter {
+    records: Vec<crate::io::xyz::XyzRecord>,
+
+    /// links back to the file entry so we can swap the data when the writer is dropped
+    data_link: Arc<RwLock<FileContent>>,
+
+    was_finished: bool,
+}
+impl Drop for XyzMemoryWriter {
+    // swap the data into the file entry on drop
+    fn drop(&mut self) {
+        if !self.was_finished {
+            panic!("XyzMemoryWriter was not finished before being dropped");
+        }
+    }
+}
+
+impl crate::io::xyz::XyzWriter for XyzMemoryWriter {
+    fn write_records(&mut self, records: &[crate::io::xyz::XyzRecord]) -> std::io::Result<()> {
+        self.records.extend_from_slice(records);
+        Ok(())
+    }
+
+    fn finish(&mut self) -> io::Result<()> {
+        let data = core::mem::take(&mut self.records);
+        let mut data_link = self.data_link.write().expect("file data lock poisoned");
+        *data_link = FileContent::XyzRecords(data.into());
+        self.was_finished = true;
+        Ok(())
+    }
+}
+
+struct XyzMemoryReader {
+    /// A pointer to the records of the file
+    records: Arc<[crate::io::xyz::XyzRecord]>,
+    /// Used to keep track of whether we have already read the records.
+    exhausted: bool,
+}
+
+impl crate::io::xyz::XyzReader for XyzMemoryReader {
+    fn next_chunk(&mut self) -> std::io::Result<Option<&[crate::io::xyz::XyzRecord]>> {
+        if !self.exhausted {
+            self.exhausted = true;
+            Ok(Some(&self.records))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
 
-    use std::io::Read;
+    use std::{io::Read, ops::Deref};
 
     use super::*;
 
@@ -714,5 +850,32 @@ mod test {
 
         let read = fs.read_to_string(path2).unwrap();
         assert_eq!(read, content);
+    }
+
+    #[test]
+    fn test_write_read_object() {
+        let fs = super::MemoryFileSystem::new();
+        let path1 = "object1.bin";
+        let value = vec![1, 2, 3, 4, 5];
+
+        fs.write_object(path1, value.clone()).unwrap();
+
+        let obj: ReadObject<Vec<i32>> = fs.read_object(path1).unwrap();
+        assert_eq!(obj.deref(), &value);
+    }
+
+    #[test]
+    fn test_write_move_read_object() {
+        let fs = super::MemoryFileSystem::new();
+        let path1 = "object1.bin";
+        let path2 = "object2.bin";
+        let value = vec![1, 2, 3, 4, 5];
+
+        fs.write_object(path1, value.clone()).unwrap();
+
+        fs.copy(path1, path2).unwrap();
+
+        let obj: ReadObject<Vec<i32>> = fs.read_object(path2).unwrap();
+        assert_eq!(obj.deref(), &value);
     }
 }
