@@ -27,17 +27,16 @@ imageproc = { version = "0.25.0", default-features = false, features = [
 ] }
 
 las = { version = "0.9", features = ["laz"] }
-liblzma = { version = "*", features = ["static"] }
 rand = "0.9"
 rust-ini = "0.21"
 rustc-hash = "2.0"
 shapefile = { version = "0.7.0", optional = true }
 skia-safe = { version = "0.87", optional = true }
-zip = { version = "4.3", default-features = false, features = [
+zip = { version = "4.4", default-features = false, features = [
 	"bzip2",
 	"deflate",
 	"deflate64",
-	"lzma",
+	"lzma-static",
 	"zstd",
 ], optional = true }
 log = "0.4"
