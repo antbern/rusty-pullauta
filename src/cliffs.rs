@@ -10,7 +10,7 @@ use crate::geometry::{BinaryDxf, Bounds, Classification, Point2, Polylines};
 use crate::io::bytes::FromToBytes;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
-use crate::io::xyz::XyzInternalReader;
+use crate::io::xyz::XyzReader;
 use crate::vec2d::Vec2D;
 
 pub fn makecliffs(
@@ -94,7 +94,7 @@ pub fn makecliffs(
     let mut rng = rand::rng();
     let randdist = rand::distr::Bernoulli::new(cliff_thin).unwrap();
 
-    let mut reader = XyzInternalReader::new(fs.open(&xyz_file_in)?)?;
+    let mut reader = fs.read_xyz(&xyz_file_in)?;
     while let Some(chunk) = reader.next_chunk()? {
         for r in chunk {
             if cliff_thin == 1.0 || rng.sample(randdist) {
@@ -266,17 +266,14 @@ pub fn makecliffs(
 
     let f2_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f2_lines.into()]);
 
-    // save binary file
-    let mut f2 = fs
-        .create(tmpfolder.join("c2g.dxf.bin"))
-        .expect("Unable to create file");
-    f2_dxf.to_writer(&mut f2).expect("Cannot write c2g.dxf.bin");
-
     if config.output_dxf {
         f2_dxf.to_dxf(&mut fs.create(tmpfolder.join("c2g.dxf"))?)?;
     }
 
-    drop(f2_dxf);
+    // save binary file
+    f2_dxf
+        .to_fs(fs, tmpfolder.join("c2g.dxf.bin"))
+        .expect("Cannot write c3g.dxf.bin");
 
     let c2_limit = 2.6 * 2.75;
 
@@ -361,15 +358,14 @@ pub fn makecliffs(
 
     let f3_dxf = BinaryDxf::new(Bounds::new(xmin, xmax, ymin, ymax), vec![f3_lines.into()]);
 
-    // save binary file
-    let mut f3 = fs
-        .create(tmpfolder.join("c3g.dxf.bin"))
-        .expect("Unable to create file");
-    f3_dxf.to_writer(&mut f3).expect("Cannot write c3g.dxf.bin");
-
     if config.output_dxf {
         f3_dxf.to_dxf(&mut fs.create(tmpfolder.join("c3g.dxf"))?)?;
     }
+
+    // save binary file
+    f3_dxf
+        .to_fs(fs, tmpfolder.join("c3g.dxf.bin"))
+        .expect("Cannot write c3g.dxf.bin");
 
     img.write_to(
         &mut fs

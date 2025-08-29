@@ -15,8 +15,8 @@ use crate::contours;
 use crate::crop;
 use crate::io::fs::FileSystem;
 use crate::io::heightmap::HeightMap;
-use crate::io::xyz::XyzInternalWriter;
 use crate::io::xyz::XyzRecord;
+use crate::io::xyz::XyzWriter;
 use crate::knolls;
 use crate::merge;
 use crate::render;
@@ -119,8 +119,10 @@ pub fn process_tile(
         info!("Converting points from .xyz to internal binary format");
 
         debug!("Writing records to {:?}", &target_file);
-        let mut writer =
-            XyzInternalWriter::new(fs.create(&target_file).expect("Could not create writer"));
+        let mut writer = fs
+            .write_xyz(&target_file, None)
+            .expect("Could not create writer");
+
         read_lines_no_alloc(fs, input_file, |line| {
             let mut parts = line.split(' ');
             let x = parts.next().unwrap().parse::<f64>().unwrap();
@@ -167,8 +169,9 @@ pub fn process_tile(
             .expect("Could not create reader");
 
         debug!("Writing records to {:?}", &target_file);
-        let mut writer =
-            XyzInternalWriter::new(fs.create(&target_file).expect("Could not create writer"));
+        let mut writer = fs
+            .write_xyz(&target_file, Some(reader.header().number_of_points()))
+            .expect("Could not create writer");
 
         let mut points = Vec::with_capacity(LAZ_BUFFER_SIZE);
         let mut records = Vec::with_capacity(LAZ_BUFFER_SIZE);
@@ -434,8 +437,9 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
 
         let tmp_filename = PathBuf::from(format!("temp{thread}.xyz.bin"));
         debug!("Writing records to {:?}", &tmp_filename);
-        let mut writer =
-            XyzInternalWriter::new(fs.create(&tmp_filename).expect("Could not create writer"));
+        let mut writer = fs
+            .write_xyz(&tmp_filename, Some(header.number_of_point_records as u64))
+            .expect("Could not create writer");
 
         // read points from all LAZ files that have an overlap with the main tile file
         for laz_p in &laz_files {
@@ -491,6 +495,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             }
         }
         writer.finish().expect("Unable to finish writing");
+        drop(writer);
 
         let tmpfolder = PathBuf::from(format!("temp{thread}"));
 
