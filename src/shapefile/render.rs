@@ -128,10 +128,13 @@ pub fn render(
         let maxy = (600.0 / 254.0 / scalefactor * (y0 - bbox.min.y)).floor();
         let maxx = (600.0 / 254.0 / scalefactor * (bbox.max.x - x0)).floor();
         let miny = (600.0 / 254.0 / scalefactor * (y0 - bbox.max.y)).floor();
+        log::debug!("Bounding box: {bbox:?}");
         if minx > outw || maxx < 0.0 || miny > outh || maxy < 0.0 {
+            info!("Skipping shapefile {}, out of bounds.", file.display());
             continue;
         }
-        info!("Processing shapefile: {file:?}");
+
+        info!("Processing shapefile: {}", file.display());
 
         for shape_record in reader.iter_shapes_and_records() {
             let (shape, record) = shape_record
