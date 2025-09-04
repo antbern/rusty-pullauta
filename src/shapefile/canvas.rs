@@ -1,4 +1,8 @@
+use std::io::{Read, Write};
+
 use tiny_skia::{PathBuilder, Transform};
+
+use crate::io::fs::FileSystem;
 
 pub struct Canvas<'a> {
     pixmap: tiny_skia::Pixmap,
@@ -7,8 +11,8 @@ pub struct Canvas<'a> {
 }
 
 impl Canvas<'_> {
-    pub fn new(width: i32, height: i32) -> Self {
-        Self::from_pixmap(tiny_skia::Pixmap::new(width as u32, height as u32).unwrap())
+    pub fn new(width: u32, height: u32) -> Self {
+        Self::from_pixmap(tiny_skia::Pixmap::new(width, height).unwrap())
     }
 
     fn from_pixmap(pixmap: tiny_skia::Pixmap) -> Self {
@@ -134,14 +138,22 @@ impl Canvas<'_> {
     }
 
     #[inline]
-    pub fn save_as(&mut self, filename: &std::path::Path) {
-        self.pixmap.save_png(filename).unwrap()
+    pub fn save_as(&self, fs: &impl FileSystem, filename: &std::path::Path) -> anyhow::Result<()> {
+        let data = self.pixmap.encode_png()?;
+
+        let mut file = fs.create(filename)?;
+        file.write_all(&data)?;
+        Ok(())
     }
 
     #[inline]
-    pub fn load_from(filename: &std::path::Path) -> Canvas {
-        let pixmap = tiny_skia::Pixmap::load_png(filename).unwrap();
-        Canvas::from_pixmap(pixmap)
+    pub fn load_from(fs: &impl FileSystem, filename: &std::path::Path) -> anyhow::Result<Self> {
+        let file_size = fs.file_size(filename)?;
+        let mut file = fs.open(filename)?;
+        let mut buff = Vec::with_capacity(file_size as usize);
+        file.read_to_end(&mut buff)?;
+        let pixmap = tiny_skia::Pixmap::decode_png(&buff)?;
+        Ok(Canvas::from_pixmap(pixmap))
     }
 
     #[inline]

@@ -78,16 +78,17 @@ pub fn render(
     let outh = h * 600.0 / 254.0 / scalefactor;
 
     // TODO: only allocate the canvas that are actually used... in a lazy way
-    let mut imgbrown = Canvas::new(outw as i32, outh as i32);
-    let mut imgbrowntop = Canvas::new(outw as i32, outh as i32);
-    let mut imgblack = Canvas::new(outw as i32, outh as i32);
-    let mut imgblacktop = Canvas::new(outw as i32, outh as i32);
-    let mut imgyellow = Canvas::new(outw as i32, outh as i32);
-    let mut imgblue = Canvas::new(outw as i32, outh as i32);
-    let mut imgmarsh = Canvas::new(outw as i32, outh as i32);
-    let mut imgtempblack = Canvas::new(outw as i32, outh as i32);
-    let mut imgtempblacktop = Canvas::new(outw as i32, outh as i32);
-    let mut imgblue2 = Canvas::new(outw as i32, outh as i32);
+    let (width, height) = (outw as u32, outh as u32);
+    let mut imgbrown = Canvas::new(width, height);
+    let mut imgbrowntop = Canvas::new(width, height);
+    let mut imgblack = Canvas::new(width, height);
+    let mut imgblacktop = Canvas::new(width, height);
+    let mut imgyellow = Canvas::new(width, height);
+    let mut imgblue = Canvas::new(width, height);
+    let mut imgmarsh = Canvas::new(width, height);
+    let mut imgtempblack = Canvas::new(width, height);
+    let mut imgtempblacktop = Canvas::new(width, height);
+    let mut imgblue2 = Canvas::new(width, height);
 
     let white = (255, 255, 255);
     let black = (0, 0, 0);
@@ -758,16 +759,20 @@ pub fn render(
 
     let low_file = tmpfolder.join("low.png");
     if fs.exists(&low_file) {
-        let mut low = Canvas::load_from(&low_file);
+        let mut low = Canvas::load_from(fs, &low_file).expect("could not load low.png");
         imgyellow.overlay(&mut low, 0.0, 0.0);
     }
 
     let high_file = tmpfolder.join("high.png");
     if fs.exists(&high_file) {
-        let mut high = Canvas::load_from(&high_file);
+        let mut high = Canvas::load_from(fs, &high_file).expect("could not load high.png");
         imgblue.overlay(&mut high, 0.0, 0.0);
     }
-    imgblue.save_as(&high_file);
-    imgyellow.save_as(&low_file);
+    imgblue
+        .save_as(fs, &high_file)
+        .expect("could not save high.png");
+    imgyellow
+        .save_as(fs, &low_file)
+        .expect("could not save low.png");
     Ok(())
 }
