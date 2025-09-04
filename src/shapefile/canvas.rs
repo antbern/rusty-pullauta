@@ -71,7 +71,7 @@ impl Canvas<'_> {
         let mut pb = PathBuilder::new();
 
         pb.move_to(pts[0].0, pts[0].1);
-        for pt in pts.iter().skip(1) {
+        for pt in pts.iter() {
             pb.line_to(pt.0, pt.1);
         }
         let path = pb.finish().unwrap();
