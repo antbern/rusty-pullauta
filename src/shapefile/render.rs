@@ -2,9 +2,10 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
     str::FromStr,
+    time::Duration,
 };
 
-use log::info;
+use log::{debug, info};
 
 use crate::{
     config::Config,
@@ -117,6 +118,7 @@ pub fn render(
     }
 
     info!("Processing shapefiles: {shp_files:?}");
+    let mut total_elapsed = Duration::ZERO;
 
     for shp_file in shp_files.iter() {
         let file = shp_file.as_path().file_name().unwrap().to_str().unwrap();
@@ -136,7 +138,7 @@ pub fn render(
         }
 
         info!("Processing shapefile: {}", file.display());
-
+        let start = std::time::Instant::now();
         for shape_record in reader.iter_shapes_and_records() {
             let (shape, record) = shape_record
                 .unwrap_or_else(|_err: shapefile::Error| (Shape::NullShape, Record::default()));
@@ -717,6 +719,10 @@ pub fn render(
             }
         }
 
+        let elapsed = start.elapsed();
+        debug!("Time elapsed in drawing shapes: {elapsed:.2?}");
+        total_elapsed += elapsed;
+
         // remove the shapefile and all associated files
         if !batch {
             fs.remove_file(&file).unwrap();
@@ -729,6 +735,7 @@ pub fn render(
             }
         }
     }
+    info!("Total time elapsed in drawing shapes: {total_elapsed:.2?}",);
     imgblue2.overlay(&mut imgblue, 0.0, 0.0);
     imgblue2.overlay(&mut imgblue, 1.0, 0.0);
     imgblue2.overlay(&mut imgblue, 0.0, 1.0);

@@ -420,7 +420,7 @@ fn main() {
             if !config.vectorconf.is_empty() {
                 let path = Path::new(&config.vectorconf);
                 println!("Copying {} into memory fs", path.display());
-                fs.load_from_disk(&path, &path).unwrap();
+                fs.load_from_disk(path, path).unwrap();
             }
 
             launch_threads(fs.clone(), proc, &config, &zip_files);
