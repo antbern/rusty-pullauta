@@ -227,9 +227,8 @@ impl BinaryDxf {
             Ok(object)
         } else {
             anyhow::bail!(
-                "Binary DXF file is of another version, please recreate it with the current version of the software (file version {}, current version {})",
+                "This DXF.BIN file version is not supported by this executable. Please re-run this command with an executable that supports this version (dxf.bin file version: {})",
                 object.version,
-                BINARY_DXF_VERSION
             );
         }
     }
