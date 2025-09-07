@@ -41,10 +41,12 @@ pub fn unzip_shapefiles(fs: &impl FileSystem, filenames: &[String]) -> Result<()
         let file = fs.open(zip_name).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         info!(
-            "Extracting {:?} MB from {zip_name}",
-            archive.decompressed_size().map(|s| s / 1024 / 1024)
+            "Extracting {:?} kB from {zip_name}",
+            archive.decompressed_size().map(|s| s / 1024)
         );
         let tmpfolder = PathBuf::from("temp_shapefiles".to_string());
+        // NOTE: this does _not_ use the FS instance but rather accesses the file system directly,
+        // hence it will not be compatible with the in-memory FS implementation.
         archive.extract(tmpfolder).unwrap();
     }
     Ok(())
