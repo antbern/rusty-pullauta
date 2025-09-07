@@ -1067,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "pullauta"
-version = "2.9.5"
+version = "2.9.6"
 dependencies = [
  "anyhow",
  "bincode",
