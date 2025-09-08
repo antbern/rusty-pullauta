@@ -14,12 +14,10 @@ pub mod knolls;
 pub mod merge;
 pub mod process;
 pub mod render;
+pub mod shapefile;
 pub mod util;
 pub mod vec2d;
 pub mod vegetation;
-
-#[cfg(feature = "shapefile")]
-pub mod shapefile;
 
 /// The size of a megabyte in bytes. Used for Read/Write buffer sizes for large files, instead of
 /// the default 8KB.
