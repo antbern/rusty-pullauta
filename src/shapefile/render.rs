@@ -125,7 +125,7 @@ pub fn render(
         let mut file = shapetmpfolder.join(file);
 
         // drawshape comes here
-        let mut reader = shapefile::Reader::from_path(&file)?;
+        let mut reader = fs.read_shapefile(file.clone())?;
         let bbox = reader.header().bbox;
         let minx = (600.0 / 254.0 / scalefactor * (bbox.min.x - x0)).floor();
         let maxy = (600.0 / 254.0 / scalefactor * (y0 - bbox.min.y)).floor();
