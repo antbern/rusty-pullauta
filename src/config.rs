@@ -158,7 +158,7 @@ impl Config {
                 .unwrap_or(default)
         }
 
-        let laz_parallell: bool = gs.get("parallell_laz_decompression").unwrap_or("0") == "1";
+        let laz_parallell: bool = gs.get("parallel_laz_decompression").unwrap_or("0") == "1";
         let output_dxf: bool = gs.get("output_dxf").unwrap_or("0") == "1";
 
         let pnorthlinesangle: f64 = parse_typed(gs, "northlinesangle", 0.0);
