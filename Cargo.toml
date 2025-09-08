@@ -36,7 +36,7 @@ zip = { version = "5.0", default-features = false, features = [
 	"bzip2",
 	"deflate",
 	"deflate64",
-	"lzma-static",
+	"lzma",
 	"zstd",
 ], optional = true }
 log = "0.4"
