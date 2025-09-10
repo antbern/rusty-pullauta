@@ -468,6 +468,7 @@ impl FileSystem for MemoryFileSystem {
                     "Skipping symlink {} in zip archive as it is not supported",
                     file.name(),
                 );
+                continue;
             }
 
             let Some(name) = file.enclosed_name() else {
@@ -483,6 +484,7 @@ impl FileSystem for MemoryFileSystem {
             if file.is_dir() {
                 log::debug!("Creating directory {}", target_name.display());
                 self.create_dir_all(&target_name)?;
+                continue;
             }
 
             log::debug!("Extracting file {}", name.display());
