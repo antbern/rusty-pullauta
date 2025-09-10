@@ -41,6 +41,13 @@ pub trait FileSystem: std::fmt::Debug {
     /// Copy a file.
     fn copy(&self, from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), io::Error>;
 
+    /// Extract a ZIP archive to a directory.
+    fn extract_zip(
+        &self,
+        archive: impl AsRef<Path>,
+        target: impl AsRef<Path>,
+    ) -> anyhow::Result<()>;
+
     /// Read an image in PNG format.
     fn read_image_png(
         &self,
