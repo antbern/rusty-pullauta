@@ -466,14 +466,14 @@ impl FileSystem for MemoryFileSystem {
             if file.is_symlink() {
                 log::warn!(
                     "Skipping symlink {} in zip archive as it is not supported",
-                    file.name().to_string()
+                    file.name(),
                 );
             }
 
             let Some(name) = file.enclosed_name() else {
                 log::warn!(
                     "Skipping file {} in zip archive as it is not a valid path",
-                    file.name().to_string()
+                    file.name(),
                 );
                 continue;
             };
