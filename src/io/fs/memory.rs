@@ -458,7 +458,39 @@ impl FileSystem for MemoryFileSystem {
             archive.as_ref().display()
         );
 
-        todo!();
+        for i in 0..zip_archive.len() {
+            let mut file = zip_archive
+                .by_index(i)
+                .with_context(|| format!("get file index {i}"))?;
+
+            if file.is_symlink() {
+                log::warn!(
+                    "Skipping symlink {} in zip archive as it is not supported",
+                    file.name().to_string()
+                );
+            }
+
+            let Some(name) = file.enclosed_name() else {
+                log::warn!(
+                    "Skipping file {} in zip archive as it is not a valid path",
+                    file.name().to_string()
+                );
+                continue;
+            };
+
+            let target_name = target.as_ref().join(&name);
+
+            if file.is_dir() {
+                log::debug!("Creating directory {}", target_name.display());
+                self.create_dir_all(&target_name)?;
+            }
+
+            log::debug!("Extracting file {}", name.display());
+
+            // at this point the file is a file and so we copy it into the FS
+            let mut output = self.create(target_name)?;
+            std::io::copy(&mut file, &mut output)?;
+        }
 
         Ok(())
     }
