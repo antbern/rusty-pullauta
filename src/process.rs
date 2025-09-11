@@ -585,7 +585,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
             )
             .expect("Unable to write to file");
 
-            pgw_file_out.flush().unwrap();
+            drop(pgw_file_out);
             fs.copy(
                 Path::new(&format!("pullautus{thread}.pgw")),
                 Path::new(&format!("pullautus_depr{thread}.pgw")),
@@ -718,7 +718,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                     maxy - tfw0 / 2.0
                 )
                 .expect("Unable to write to file");
-                pgw_file_out.flush().unwrap();
+                drop(pgw_file_out);
 
                 let mut orig_img_reader = image::ImageReader::new(
                     fs.open(format!("temp{thread}/undergrowth.png"))
@@ -780,7 +780,7 @@ pub fn batch_process(conf: &Config, fs: &impl FileSystem, thread: &String, has_z
                 )
                 .expect("Unable to write to file");
 
-                pgw_file_out.flush().unwrap();
+                drop(pgw_file_out);
 
                 if vege_bitmode {
                     let mut orig_img_reader = image::ImageReader::new(
