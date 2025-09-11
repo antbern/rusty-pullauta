@@ -85,6 +85,8 @@ pub fn render(
     let mut imgblack = Canvas::new(width, height);
     let mut imgblacktop = Canvas::new(width, height);
     let mut imgyellow = Canvas::new(width, height);
+    let mut imgolive = Canvas::new(width, height);
+    let mut imgparkings = Canvas::new(width, height);
     let mut imgblue = Canvas::new(width, height);
     let mut imgmarsh = Canvas::new(width, height);
     let mut imgtempblack = Canvas::new(width, height);
@@ -348,7 +350,7 @@ pub fn render(
                     area = true;
                     color = Some(olive);
                     border = 0.0;
-                    image = "yellow";
+                    image = "olive";
                 }
 
                 // airport runway, car parkings
@@ -356,7 +358,7 @@ pub fn render(
                     area = true;
                     color = Some(brown);
                     border = 0.0;
-                    image = "yellow";
+                    image = "parkings";
                 }
 
                 if mtkskip.contains(&luokka) {
@@ -547,7 +549,7 @@ pub fn render(
                     if isom == "527" {
                         area = true;
                         color = Some(olive);
-                        image = "yellow";
+                        image = "olive";
                     }
                     // car parkings border
                     if isom == "529.1" || isom == "301.1" {
@@ -559,7 +561,7 @@ pub fn render(
                     if isom == "529" {
                         area = true;
                         color = Some(brown);
-                        image = "yellow";
+                        image = "parkings";
                     }
                     // car park top
                     if isom == "529T" {
@@ -707,6 +709,14 @@ pub fn render(
                         imgyellow.set_color(color);
                         imgyellow.draw_filled_polygon(&polys)
                     }
+                    if image == "olive" {
+                        imgolive.set_color(color);
+                        imgolive.draw_filled_polygon(&polys)
+                    }
+                    if image == "parkings" {
+                        imgparkings.set_color(color);
+                        imgparkings.draw_filled_polygon(&polys)
+                    }
                     if image == "marsh" {
                         imgmarsh.set_color(color);
                         imgmarsh.draw_filled_polygon(&polys)
@@ -757,7 +767,9 @@ pub fn render(
     imgblacktop.overlay(&mut imgtempblacktop, 0.0, 0.0);
     imgblack.overlay(&mut imgtempblack, 0.0, 0.0);
 
-    imgyellow.overlay(&mut imgmarsh, 0.0, 0.0);
+    imgolive.overlay(&mut imgyellow, 0.0, 0.0);
+    imgolive.overlay(&mut imgparkings, 0.0, 0.0);
+    imgolive.overlay(&mut imgmarsh, 0.0, 0.0);
 
     imgblue.overlay(&mut imgblack, 0.0, 0.0);
     imgblue.overlay(&mut imgbrown, 0.0, 0.0);
@@ -767,7 +779,7 @@ pub fn render(
     let low_file = tmpfolder.join("low.png");
     if fs.exists(&low_file) {
         let mut low = Canvas::load_from(fs, &low_file).expect("could not load low.png");
-        imgyellow.overlay(&mut low, 0.0, 0.0);
+        imgolive.overlay(&mut low, 0.0, 0.0);
     }
 
     let high_file = tmpfolder.join("high.png");
@@ -778,7 +790,7 @@ pub fn render(
     imgblue
         .save_as(fs, &high_file)
         .expect("could not save high.png");
-    imgyellow
+    imgolive
         .save_as(fs, &low_file)
         .expect("could not save low.png");
     Ok(())
