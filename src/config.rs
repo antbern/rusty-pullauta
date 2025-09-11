@@ -118,19 +118,31 @@ pub struct Zone {
 
 const DEFAULT_CONFIG_FILE: &str = "pullauta.ini";
 
+const DEFAULT_CONFIG: &str = include_str!("../pullauta.default.ini");
+
+impl Default for Config {
+    fn default() -> Self {
+        let ini = Ini::load_from_str(DEFAULT_CONFIG).expect("Could not load the default config");
+        Self::from_ini(ini).expect("Could not parse the default config")
+    }
+}
+
 impl Config {
     pub fn load_or_create_default() -> Result<Self, Box<dyn std::error::Error>> {
         let path = Path::new(DEFAULT_CONFIG_FILE);
         // populate the default if no file was found
         if !path.exists() {
-            std::fs::write(path, include_bytes!("../pullauta.default.ini"))?;
+            std::fs::write(path, DEFAULT_CONFIG)?;
         }
         Self::from_file(path)
     }
 
     fn from_file(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let conf = Ini::load_from_file(path)?;
+        Self::from_ini(conf)
+    }
 
+    fn from_ini(conf: Ini) -> Result<Self, Box<dyn std::error::Error>> {
         let gs = conf.general_section();
 
         // only one can be set at a time

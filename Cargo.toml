@@ -12,8 +12,10 @@ categories = ["command-line-utilities"]
 publish = false
 
 [features]
-default = ["shapefile"]
-shapefile = ["dep:tiny-skia", "dep:shapefile", "dep:zip"]
+default = ["wasm-nocompat"]
+
+# feature that enables features that would not compile on WASM, but are okay otherwise (eg. native library deps etc)
+"wasm-nocompat" = ["zip/zstd"]
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = [
@@ -26,19 +28,21 @@ imageproc = { version = "0.25.0", default-features = false, features = [
 	"rayon",
 ] }
 
+web-time = "1.1"
+
 las = { version = "0.9", features = ["laz", "laz-parallel"] }
 rand = "0.9"
 rust-ini = "0.21"
 rustc-hash = "2.0"
-shapefile = { version = "0.7.0", optional = true }
-tiny-skia = { version = "0.11", optional = true }
+shapefile = { version = "0.7.0" }
+tiny-skia = { version = "0.11" }
 zip = { version = "5.0", default-features = false, features = [
 	"bzip2",
 	"deflate",
 	"deflate64",
 	"lzma",
-	"zstd",
-], optional = true }
+	# "zstd", # <-- enabled in "wasm-nocompat" feature
+] }
 log = "0.4"
 env_logger = "0.11"
 
