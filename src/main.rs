@@ -304,12 +304,10 @@ fn main() {
         pullauta::knolls::xyzknolls(&fs, &config, &tmpfolder).unwrap();
     }
 
-    #[cfg(feature = "shapefile")]
     if command == "unzipmtk" {
         pullauta::shapefile::unzip_and_render(&fs, &config, &tmpfolder, &args).unwrap();
     }
 
-    #[cfg(feature = "shapefile")]
     if command == "mtkshaperender" {
         pullauta::shapefile::render(&fs, &config, &tmpfolder, false).unwrap();
     }

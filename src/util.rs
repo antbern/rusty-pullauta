@@ -2,10 +2,11 @@ use std::{
     fmt::Debug,
     io::{self, BufRead},
     path::Path,
-    time::Instant,
 };
 
 use anyhow::Context;
+use web_time::Instant;
+
 use log::debug;
 
 use crate::io::fs::FileSystem;
