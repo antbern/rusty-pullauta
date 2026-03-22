@@ -24,23 +24,24 @@ image = { version = "0.25", default-features = false, features = [
 	"jpeg",
 ] }
 
-imageproc = { version = "0.25.0", default-features = false, features = [
+imageproc = { version = "0.26", default-features = false, features = [
 	"rayon",
 ] }
 
 web-time = "1.1"
 
 las = { version = "0.9", features = ["laz", "laz-parallel"] }
-rand = "0.9"
+rand = "0.10"
 rust-ini = "0.21"
 rustc-hash = "2.0"
 shapefile = { version = "0.7.0" }
-tiny-skia = { version = "0.11" }
-zip = { version = "5.0", default-features = false, features = [
+tiny-skia = { version = "0.12" }
+zip = { version = "8.3", default-features = false, features = [
 	"bzip2",
 	"deflate",
 	"deflate64",
 	"lzma",
+	"xz",
 	# "zstd", # <-- enabled in "wasm-nocompat" feature
 ] }
 log = "0.4"
