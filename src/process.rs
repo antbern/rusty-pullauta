@@ -42,15 +42,12 @@ pub fn process_zip(
         pnorthlinesangle,
         ..
     } = config;
-    #[cfg(feature = "shapefile")]
-    {
-        if !batch && !filenames.is_empty() {
-            info!("Rendering shape files");
-            timing.start_section("unzip and render shape files");
-            crate::shapefile::unzip_and_render(fs, config, tmpfolder, filenames).unwrap();
-        } else {
-            crate::shapefile::render(fs, config, tmpfolder, true).unwrap();
-        }
+    if !batch && !filenames.is_empty() {
+        info!("Rendering shape files");
+        timing.start_section("unzip and render shape files");
+        crate::shapefile::unzip_and_render(fs, config, tmpfolder, filenames).unwrap();
+    } else {
+        crate::shapefile::render(fs, config, tmpfolder, true).unwrap();
     }
 
     info!("Rendering png map with depressions");

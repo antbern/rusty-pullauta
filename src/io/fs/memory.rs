@@ -31,6 +31,10 @@ impl MemoryFileSystem {
         }
     }
 
+    pub fn root(&self) -> Arc<RwLock<Root>> {
+        self.root.clone()
+    }
+
     /// Load the contents of a file on the local file system into the memory file system.
     pub fn load_from_disk(
         &self,
@@ -57,7 +61,7 @@ impl MemoryFileSystem {
 
 /// Represents the root of the file system.
 #[derive(Debug)]
-struct Root(Directory);
+pub struct Root(pub Directory);
 
 impl Root {
     /// Traverse the file system to find the directory at the given path.
@@ -133,9 +137,9 @@ impl Root {
 }
 
 #[derive(Debug, Default)]
-struct Directory {
-    subdirs: HashMap<String, Directory>,
-    files: HashMap<String, FileEntry>,
+pub struct Directory {
+    pub subdirs: HashMap<String, Directory>,
+    pub files: HashMap<String, FileEntry>,
 }
 
 /// Get the parent directory of a file or directory path.
@@ -145,10 +149,10 @@ fn file_parent(path: &Path) -> Result<&Path, io::Error> {
 }
 
 #[derive(Debug)]
-struct FileEntry {
+pub struct FileEntry {
     /// data is stored as an Arc to allow for multiple readers.
     /// Wrapped in an [`RwLock`] to allow for swapping the value when the Writer is dropped / finished.
-    data: Arc<RwLock<FileData>>,
+    pub data: Arc<RwLock<FileData>>,
 }
 
 impl FileEntry {
@@ -202,7 +206,7 @@ impl Drop for WritableFile {
 
 /// Holds the data of a file. Cheap to clone because the data is behind an [`Arc`].
 #[derive(Clone)]
-struct FileData(Arc<Vec<u8>>);
+pub struct FileData(Arc<Vec<u8>>);
 
 impl FileData {
     fn new() -> Self {
